@@ -441,18 +441,61 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
 
 void ExpCodeGenerator::visit(ast::UnaryExp &exp)
 {
-    if (exp.op != "-")
+    if (exp.op == "-")
     {
-        llvm::errs() << "unknown unary operator: " << exp.op;
+        if (!expectedType->isSigned())
+        {
+            typeError(expectedType->name(), "Signed"); // TODO: TypeClass name
+        }
+        else
+        {
+            auto value = ExpCodeGenerator::generate(*exp.operand, expectedType, this);
+            if (value != nullptr)
+            {
+                if (expectedType->isFloating())
+                {
+                    result = llvmBuilder().CreateFNeg(value, "fneg");
+                }
+                else
+                {
+                    result = llvmBuilder().CreateNeg(value, "neg");
+                }
+            }
+        }
     }
-    else if (!expectedType->isSigned())
+    else if (exp.op == "!")
     {
-        typeError(expectedType->name(), "Signed");
+        if (*expectedType != type::name::Bool)
+        {
+            typeError(expectedType->name(), type::name::Bool);
+        }
+        else
+        {
+            auto value = ExpCodeGenerator::generate(*exp.operand, expectedType, this);
+            if (value != nullptr)
+            {
+                result = llvmBuilder().CreateNot(value, "lnot");
+            }
+        }
+    }
+    else if (exp.op == "~")
+    {
+        if (!expectedType->isInteger())
+        {
+            typeError(expectedType->name(), "Integer"); // TODO: TypeClass name
+        }
+        else
+        {
+            auto value = ExpCodeGenerator::generate(*exp.operand, expectedType, this);
+            if (value != nullptr)
+            {
+                result = llvmBuilder().CreateNot(value, "bnot");
+            }
+        }
     }
     else
     {
-        auto value = ExpCodeGenerator::generate(*exp.operand, expectedType, this);
-        result = llvmBuilder().CreateNeg(value, "neg");
+        llvm::errs() << "unknown unary operator: " << exp.op;
     }
 }
 

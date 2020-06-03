@@ -65,7 +65,8 @@ int main()
         "'\\",
         "'a 1",
         "1111 <= \"\" 'a' data else #commnet\n1.1",
-        "()"
+        "()",
+        " a_ a_b a' a'a a'' a''*b_"
     });
 
     runParser(
@@ -74,7 +75,8 @@ int main()
     "i32 foo(i32 x) = 2;\n"
     "i32 bar(i32 y, i32 z) = let i32 baz = 1; in x() + x + y + baz;\n"
     "i32 meh(bool b, i32 x) = if b then 1 + x else 2;\n"
-    "i32 x = meh(true, 1);");
+    "i32 x = meh(true, 1);\n"
+    "i32 not_test(bool b, i32 i1, i32 i2) = if !b then ~i1 else i1 + i2;");
 
     getchar();
 }

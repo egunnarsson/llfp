@@ -53,6 +53,9 @@ Lexer::Lexer(Input *input) :
     nextToken();
 }
 
+namespace
+{
+
 /*int convertEscapedChar(int _C)
 {
     switch (_C)
@@ -104,6 +107,13 @@ constexpr Token punctuation(int _C)
     }
 }
 
+bool isidentifier(int _C)
+{
+    return isalnum(_C) || _C == '_' || _C == '\'';
+}
+
+} // namespace
+
 Token Lexer::nextToken()
 {
     return currentToken = parseToken();
@@ -136,7 +146,7 @@ Token Lexer::parseToken()
         // identifier: letter (letter | digit | '_' | '\'')*
         tokenString = static_cast<char>(lastChar);
 
-        while (isalnum((lastChar = input->getChar()))) // '_', '\''
+        while (isidentifier(lastChar = input->getChar()))
             tokenString += static_cast<char>(lastChar);
 
         // change to switch or map
