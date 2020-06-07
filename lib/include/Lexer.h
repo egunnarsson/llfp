@@ -116,7 +116,6 @@ protected:
     int getCharInt() override;
 };
 
-/*
 class StdinInput : public Input
 {
 public:
@@ -127,7 +126,6 @@ protected:
 
     int getCharInt() override;
 };
-*/
 
 class Lexer
 {

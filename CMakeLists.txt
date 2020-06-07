@@ -14,11 +14,7 @@ message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 # you will need to enable C++11 support
 # for your compiler.
 
-include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
-
-# Now build our tools
-add_executable(llfp main.cpp Ast.cpp Codegen.cpp Lexer.cpp Parser.cpp Type.cpp Ast.h Codegen.h Lexer.h Parser.h Type.h)
 
 # Find the libraries that correspond to the LLVM components
 # that we wish to use
@@ -30,5 +26,8 @@ llvm_map_components_to_libnames(llvm_libs core executionengine object orcjit sup
 #Support
 #native
 
-# Link against LLVM libraries
-target_link_libraries(llfp ${llvm_libs})
+set (LLFP_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/lib/include")
+
+add_subdirectory(lib)
+add_subdirectory(main)
+add_subdirectory(test)

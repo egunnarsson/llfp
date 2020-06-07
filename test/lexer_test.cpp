@@ -7,9 +7,7 @@
 
 #pragma warning(pop)
 
-#include "Codegen.h"
 #include "Lexer.h"
-#include "Parser.h"
 
 
 void runLexer(const char *stringInput)
@@ -42,20 +40,6 @@ void runLexer(std::initializer_list<const char*> list)
     }
 }
 
-void runParser(const char *string)
-{
-    runLexer(string);
-
-    auto input = llfp::lex::StringInput(string);
-    auto lexer = llfp::lex::Lexer(&input);
-    auto parser = llfp::parse::Parser(&lexer);
-
-    auto module = parser.parse();
-
-    llfp::codegen::CodeGenerator gen;
-    gen.generate(module);
-}
-
 int main()
 {
     runLexer({
@@ -68,15 +52,6 @@ int main()
         "()",
         " a_ a_b a' a'a a'' a''*b_"
     });
-
-    runParser(
-    "module meh\n"
-    "i32 i = 1;\n"
-    "i32 foo(i32 x) = 2;\n"
-    "i32 bar(i32 y, i32 z) = let i32 baz = 1; in x() + x + y + baz;\n"
-    "i32 meh(bool b, i32 x) = if b then 1 + x else 2;\n"
-    "i32 x = meh(true, 1);\n"
-    "i32 not_test(bool b, i32 i1, i32 i2) = if !b then ~i1 else i1 + i2;");
 
     getchar();
 }

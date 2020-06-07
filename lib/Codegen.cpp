@@ -25,7 +25,7 @@ CodeGenerator::CodeGenerator() :
     // fill functions with default functions
 }
 
-void CodeGenerator::generate(const std::unique_ptr<ast::Module> &module)
+std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<ast::Module> &module)
 {
     llvmModule = llvm::make_unique<llvm::Module>(module->identifier, llvmContext);
 
@@ -42,7 +42,7 @@ void CodeGenerator::generate(const std::unique_ptr<ast::Module> &module)
                 if (type == nullptr)
                 {
                     llvm::errs() << "unknown type: " << p->typeName;
-                    return;
+                    return nullptr;
                 }
                 parameterTypes.push_back(type->llvmType());
             }
@@ -50,7 +50,7 @@ void CodeGenerator::generate(const std::unique_ptr<ast::Module> &module)
             if (returnType == nullptr)
             {
                 llvm::errs() << "unknown type: " << f->typeName;
-                return;
+                return nullptr;
             }
             llvm::FunctionType *functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
 
@@ -66,7 +66,7 @@ void CodeGenerator::generate(const std::unique_ptr<ast::Module> &module)
         else
         {
             llvm::errs() << "duplicate function definition: " << f->identifier;
-            return;
+            return nullptr;
         }
     }
 
@@ -85,7 +85,7 @@ void CodeGenerator::generate(const std::unique_ptr<ast::Module> &module)
             if (namedValues.find(llvmArg.getName()) != namedValues.end())
             {
                 llvm::errs() << "duplicate parameter: " << llvmArg.getName();
-                return;
+                return nullptr;
             }
             auto &typeName = f.ast->parameters[i]->typeName;
             auto type = typeContext.getType(typeName);
@@ -98,7 +98,7 @@ void CodeGenerator::generate(const std::unique_ptr<ast::Module> &module)
         llvmBuilder.CreateRet(expGenerator.getResult());
     }
 
-    llvm::outs() << (*llvmModule);
+    return std::move(llvmModule);
 }
 
 ExpCodeGenerator::ExpCodeGenerator(type::Type *type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_):

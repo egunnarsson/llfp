@@ -48,7 +48,7 @@ public:
 
     CodeGenerator();
 
-    void generate(const std::unique_ptr<ast::Module> &module);
+    std::unique_ptr<llvm::Module> generate(const std::unique_ptr<ast::Module> &module);
 
 private:
 

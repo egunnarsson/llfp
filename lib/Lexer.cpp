@@ -24,12 +24,10 @@ int Input::getChar()
     return _C;
 }
 
-/*
 int StdinInput::getCharInt()
 {
     return getchar();
 }
-*/
 
 FileInput::FileInput(const char*filename)
 {
