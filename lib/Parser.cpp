@@ -1,9 +1,9 @@
 
-#pragma warning(push, 0)
-
 #include <memory>
 #include <string>
 #include <utility>
+
+#pragma warning(push, 0)
 
 #include "llvm/Support/FormatVariadic.h"
 

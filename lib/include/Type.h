@@ -1,10 +1,10 @@
 #pragma once
 
-#pragma warning(push, 0)
-
 #include <map>
 #include <memory>
 #include <unordered_map>
+
+#pragma warning(push, 0)
 
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Type.h"

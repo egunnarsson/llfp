@@ -1,0 +1,1 @@
+A simple http server. Reads http messages from std in and writes responses to std out.

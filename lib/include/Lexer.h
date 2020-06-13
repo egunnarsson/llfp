@@ -1,11 +1,7 @@
 #pragma once
 
-#pragma warning(push, 0)
-
 #include <stdio.h>
 #include <string>
-
-#pragma warning(pop)
 
 
 namespace llfp

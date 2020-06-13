@@ -1,0 +1,1 @@
+A path tracer based on http://www.kevinbeason.com/smallpt/

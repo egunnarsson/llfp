@@ -1,10 +1,10 @@
 #pragma once
 
-#pragma warning(push, 0)
-
 #include <memory>
 #include <unordered_map>
 #include <string>
+
+#pragma warning(push, 0)
 
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"

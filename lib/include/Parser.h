@@ -1,12 +1,12 @@
 #pragma once
 
-#pragma warning(push, 0)
-
 #include <memory>
+
+//#pragma warning(push, 0)
 
 #include "llvm/Support/raw_ostream.h"
 
-#pragma warning(pop)
+//#pragma warning(pop)
 
 #include "Ast.h"
 #include "Lexer.h"
