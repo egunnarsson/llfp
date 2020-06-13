@@ -29,6 +29,15 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<ast:
 {
     llvmModule = llvm::make_unique<llvm::Module>(module->identifier, llvmContext);
 
+#ifdef _WIN32
+    module->functionDeclarations.push_back(
+        std::make_unique<ast::FunctionDeclaration>(
+            std::string("_DllMainCRTStartup"),
+            std::string("i32"),
+            std::vector<std::unique_ptr<ast::Parameter>>(),
+            std::make_unique<ast::LiteralExp>(lex::Token::tok_integer, std::string("0"))));
+#endif
+
     for (auto& f : module->functionDeclarations)
     {
         // make prototypes so that we can call them before generating code
@@ -101,7 +110,7 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<ast:
     return std::move(llvmModule);
 }
 
-ExpCodeGenerator::ExpCodeGenerator(type::Type *type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_):
+ExpCodeGenerator::ExpCodeGenerator(type::Type *type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_) :
     parent{ nullptr },
     generator{ generator_ },
     expectedType{ type_ },
