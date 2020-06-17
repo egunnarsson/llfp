@@ -101,7 +101,14 @@ int writeDefFile(std::unique_ptr<llfp::ast::Module> &module, llvm::SmallString<1
 
 int createDataLayout(llvm::StringRef targetTriple, llvm::DataLayout &dataLayout)
 {
+#if 1
     llvm::InitializeNativeTarget();
+#else
+    llvm::InitializeAllTargetInfos();
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmPrinters();
+#endif
 
     std::string targetError;
     auto target = llvm::TargetRegistry::lookupTarget(targetTriple, targetError);
@@ -158,7 +165,7 @@ int main(int argc, char *argv[])
         return TypeOrCodeGenerationError;
     }
 
-    auto targetTriple = llvm::sys::getDefaultTargetTriple();
+    auto targetTriple = llvm::sys::getDefaultTargetTriple(); // 32 bit "i386-pc-windows-msvc"
     llvm::DataLayout dataLayout("");
     int result = createDataLayout(targetTriple, dataLayout);
     if (result) { return result; }

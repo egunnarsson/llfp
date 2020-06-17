@@ -29,15 +29,6 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<ast:
 {
     llvmModule = llvm::make_unique<llvm::Module>(module->identifier, llvmContext);
 
-#ifdef _WIN32
-    module->functionDeclarations.push_back(
-        std::make_unique<ast::FunctionDeclaration>(
-            std::string("_DllMainCRTStartup"),
-            std::string("i32"),
-            std::vector<std::unique_ptr<ast::Parameter>>(),
-            std::make_unique<ast::LiteralExp>(lex::Token::tok_integer, std::string("0"))));
-#endif
-
     for (auto& f : module->functionDeclarations)
     {
         // make prototypes so that we can call them before generating code
@@ -107,7 +98,28 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<ast:
         llvmBuilder.CreateRet(expGenerator.getResult());
     }
 
+    // TODO: Should not be an ifdef for cross compile support
+#ifdef _WIN32
+    AddDllMain();
+#endif
+
     return std::move(llvmModule);
+}
+
+void CodeGenerator::AddDllMain()
+{
+    std::vector<llvm::Type*> parameterTypes;
+    parameterTypes.push_back(llvm::Type::getInt8PtrTy(llvmContext));
+    parameterTypes.push_back(llvm::Type::getInt32Ty(llvmContext));
+    parameterTypes.push_back(llvm::Type::getInt8PtrTy(llvmContext));
+    auto returnType = llvm::Type::getInt32Ty(llvmContext);
+    llvm::FunctionType *functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
+    auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, "_DllMainCRTStartup", llvmModule.get());
+    llvmFunction->setCallingConv(llvm::CallingConv::X86_StdCall);
+    auto bb = llvm::BasicBlock::Create(llvmContext, "entry", llvmFunction);
+    llvmBuilder.SetInsertPoint(bb);
+    auto value = llvm::ConstantInt::get(returnType, 1);
+    llvmBuilder.CreateRet(value);
 }
 
 ExpCodeGenerator::ExpCodeGenerator(type::Type *type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_) :

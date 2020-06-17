@@ -52,6 +52,8 @@ public:
 
 private:
 
+    void AddDllMain();
+
     friend ExpCodeGenerator;
 };
 
