@@ -22,6 +22,7 @@
 #pragma warning(pop)
 
 #include "Codegen.h"
+#include "HeaderWriter.h"
 #include "Lexer.h"
 #include "Parser.h"
 
@@ -90,13 +91,19 @@ int writeDefFile(std::unique_ptr<llfp::ast::Module> &module, llvm::SmallString<1
         {
             os << "LIBRARY " << module->identifier << "\n";
             os << "EXPORTS\n";
-            // TODO: this will include the _DllMainCRTStartup, should it?
-            // when we check "exported" functions this will not be a problem
             for (auto &f : module->functionDeclarations)
             {
                 os << "    " << f->identifier << "\n";
             }
         });
+}
+
+int writeHeaderFile(std::unique_ptr<llfp::ast::Module> &module, llvm::SmallString<128> &output)
+{
+    return write(output, ".h", [&module](llvm::raw_fd_ostream &os) {
+        llfp::HeaderWriter writer;
+        writer.write(os, *module);
+    });
 }
 
 int createDataLayout(llvm::StringRef targetTriple, llvm::DataLayout &dataLayout)
@@ -186,6 +193,8 @@ int main(int argc, char *argv[])
         result = writeBitcode(llvmModule, output);
         if (result) { return result; }
         result = writeDefFile(module, output);
+        if (result) { return result; }
+        result = writeHeaderFile(module, output);
         if (result) { return result; }
     }
 
