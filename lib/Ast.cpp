@@ -9,25 +9,30 @@ namespace ast
 
 Exp::~Exp() {}
 
-FunctionDeclaration::FunctionDeclaration(std::string identifier_,
+
+FunctionDeclaration::FunctionDeclaration(
+    std::string name_,
     std::string typeName_,
     std::vector<std::unique_ptr<Parameter>> parameters_,
-    std::unique_ptr<Exp> functionBody_) :
+    std::unique_ptr<Exp> functionBody_,
+    bool exported_) :
 
-    identifier{ std::move(identifier_) },
+    name{ std::move(name_) },
     typeName{ std::move(typeName_) },
     parameters{ std::move(parameters_) },
-    functionBody{ std::move(functionBody_) }
+    functionBody{ std::move(functionBody_) },
+    exported{ exported_ }
 {}
 
 FunctionDeclaration::~FunctionDeclaration() {}
 
-Module::Module(std::string identifier_, std::vector<std::unique_ptr<FunctionDeclaration>> functionDeclarations_) :
-    identifier{ std::move(identifier_) },
-    functionDeclarations{ std::move(functionDeclarations_) }
+
+Module::Module(std::string name_) :
+    name{ std::move(name_) }
 {}
 
 Module::~Module() {}
+
 
 LetExp::LetExp(std::vector<std::unique_ptr<FunctionDeclaration>> letStatments_, std::unique_ptr<Exp> exp_) :
     letStatments{ std::move(letStatments_) },
@@ -37,6 +42,7 @@ LetExp::LetExp(std::vector<std::unique_ptr<FunctionDeclaration>> letStatments_, 
 LetExp::~LetExp() {}
 
 void LetExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
+
 
 IfExp::IfExp(std::unique_ptr<Exp> condition_, std::unique_ptr<Exp> thenExp_, std::unique_ptr<Exp> elseExp_) :
     condition{ std::move(condition_) },
@@ -48,12 +54,14 @@ IfExp::~IfExp() {}
 
 void IfExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
 
+
 CaseExp::~CaseExp() {}
 
 void CaseExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
 
-BinaryExp::BinaryExp(std::string op, std::unique_ptr<Exp> lhs_, std::unique_ptr<Exp> rhs_) :
-    operand{ std::move(op) },
+
+BinaryExp::BinaryExp(std::string op_, std::unique_ptr<Exp> lhs_, std::unique_ptr<Exp> rhs_) :
+    op{ std::move(op_) },
     lhs{ std::move(lhs_) },
     rhs{ std::move(rhs_) }
 {}
@@ -61,6 +69,7 @@ BinaryExp::BinaryExp(std::string op, std::unique_ptr<Exp> lhs_, std::unique_ptr<
 BinaryExp::~BinaryExp() {}
 
 void BinaryExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
+
 
 UnaryExp::UnaryExp(std::string op_, std::unique_ptr<Exp> operand_) :
     op{ std::move(op_) },
@@ -71,6 +80,7 @@ UnaryExp::~UnaryExp() {}
 
 void UnaryExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
 
+
 LiteralExp::LiteralExp(lex::Token tokenType_, std::string value_) :
     tokenType{ tokenType_ },
     value{ std::move(value_) }
@@ -80,16 +90,20 @@ LiteralExp::~LiteralExp() {}
 
 void LiteralExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
 
-VariableExp::VariableExp(std::string id) :
-    identifier{ std::move(id) }
+
+VariableExp::VariableExp(std::string moduleName_, std::string name_) :
+    moduleName{ std::move(moduleName_) },
+    name{ std::move(name_) }
 {}
 
 VariableExp::~VariableExp() {}
 
 void VariableExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
 
-CallExp::CallExp(std::string id, std::vector<std::unique_ptr<Exp>> args) :
-    identifier{ std::move(id) },
+
+CallExp::CallExp(std::string moduleName_, std::string name_, std::vector<std::unique_ptr<Exp>> args) :
+    moduleName{ std::move(moduleName_) },
+    name{ std::move(name_) },
     arguments{ std::move(args) }
 {}
 

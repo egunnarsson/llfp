@@ -40,9 +40,9 @@ private:
     }
     bool expect(lex::Token token);
 
-    bool parseDeclaration(std::unique_ptr<ast::Module> &module);
+    bool parseDeclaration(const std::unique_ptr<ast::Module> &module);
 
-    std::unique_ptr<ast::FunctionDeclaration> parseFunction();
+    std::unique_ptr<ast::FunctionDeclaration> parseFunction(bool exported);
 
     std::unique_ptr<ast::Exp> parseLiteralExp();
     std::unique_ptr<ast::Exp> parseParenthesizedExp();

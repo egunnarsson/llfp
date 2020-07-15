@@ -1,9 +1,12 @@
-module foo
+module foo;
+
+import bar;
 
 i32 i = 1;
 
 i32 foo(i32 x) = 2;
 
+# this is a comment
 i32 bar(i32 y, i32 z) =
     let i32 baz = 1;
     in x() + x + y + baz;
@@ -13,3 +16,7 @@ i32 meh(bool b, i32 x) = if b then 1 + x else 2;
 i32 x = meh(true, 1);
 
 i32 not_test(bool b, i32 i1, i32 i2) = if !b then ~i1 else i1 + i2;
+
+float crt_test(float f1) = sin(f1) + 1.0;
+
+float import_test(float x) = addif(x, 1, x < 0);

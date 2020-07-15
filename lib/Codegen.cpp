@@ -18,22 +18,25 @@ namespace codegen
 
 const Value ExpCodeGenerator::EmptyValue{ nullptr, nullptr };
 
-CodeGenerator::CodeGenerator() :
-    llvmBuilder(llvmContext),
-    typeContext(llvmContext)
+CodeGenerator::CodeGenerator(SourceModule *sourceModule_) :
+    sourceModule{ sourceModule_ },
+    llvmBuilder(sourceModule_->context()),
+    typeContext(sourceModule_->context())
 {
     // fill functions with default functions
 }
 
-std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<ast::Module> &module)
+std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<SourceModule> &module)
 {
-    llvmModule = llvm::make_unique<llvm::Module>(module->identifier, llvmContext);
+    llvmModule = llvm::make_unique<llvm::Module>(module->name(), sourceModule->context());
 
-    for (auto& f : module->functionDeclarations)
+    // TODO: I only need to do this when I want to call it, start generating exported functions instead
+    for (auto& f : module->getAST()->functionDeclarations)
     {
+        std::string functionName = module->getFullFunctionName(f.get());
         // make prototypes so that we can call them before generating code
         // check no duplicated
-        if (functions.find(f->identifier) == functions.end())
+        if (functions.find(functionName) == functions.end())
         {
             std::vector<llvm::Type*> parameterTypes;
             for (auto& p : f->parameters)
@@ -54,8 +57,8 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<ast:
             }
             llvm::FunctionType *functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
 
-            auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, f->identifier, llvmModule.get());
-            functions[f->identifier] = { f.get(), llvmFunction };
+            auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, functionName, llvmModule.get());
+            functions[functionName] = { f.get(), llvmFunction };
 
             size_t i = 0;
             for (auto &p : llvmFunction->args())
@@ -65,7 +68,7 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<ast:
         }
         else
         {
-            llvm::errs() << "duplicate function definition: " << f->identifier;
+            llvm::errs() << "duplicate function definition: " << f->name;
             return nullptr;
         }
     }
@@ -75,7 +78,7 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<ast:
         // actually generate code
         auto f = f_.second;
 
-        auto bb = llvm::BasicBlock::Create(llvmContext, "entry", f.llvm);
+        auto bb = llvm::BasicBlock::Create(sourceModule->context(), "entry", f.llvm);
         llvmBuilder.SetInsertPoint(bb);
 
         std::map<std::string, Value> namedValues;
@@ -106,8 +109,10 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<ast:
     return std::move(llvmModule);
 }
 
+// TODO: only once per dll
 void CodeGenerator::AddDllMain()
 {
+    auto &llvmContext = sourceModule->context();
     std::vector<llvm::Type*> parameterTypes;
     parameterTypes.push_back(llvm::Type::getInt8PtrTy(llvmContext));
     parameterTypes.push_back(llvm::Type::getInt32Ty(llvmContext));
@@ -120,6 +125,112 @@ void CodeGenerator::AddDllMain()
     llvmBuilder.SetInsertPoint(bb);
     auto value = llvm::ConstantInt::get(returnType, 1);
     llvmBuilder.CreateRet(value);
+}
+
+Function* CodeGenerator::getFunction(llvm::StringRef module, llvm::StringRef functionName)
+{
+    if (module.empty())
+    {
+        std::vector<llvm::StringRef> modules;
+
+        if (functions.find(sourceModule->getFullFunctionName(functionName)) != functions.end())
+        {
+            modules.push_back(sourceModule->name());
+        }
+
+        for (auto &importedModules : sourceModule->getImportedModules())
+        {
+            auto function = importedModules.second->getFunction(functionName);
+            if (function != nullptr)
+            {
+                modules.push_back(importedModules.second->name());
+            }
+        }
+
+        if (modules.size() == 1)
+        {
+            module = modules.front();
+        }
+        else if (!modules.empty())
+        {
+            llvm::errs() << "reference to " << functionName << " is ambiguous";
+            return nullptr;
+        }
+
+        if (module.empty())
+        {
+            llvm::errs() << "undefined function " << functionName;
+            return nullptr;
+        }
+    }
+
+    if (module == sourceModule->name())
+    {
+        auto it = functions.find(sourceModule->getFullFunctionName(functionName));
+        if (it != functions.end())
+        {
+            return &it->second;
+        }
+    }
+    else
+    {
+        auto map = sourceModule->getImportedModules();
+        auto itm = map.find(module);
+        if (itm != map.end())
+        {
+            auto importedModule = itm->second;
+            auto astFunction = importedModule->getFunction(functionName);
+
+            if (astFunction != nullptr)
+            {
+                std::string fullName = importedModule->getFullFunctionName(astFunction);
+                auto itf = functions.find(fullName);
+                if (itf == functions.end())
+                {
+                    Function f;
+                    f.ast = astFunction;
+                    f.llvm = generateFunctionDeclaration(fullName, astFunction);
+                    if (f.llvm == nullptr) { return nullptr; }
+                    itf = functions.insert(std::make_pair(fullName, f)).first;
+                }
+                return &itf->second;
+            }
+        }
+        else
+        {
+            llvm::errs() << "undefined module " << module;
+            return nullptr;
+        }
+    }
+
+    llvm::errs() << "undefined function " << module << ":" << functionName;
+    return nullptr;
+}
+
+llvm::Function* CodeGenerator::generateFunctionDeclaration(const std::string &name, const ast::FunctionDeclaration *ast)
+{
+    std::vector<llvm::Type*> parameterTypes;
+
+    for (auto &arg : ast->parameters)
+    {
+        auto type = typeContext.getType(arg->typeName);
+        if (type == nullptr)
+        {
+            llvm::errs() << "unknown type " << arg->typeName;
+            return nullptr;
+        }
+        parameterTypes.push_back(type->llvmType());
+    }
+
+    auto returnType = typeContext.getType(ast->typeName);
+    if (returnType == nullptr)
+    {
+        llvm::errs() << "unknown type " << ast->typeName;
+        return nullptr;
+    }
+
+    llvm::FunctionType *functionType = llvm::FunctionType::get(returnType->llvmType(), parameterTypes, false);
+    return llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule.get());
 }
 
 ExpCodeGenerator::ExpCodeGenerator(type::Type *type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_) :
@@ -182,14 +293,14 @@ void ExpCodeGenerator::visit(ast::LetExp &exp)
         {
             return;
         }
-        if (values.find(var->identifier) != values.end())
+        if (values.find(var->name) != values.end())
         {
             llvm::errs() << "already defined";
             return;
         }
         else
         {
-            values[var->identifier] = { varType, value };
+            values[var->name] = { varType, value };
         }
     }
 
@@ -293,92 +404,92 @@ bool checkBool(type::Type *type)
 void ExpCodeGenerator::visit(ast::BinaryExp &exp)
 {
     // math
-    if (exp.operand == "*")// Multiplication
+    if (exp.op == "*")// Multiplication
     {
         generateBinary(exp, checkNum,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFMul(v1, v2, "fmul"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateMul(v1, v2, "mul", false, false); });
     }
-    else if (exp.operand == "/") // Division
+    else if (exp.op == "/") // Division
     {
         generateBinary(exp, checkNum,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFMul(v1, v2, "fmul"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateSDiv(v1, v2, "sdiv", false); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateUDiv(v1, v2, "udiv", false); });
     }
-    else if (exp.operand == "%") // Remainder
+    else if (exp.op == "%") // Remainder
     {
         generateBinary(exp, checkNum,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFRem(v1, v2, "frem"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateSRem(v1, v2, "srem"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateURem(v1, v2, "urem"); });
     }
-    else if (exp.operand == "+") // Addition
+    else if (exp.op == "+") // Addition
     {
         generateBinary(exp, checkNum,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFAdd(v1, v2, "fadd"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAdd(v1, v2, "add"); });
     }
-    else if (exp.operand == "-") // Subtraction
+    else if (exp.op == "-") // Subtraction
     {
         generateBinary(exp, checkNum,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFSub(v1, v2, "fsub"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateSub(v1, v2, "sub"); });
     }
     // bitwise
-    else if (exp.operand == "<<") // Shift
+    else if (exp.op == "<<") // Shift
     {
-        // Both arguments to the ‘shl’ instruction must be the same integer or vector of integer type. ‘op2’ is treated as an unsigned value.
+        // Both arguments to the 'shl' instruction must be the same integer or vector of integer type. 'op2' is treated as an unsigned value.
         generateBinary(exp, checkInteger,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateShl(v1, v2, "shl", false, false); });
     }
-    else if (exp.operand == ">>") // Signed shift
+    else if (exp.op == ">>") // Signed shift
     {
         generateBinary(exp, checkInteger,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAShr(v1, v2, "ashr", false); });
     }
-    else if (exp.operand == ">>>") // Logical shift
+    else if (exp.op == ">>>") // Logical shift
     {
         generateBinary(exp, checkInteger,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateLShr(v1, v2, "lshr", false); });
     }
     // compare
-    else if (exp.operand == ">")  { generateCompare(llvm::CmpInst::Predicate::ICMP_UGT, exp); } // Greater than
-    else if (exp.operand == ">=") { generateCompare(llvm::CmpInst::Predicate::ICMP_UGE, exp); } // Greater or equal
-    else if (exp.operand == "<")  { generateCompare(llvm::CmpInst::Predicate::ICMP_ULT, exp); } // Less than
-    else if (exp.operand == "<=") { generateCompare(llvm::CmpInst::Predicate::ICMP_ULE, exp); } // Less or equal
-    else if (exp.operand == "==") { generateCompare(llvm::CmpInst::Predicate::ICMP_EQ, exp); }  // Equal
-    else if (exp.operand == "!=") { generateCompare(llvm::CmpInst::Predicate::ICMP_NE, exp); }  // Not equal
+    else if (exp.op == ">") { generateCompare(llvm::CmpInst::Predicate::ICMP_UGT, exp); } // Greater than
+    else if (exp.op == ">=") { generateCompare(llvm::CmpInst::Predicate::ICMP_UGE, exp); } // Greater or equal
+    else if (exp.op == "<") { generateCompare(llvm::CmpInst::Predicate::ICMP_ULT, exp); } // Less than
+    else if (exp.op == "<=") { generateCompare(llvm::CmpInst::Predicate::ICMP_ULE, exp); } // Less or equal
+    else if (exp.op == "==") { generateCompare(llvm::CmpInst::Predicate::ICMP_EQ, exp); }  // Equal
+    else if (exp.op == "!=") { generateCompare(llvm::CmpInst::Predicate::ICMP_NE, exp); }  // Not equal
     // bitwise
-    else if (exp.operand == "&")
+    else if (exp.op == "&")
     {
         generateBinary(exp, checkInteger,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAnd(v1, v2, "and"); });
     }
-    else if (exp.operand == "|")
+    else if (exp.op == "|")
     {
         generateBinary(exp, checkInteger,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateOr(v1, v2, "or"); });
     }
-    else if (exp.operand == "^")
+    else if (exp.op == "^")
     {
         generateBinary(exp, checkInteger,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateXor(v1, v2, "xor"); });
     }
     // logical
-    else if (exp.operand == "&&")
+    else if (exp.op == "&&")
     {
         generateBinary(exp, checkBool,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAnd(v1, v2, "and"); });
     }
-    else if (exp.operand == "||")
+    else if (exp.op == "||")
     {
         generateBinary(exp, checkBool,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateOr(v1, v2, "or"); });
     }
     else
     {
-        llvm::errs() << "unknown operator: " << exp.operand;
+        llvm::errs() << "unknown operator: " << exp.op;
     }
 }
 
@@ -536,7 +647,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
         }
         else if (expectedType->isInteger())
         {
-            result = llvm::ConstantInt::get(llvm::IntegerType::get(generator->llvmContext, type->getIntegerBitWidth()), exp.value, 10);
+            result = llvm::ConstantInt::get(llvm::IntegerType::get(llvmContext(), type->getIntegerBitWidth()), exp.value, 10);
         }
         else
         {
@@ -584,11 +695,11 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
         {
             if (exp.value == "true")
             {
-                result = llvm::ConstantInt::getTrue(generator->llvmContext);
+                result = llvm::ConstantInt::getTrue(llvmContext());
             }
             else if (exp.value == "false")
             {
-                result = llvm::ConstantInt::getFalse(generator->llvmContext);
+                result = llvm::ConstantInt::getFalse(llvmContext());
             }
             else
             {
@@ -607,22 +718,20 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
 void ExpCodeGenerator::visit(ast::CallExp &exp)
 {
-    auto x = functions().find(exp.identifier);
-    if (x == functions().end())
+    auto function = getFunction(exp.moduleName, exp.name);
+    if (function == nullptr)
     {
-        llvm::errs() << "unknown function: " << exp.identifier;
+        llvm::errs() << "unknown function: " << exp.name;
     }
     else
     {
-        auto function = x->second;
-
-        if (*expectedType != function.ast->typeName)
+        if (*expectedType != function->ast->typeName)
         {
-            typeError(expectedType->name(), function.ast->typeName);
+            typeError(expectedType->name(), function->ast->typeName);
             return;
         }
 
-        if (function.ast->parameters.size() != exp.arguments.size())
+        if (function->ast->parameters.size() != exp.arguments.size())
         {
             llvm::errs() << "parameter count mismatch";
             return;
@@ -631,7 +740,7 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
         std::vector<llvm::Value*> arguments;
         for (size_t i = 0; i < exp.arguments.size(); ++i)
         {
-            auto parameterType = function.ast->parameters[i]->typeName;
+            auto parameterType = function->ast->parameters[i]->typeName;
             arguments.push_back(generate(*exp.arguments[i], typeContext().getType(parameterType), this));
             if (arguments.back() == nullptr)
             {
@@ -639,48 +748,50 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
             }
         }
 
-        result = llvmBuilder().CreateCall(function.llvm, arguments, "call");
+        result = llvmBuilder().CreateCall(function->llvm, arguments, "call");
     }
 }
 
 void ExpCodeGenerator::visit(ast::VariableExp &exp)
 {
-    auto x = getNamedValue(exp.identifier);
-    if (x.value == nullptr)
+    if (exp.moduleName.empty())
     {
-        auto y = functions().find(exp.identifier);
-        if (y != functions().end())
+        auto x = getNamedValue(exp.name);
+        if (x.value != nullptr)
         {
-            auto function = y->second;
-            if (function.ast->parameters.empty())
+            // check type
+            if (x.type != expectedType)
             {
-                // generate call
-                if (*expectedType != function.ast->typeName)
-                {
-                    typeError(expectedType->name(), function.ast->typeName);
-                    return;
-                }
-                result = llvmBuilder().CreateCall(function.llvm, std::vector<llvm::Value*>{}, "call");
+                typeError(expectedType->name(), x.type->name());
+                return;
             }
-            else
+            result = x.value;
+            return;
+        }
+    }
+
+    auto y = getFunction(exp.moduleName, exp.name); // functions().find(exp.name); // replace with lookup
+    if (y != nullptr)//functions().end())
+    {
+        auto &function = *y;//->second;
+        if (function.ast->parameters.empty())
+        {
+            // generate call
+            if (*expectedType != function.ast->typeName)
             {
-                llvm::errs() << exp.identifier << " is not a zero parameter function";
+                typeError(expectedType->name(), function.ast->typeName);
+                return;
             }
+            result = llvmBuilder().CreateCall(function.llvm, std::vector<llvm::Value*>{}, "call");
         }
         else
         {
-            llvm::errs() << "unknown identifier: " << exp.identifier;
+            llvm::errs() << exp.name << " is not a zero parameter function";
         }
     }
     else
     {
-        // check type
-        if (x.type != expectedType)
-        {
-            typeError(expectedType->name(), x.type->name());
-            return;
-        }
-        result = x.value;
+        llvm::errs() << "unknown identifier: " << exp.name;
     }
 }
 
@@ -711,15 +822,21 @@ type::Type* ExpCodeGenerator::getVariableType(llvm::StringRef variable)
     return getNamedValue(variable).type;
 }
 
-type::Type* ExpCodeGenerator::getFunctionReturnType(llvm::StringRef variable)
+Function* ExpCodeGenerator::getFunction(llvm::StringRef module, llvm::StringRef functionName)
 {
-    auto it = functions().find(variable);
-    if (it == functions().end())
+    // TODO: add local functions
+    return generator->getFunction(module, functionName);
+}
+
+type::Type* ExpCodeGenerator::getFunctionReturnType(llvm::StringRef module, llvm::StringRef functionName)
+{
+    auto f = getFunction(module, functionName);
+    if (f == nullptr)
     {
-        llvm::errs() << "unknown function: " << variable;
+        llvm::errs() << "unknown function: " << module << ":" << functionName;
         return nullptr;
     }
-    return typeContext().getType(it->second.ast->typeName);
+    return typeContext().getType(f->ast->typeName);
 }
 
 llvm::Value* ExpCodeGenerator::getResult()

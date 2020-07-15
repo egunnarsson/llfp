@@ -100,6 +100,7 @@ constexpr Token punctuation(int _C)
     case '(': return tok_open_parenthesis;
     case ')': return tok_close_parenthesis;
     case ',': return tok_comma;
+    case ':': return tok_colon;
     case ';': return tok_semicolon;
     default: return tok_error;
     }
@@ -150,6 +151,10 @@ Token Lexer::parseToken()
         // change to switch or map
         if (tokenString == "module")
             return tok_module;
+        if (tokenString == "import")
+            return tok_import;
+        if (tokenString == "export")
+            return tok_export;
         if (tokenString == "data")
             return tok_data;
         if (tokenString == "class")
@@ -173,7 +178,7 @@ Token Lexer::parseToken()
 
     // -1? -1.0? or treat it as unary op, problem is type check unsigned, or fix in parsing
     // hex, oct, bin
-    if (isdigit(lastChar) || lastChar == '.') // Number: digit+ | digit* '.' digit+ ('e' '-'? digit+)?
+    if (isdigit(lastChar) || lastChar == '.') // Number: '.'? digit+ | digit* '.' digit+ ('e' '-'? digit+)?
     {
         tokenString.clear();
 
@@ -191,6 +196,7 @@ Token Lexer::parseToken()
         {
             tokenString += '.';
             lastChar = input->getChar();
+            // FIXME: if (!isDigit(lastChar)) could be member access (foo.x)
             while (isdigit(lastChar))
             {
                 tokenString += static_cast<char>(lastChar);

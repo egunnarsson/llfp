@@ -97,43 +97,87 @@ std::unique_ptr<ast::Module> Parser::parse()
     std::string name = lexer->getString();
     lexer->nextToken();
 
+    auto module = std::make_unique<ast::Module>(name);
+
+    if (lexer->getToken() == lex::tok_open_parenthesis)
+    {
+        while (true)
+        {
+            lexer->nextToken();
+            if (lexer->getToken() != lex::tok_identifier)
+            {
+                return Error<ast::Module>("expected identifier");
+            }
+            module->publicDeclarations.push_back(lexer->getString());
+
+            lexer->nextToken();
+            if (lexer->getToken() == lex::tok_close_parenthesis)
+            {
+                lexer->nextToken();
+                break;
+            }
+            else
+            {
+                if (!expect(lex::tok_comma)) { return nullptr; }
+            }
+        }
+    }
+
+    if (!expect(lex::tok_semicolon)) { return nullptr; }
+
+    while (lexer->getToken() == lex::tok_import)
+    {
+        lexer->nextToken();
+        if (lexer->getToken() != lex::tok_identifier)
+        {
+            return Error<ast::Module>("expected identifier");
+        }
+        module->imports.push_back(lexer->getString());
+        lexer->nextToken();
+        if (!expect(lex::tok_semicolon)) { return nullptr; }
+    }
+
     std::vector<std::unique_ptr<ast::FunctionDeclaration>> functionDeclarations;
     while (lexer->getToken() != lex::tok_eof)
     {
-        auto function = parseFunction();
-        if (!function)
+        if (!parseDeclaration(module))
         {
             return nullptr;
         }
-        functionDeclarations.push_back(std::move(function));
     }
 
-    return std::make_unique<ast::Module>(std::move(name), std::move(functionDeclarations));
+    return std::move(module);
 }
 
-bool Parser::parseDeclaration(std::unique_ptr<ast::Module> &module)
+bool Parser::parseDeclaration(const std::unique_ptr<ast::Module> &module)
 {
-    bool result = false;
+    bool exported = false;
+    if (lexer->getToken() == lex::tok_export)
+    {
+        exported = true;
+        lexer->nextToken();
+    }
     switch (lexer->getToken())
     {
-    case lex::tok_data: llvm::errs() << "data declaration not implemented"; result = false; break;
-    case lex::tok_class: llvm::errs() << "class declaration not implemented"; result = false; break;
-    case lex::tok_instance: llvm::errs() << "instance declaration not implemented"; result = false; break;
+    case lex::tok_data: llvm::errs() << "data declaration not implemented"; break;
+    case lex::tok_class: llvm::errs() << "class declaration not implemented"; break;
+    case lex::tok_instance: llvm::errs() << "instance declaration not implemented"; break;
     case lex::tok_identifier:
+    {
+        if (auto function = parseFunction(exported))
         {
-            auto function = parseFunction();
-            result = function != nullptr;
-            //if (!result) { llvm::errs() << ""; }// error msg;
             module->functionDeclarations.push_back(std::move(function));
+            return true;
         }
-        break;
+    }
+    break;
 
     default: llvm::errs() << "unexpected token: " << lex::Lexer::tokenName(lexer->getToken()); break;
     }
-    return result;
+    return false;
 }
 
-std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction()
+std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
 {
     if (lexer->getToken() != lex::tok_identifier)
     {
@@ -179,7 +223,12 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction()
 
     if (!expect(lex::tok_semicolon)) { return nullptr; }
 
-    return std::make_unique<ast::FunctionDeclaration>(std::move(identifier), std::move(typeName), std::move(parameters), std::move(body));
+    return std::make_unique<ast::FunctionDeclaration>(
+        std::move(identifier),
+        std::move(typeName),
+        std::move(parameters),
+        std::move(body),
+        exported);
 }
 
 std::unique_ptr<ast::Exp> Parser::parseLiteralExp()
@@ -216,12 +265,23 @@ std::unique_ptr<ast::Exp> Parser::parseIdentifierExp()
         return nullptr;
     }
 
+    std::string moduleName;
     std::string identifier = lexer->getString();
 
     auto token = lexer->nextToken();
+    if (token == lex::tok_colon)
+    {
+        token = lexer->nextToken();
+        if (token != lex::tok_identifier) { return Error<ast::VariableExp>("expected identifier"); }
+
+        moduleName = std::move(identifier);
+        identifier = lexer->getString();
+        token = lexer->nextToken();
+    }
+
     if (token != lex::tok_open_parenthesis)
     {
-        return std::make_unique<ast::VariableExp>(std::move(identifier));
+        return std::make_unique<ast::VariableExp>(std::move(moduleName), std::move(identifier));
     }
 
     // call
@@ -249,7 +309,7 @@ std::unique_ptr<ast::Exp> Parser::parseIdentifierExp()
     }
     lexer->nextToken(); // eat ')'
 
-    return std::make_unique<ast::CallExp>(std::move(identifier), std::move(args));
+    return std::make_unique<ast::CallExp>(std::move(moduleName), std::move(identifier), std::move(args));
 }
 
 std::unique_ptr<ast::Exp> Parser::parseIfExp()
@@ -288,7 +348,7 @@ std::unique_ptr<ast::Exp> Parser::parseLetExp()
     std::vector<std::unique_ptr<ast::FunctionDeclaration>> declarations;
     while (true)
     {
-        auto declaration = parseFunction();
+        auto declaration = parseFunction(false);
         if (!declaration)
         {
             return nullptr;

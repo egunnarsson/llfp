@@ -16,6 +16,8 @@ enum Token
 
     //tok_function, /* "function" */
     tok_module,
+    tok_import,
+    tok_export,
     tok_data,     /* "data"     */
     tok_class,    /* "class"    */
     tok_instance, /* "instance" */
@@ -34,6 +36,7 @@ enum Token
     tok_in,
 
     tok_operator,
+    tok_colon,
     tok_semicolon,
     tok_open_parenthesis,
     tok_close_parenthesis,
@@ -61,7 +64,7 @@ public:
     }
     virtual ~Input() {}
 
-    int getChar();
+    int            getChar();
     // mark() ? to mark start of token
     SourceLocation getLocation() { return location; };
 
@@ -125,11 +128,11 @@ protected:
 
 class Lexer
 {
-    Input* input;
-    Token currentToken;
+    Input*      input;
+    Token       currentToken;
     std::string tokenString;
-    int lastChar;
-    bool skipComments = true;
+    int         lastChar;
+    bool        skipComments = true;
 
 public:
 
@@ -143,6 +146,8 @@ public:
         case tok_error: return "error";
         case tok_eof: return "eof";
         case tok_module: return "module";
+        case tok_import: return "import";
+        case tok_export: return "export";
         case tok_data: return "data";
         case tok_class: return "class";
         case tok_instance: return "instance";
@@ -158,6 +163,7 @@ public:
         case tok_let: return "let";
         case tok_in: return "in";
         case tok_operator: return "operator";
+        case tok_colon: return "colon";
         case tok_semicolon: return "semicolon";
         case tok_open_parenthesis: return "parenthesis";
         case tok_close_parenthesis: return "parenthesis";
@@ -168,10 +174,10 @@ public:
         }
     }
 
-    Token nextToken(); /*bool skipComment = true*/ /* should return void? */
-    Token getToken() const;
+    Token              nextToken(); /*bool skipComment = true*/ /* should return void? */
+    Token              getToken() const;
     const std::string& getString() const;
-    SourceLocation getLocation() const;
+    SourceLocation     getLocation() const;
 
 private:
 

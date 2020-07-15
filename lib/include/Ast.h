@@ -12,8 +12,6 @@ namespace llfp
 namespace ast
 {
 
-class Module;
-class FunctionDeclaration;
 class LetExp;
 class IfExp;
 class CaseExp;
@@ -81,16 +79,18 @@ class FunctionDeclaration : public Node
 {
 public:
 
-    std::string          identifier;
+    std::string          name;
     std::string          typeName;
     std::vector<std::unique_ptr<Parameter>> parameters;
     std::unique_ptr<Exp> functionBody;
-    //bool                 export;
+    bool                 exported;
 
-    FunctionDeclaration(std::string identifier_,
+    FunctionDeclaration(
+        std::string name_,
         std::string typeName_,
         std::vector<std::unique_ptr<Parameter>> parameters_,
-        std::unique_ptr<Exp> functionBody_);
+        std::unique_ptr<Exp> functionBody_,
+        bool exported);
     virtual ~FunctionDeclaration();
 };
 
@@ -98,10 +98,12 @@ class Module : public Node
 {
 public:
 
-    std::string identifier;
+    std::string              name;
+    std::vector<std::string> publicDeclarations;
+    std::vector<std::string> imports;
     std::vector<std::unique_ptr<FunctionDeclaration>> functionDeclarations;
 
-    Module(std::string identifier_, std::vector<std::unique_ptr<FunctionDeclaration>> functionDeclarations_);
+    Module(std::string name_);
     virtual ~Module();
 };
 
@@ -147,11 +149,11 @@ class BinaryExp : public Exp
 {
 public:
 
-    std::string operand;
+    std::string          op;
     std::unique_ptr<Exp> lhs;
     std::unique_ptr<Exp> rhs;
 
-    BinaryExp(std::string op, std::unique_ptr<Exp> lhs_, std::unique_ptr<Exp> rhs_);
+    BinaryExp(std::string op_, std::unique_ptr<Exp> lhs_, std::unique_ptr<Exp> rhs_);
     virtual ~BinaryExp();
 
     void accept(ExpVisitor *visitor) override;
@@ -161,7 +163,7 @@ class UnaryExp : public Exp
 {
 public:
 
-    std::string op;
+    std::string          op;
     std::unique_ptr<Exp> operand;
 
     UnaryExp(std::string op_, std::unique_ptr<Exp> operand_);
@@ -174,7 +176,7 @@ class LiteralExp : public Exp
 {
 public:
 
-    lex::Token tokenType;
+    lex::Token  tokenType;
     std::string value;
 
     LiteralExp(lex::Token tokenType_, std::string value_);
@@ -187,9 +189,10 @@ class VariableExp : public Exp
 {
 public:
 
-    std::string identifier;
+    std::string moduleName;
+    std::string name;
 
-    VariableExp(std::string id);
+    VariableExp(std::string moduleName, std::string name_);
     virtual ~VariableExp();
 
     void accept(ExpVisitor *visitor) override;
@@ -199,10 +202,11 @@ class CallExp : public Exp
 {
 public:
 
-    std::string identifier;
+    std::string moduleName;
+    std::string name;
     std::vector<std::unique_ptr<Exp>> arguments;
 
-    CallExp(std::string id, std::vector<std::unique_ptr<Exp>> args);
+    CallExp(std::string moduleName_, std::string name_, std::vector<std::unique_ptr<Exp>> args);
     virtual ~CallExp();
 
     void accept(ExpVisitor *visitor) override;

@@ -66,9 +66,9 @@ void writeParameter(llvm::raw_ostream &os, std::unique_ptr<ast::Parameter> &para
 
 } // namespace
 
-void HeaderWriter::write(llvm::raw_ostream &os, ast::Module &module)
+void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
 {
-    auto headerGuard = module.identifier;
+    auto headerGuard = module.name();
     for (auto &c : headerGuard) c = llvm::toUpper(c);
     headerGuard += "_H";
 
@@ -84,9 +84,9 @@ void HeaderWriter::write(llvm::raw_ostream &os, ast::Module &module)
 
     // for () {} user types
 
-    for (auto &f : module.functionDeclarations)
+    for (auto &f : module.getAST()->functionDeclarations)
     {
-        os << convertType(f->typeName) << ' ' << f->identifier << '(';
+        os << convertType(f->typeName) << ' ' << module.getFullFunctionName(f.get()) << '(';
         if (f->parameters.size() >= 1)
         {
             writeParameter(os, f->parameters.front());

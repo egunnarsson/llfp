@@ -34,7 +34,8 @@ int main()
     "i32 bar(i32 y, i32 z) = let i32 baz = 1; in x() + x + y + baz;\n"
     "i32 meh(bool b, i32 x) = if b then 1 + x else 2;\n"
     "i32 x = meh(true, 1);\n"
-    "i32 not_test(bool b, i32 i1, i32 i2) = if !b then ~i1 else i1 + i2;");
+    "i32 not_test(bool b, i32 i1, i32 i2) = if !b then ~i1 else i1 + i2;\n"
+    "float module_test = math:cos(1.0);");
 
     getchar();
 }

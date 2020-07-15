@@ -1,0 +1,3 @@
+module baz(addif);
+
+float addif(float x, float y, bool b) = if b then x + y else x;

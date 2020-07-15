@@ -6,7 +6,7 @@
 
 #pragma warning(pop)
 
-#include "Ast.h"
+#include "Module.h"
 
 
 namespace llfp
@@ -19,7 +19,7 @@ public:
 
     // HeaderGen(std::string useNamespace) // option for c++ header
 
-    void write(llvm::raw_ostream &os, ast::Module &module);
+    void write(llvm::raw_ostream &os, llfp::SourceModule &module);
 };
 
 } // llfp

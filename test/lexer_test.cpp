@@ -50,7 +50,9 @@ int main()
         "'a 1",
         "1111 <= \"\" 'a' data else #commnet\n1.1",
         "()",
-        " a_ a_b a' a'a a'' a''*b_"
+        " a_ a_b a' a'a a'' a''*b_",
+        //"a:b().c.d+f.g"
+        "a:b()"
     });
 
     getchar();

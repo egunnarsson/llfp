@@ -217,14 +217,14 @@ void TypeInferer::visit(ast::LetExp &exp)
             return;
         }
 
-        if (variables.find(var->identifier) != variables.end())
+        if (variables.find(var->name) != variables.end())
         {
             llvm::errs() << "already defined";
             return;
         }
         else
         {
-            variables[var->identifier] = varType;
+            variables[var->name] = varType;
         }
     }
 
@@ -287,32 +287,32 @@ Type* inferBitExp(TypeInferer *inferer, ast::BinaryExp &exp)
 void TypeInferer::visit(ast::BinaryExp &exp)
 {
     // math
-    if (exp.operand == "*")      { result = inferMathExp(this, exp); } // Multiplication
-    else if (exp.operand == "/") { result = inferMathExp(this, exp); } // Division
-    else if (exp.operand == "%") { result = inferMathExp(this, exp); } // Remainder
-    else if (exp.operand == "+") { result = inferMathExp(this, exp); } // Addition
-    else if (exp.operand == "-") { result = inferMathExp(this, exp); } // Subtraction
+    if (exp.op == "*")      { result = inferMathExp(this, exp); } // Multiplication
+    else if (exp.op == "/") { result = inferMathExp(this, exp); } // Division
+    else if (exp.op == "%") { result = inferMathExp(this, exp); } // Remainder
+    else if (exp.op == "+") { result = inferMathExp(this, exp); } // Addition
+    else if (exp.op == "-") { result = inferMathExp(this, exp); } // Subtraction
     // bitwise
-    else if (exp.operand == "<<")  { result = inferBitExp(this, exp); } // Shift
-    else if (exp.operand == ">>")  { result = inferBitExp(this, exp); } // Signed shift
-    else if (exp.operand == ">>>") { result = inferBitExp(this, exp); } // Logical shift
+    else if (exp.op == "<<")  { result = inferBitExp(this, exp); } // Shift
+    else if (exp.op == ">>")  { result = inferBitExp(this, exp); } // Signed shift
+    else if (exp.op == ">>>") { result = inferBitExp(this, exp); } // Logical shift
     // compare
-    else if (exp.operand == ">")  { result = getTypeByName(name::Bool); } // Greater than
-    else if (exp.operand == ">=") { result = getTypeByName(name::Bool); } // Greater or equal
-    else if (exp.operand == "<")  { result = getTypeByName(name::Bool); } // Less than
-    else if (exp.operand == "<=") { result = getTypeByName(name::Bool); } // Less or equal
-    else if (exp.operand == "==") { result = getTypeByName(name::Bool); } // Equal
-    else if (exp.operand == "!=") { result = getTypeByName(name::Bool); } // Not equal
+    else if (exp.op == ">")  { result = getTypeByName(name::Bool); } // Greater than
+    else if (exp.op == ">=") { result = getTypeByName(name::Bool); } // Greater or equal
+    else if (exp.op == "<")  { result = getTypeByName(name::Bool); } // Less than
+    else if (exp.op == "<=") { result = getTypeByName(name::Bool); } // Less or equal
+    else if (exp.op == "==") { result = getTypeByName(name::Bool); } // Equal
+    else if (exp.op == "!=") { result = getTypeByName(name::Bool); } // Not equal
     // bitwise
-    else if (exp.operand == "&") { result = inferBitExp(this, exp); }
-    else if (exp.operand == "|") { result = inferBitExp(this, exp); }
-    else if (exp.operand == "^") { result = inferBitExp(this, exp); }
+    else if (exp.op == "&") { result = inferBitExp(this, exp); }
+    else if (exp.op == "|") { result = inferBitExp(this, exp); }
+    else if (exp.op == "^") { result = inferBitExp(this, exp); }
     // logical
-    else if (exp.operand == "&&") { result = getTypeByName(name::Bool); }
-    else if (exp.operand == "||") { result = getTypeByName(name::Bool); }
+    else if (exp.op == "&&") { result = getTypeByName(name::Bool); }
+    else if (exp.op == "||") { result = getTypeByName(name::Bool); }
     else
     {
-        llvm::errs() << "unknown operator: " << exp.operand;
+        llvm::errs() << "unknown operator: " << exp.op;
     }
 }
 
@@ -379,17 +379,22 @@ void TypeInferer::visit(ast::CallExp &exp)
 
     // infer exp of body in the new environment
 
-    result = env->getFunctionReturnType(exp.identifier);
+    result = env->getFunctionReturnType(exp.moduleName, exp.name);
 }
 
 void TypeInferer::visit(ast::VariableExp &exp)
 {
-    result = getVariableType(exp.identifier);
-    if (result == nullptr)
+    if (exp.moduleName.empty())
     {
-        // possibly 0 arity function
-        result = getFunctionReturnType(exp.identifier);
+        result = getVariableType(exp.name);
+        if (result != nullptr)
+        {
+            return;
+        }
     }
+
+    // possibly 0 arity function
+    result = getFunctionReturnType(exp.moduleName, exp.name);
 }
 
 Type* TypeInferer::getTypeByName(llvm::StringRef name)
@@ -407,9 +412,9 @@ Type* TypeInferer::getVariableType(llvm::StringRef name)
     return env->getVariableType(name);
 }
 
-Type* TypeInferer::getFunctionReturnType(llvm::StringRef function)
+Type* TypeInferer::getFunctionReturnType(llvm::StringRef module, llvm::StringRef functionName)
 {
-    return env->getVariableType(function);
+    return env->getFunctionReturnType(module, functionName);
 }
 
 } // namespace Type

@@ -63,9 +63,9 @@ class TypeEnvironment;
 
 class Type
 {
-    const std::string name_;
+    const std::string  name_;
     llvm::Type * const llvmType_;
-    const bool isSigned_;
+    const bool         isSigned_;
 
 public:
 
@@ -105,7 +105,7 @@ public:
 
     virtual Type* getTypeByName(llvm::StringRef variable) = 0;
     virtual Type* getVariableType(llvm::StringRef variable) = 0;
-    virtual Type* getFunctionReturnType(llvm::StringRef function) = 0;
+    virtual Type* getFunctionReturnType(llvm::StringRef module, llvm::StringRef functionName) = 0;
 
 protected:
 
@@ -136,7 +136,7 @@ public:
 
     Type* getTypeByName(llvm::StringRef name) override;
     Type* getVariableType(llvm::StringRef variable) override;
-    Type* getFunctionReturnType(llvm::StringRef function) override;
+    Type* getFunctionReturnType(llvm::StringRef module, llvm::StringRef functionName) override;
 };
 
 } // namespace type

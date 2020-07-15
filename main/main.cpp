@@ -30,27 +30,28 @@
 enum ErrorCodes
 {
     NoError = 0,
+    CommandLineArgumentError,
     ParseOrLexerError,
     TypeOrCodeGenerationError,
     LLVMError,
     IOError,
 };
 
-static llvm::cl::opt<std::string>
-InputFilename(llvm::cl::Positional, llvm::cl::desc("<input file>"), llvm::cl::init("-"));
+static llvm::cl::list<std::string>
+InputFilenames(llvm::cl::Positional, llvm::cl::desc("<Input files>"), llvm::cl::ZeroOrMore);
 
 static llvm::cl::opt<std::string>
 OutputFilename("o", llvm::cl::desc("Output filename"), llvm::cl::value_desc("filename"));
 
-std::unique_ptr<llfp::lex::Input> makeInput()
+std::unique_ptr<llfp::lex::Input> makeInput(std::string &inputFilename)
 {
-    if (InputFilename == "-")
+    if (inputFilename == "-")
     {
         return std::make_unique<llfp::lex::StdinInput>();
     }
     else
     {
-        return std::make_unique<llfp::lex::FileInput>(InputFilename.c_str());
+        return std::make_unique<llfp::lex::FileInput>(inputFilename.c_str());
     }
 }
 
@@ -74,31 +75,31 @@ int write(llvm::SmallString<128> &output, llvm::StringRef extention, T writeFun)
     return NoError;
 }
 
-int writeIR(std::unique_ptr<llvm::Module> &llvmModule, llvm::SmallString<128> &output)
+int writeIR(llvm::Module *llvmModule, llvm::SmallString<128> &output)
 {
-    return write(output, ".ll", [&llvmModule](llvm::raw_fd_ostream &os) { os << (*llvmModule); });
+    return write(output, ".ll", [llvmModule](llvm::raw_fd_ostream &os) { os << (*llvmModule); });
 }
 
-int writeBitcode(std::unique_ptr<llvm::Module> &llvmModule, llvm::SmallString<128> &output)
+int writeBitcode(llvm::Module *llvmModule, llvm::SmallString<128> &output)
 {
-    return write(output, ".bc", [&llvmModule](llvm::raw_fd_ostream &os) { llvm::WriteBitcodeToFile(*llvmModule, os); });
+    return write(output, ".bc", [llvmModule](llvm::raw_fd_ostream &os) { llvm::WriteBitcodeToFile(*llvmModule, os); });
 }
 
-int writeDefFile(std::unique_ptr<llfp::ast::Module> &module, llvm::SmallString<128> &output)
+int writeDefFile(llfp::SourceModule *module, llvm::SmallString<128> &output)
 {
     return write(output, ".def",
         [&module](llvm::raw_fd_ostream &os)
         {
-            os << "LIBRARY " << module->identifier << "\n";
+            os << "LIBRARY " << module->name() << "\n";
             os << "EXPORTS\n";
-            for (auto &f : module->functionDeclarations)
+            for (auto &f : module->getAST()->functionDeclarations)
             {
-                os << "    " << f->identifier << "\n";
+                os << "    " << module->getFullFunctionName(f.get()) << "\n";
             }
         });
 }
 
-int writeHeaderFile(std::unique_ptr<llfp::ast::Module> &module, llvm::SmallString<128> &output)
+int writeHeaderFile(llfp::SourceModule* module, llvm::SmallString<128> &output)
 {
     return write(output, ".h", [&module](llvm::raw_fd_ostream &os) {
         llfp::HeaderWriter writer;
@@ -144,32 +145,69 @@ int createDataLayout(llvm::StringRef targetTriple, llvm::DataLayout &dataLayout)
     return NoError;
 }
 
+int write(llfp::SourceModule* module, llvm::SmallString<128> &output)
+{
+    auto llvmModule = module->getLLVM();
+
+    int result = writeIR(llvmModule, output);
+    if (result) { return result; }
+    result = writeBitcode(llvmModule, output);
+    if (result) { return result; }
+    result = writeDefFile(module, output);
+    if (result) { return result; }
+    result = writeHeaderFile(module, output);
+    if (result) { return result; }
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
-    llvm::cl::ParseCommandLineOptions(argc, argv, "");
-
-    llvm::SmallString<128> output = OutputFilename.empty() ? InputFilename : OutputFilename;
-
-    auto input = makeInput();
-
-    llfp::lex::Lexer lexer(input.get());
-    llfp::parse::Parser parser(&lexer);
-
-    auto module = parser.parse();
-
-    if (module == nullptr)
+    if (!llvm::cl::ParseCommandLineOptions(argc, argv, "", &llvm::errs()))
     {
-        llvm::errs() << "Parse error\n";
-        return ParseOrLexerError;
+        return CommandLineArgumentError;
     }
 
-    llfp::codegen::CodeGenerator codeGen;
-    auto llvmModule = codeGen.generate(module);
-
-    if (llvmModule == nullptr)
+    if (InputFilenames.empty())
     {
-        llvm::errs() << "Code generation error\n";
-        return TypeOrCodeGenerationError;
+        InputFilenames.push_back("-");
+    }
+
+    if (InputFilenames.size() > 1 && !OutputFilename.empty())
+    {
+        llvm::errs() << "multiple input files specified while also specifying an output file";
+        return CommandLineArgumentError;
+    }
+
+    std::vector<const llfp::ImportedModule*> modules; // will later contain standard modules
+    std::vector<std::unique_ptr<llfp::SourceModule>> sourceModules;
+    for (auto &inputFile : InputFilenames)
+    {
+        sourceModules.push_back(std::make_unique<llfp::SourceModule>(inputFile));
+
+        auto input = makeInput(inputFile);
+        llfp::lex::Lexer lexer(input.get());
+        llfp::parse::Parser parser(&lexer);
+        auto astModule = parser.parse();
+        if (astModule == nullptr)
+        {
+            return ParseOrLexerError;
+        }
+
+        if (!sourceModules.back()->setAST(std::move(astModule)))
+        {
+            return TypeOrCodeGenerationError;
+        }
+
+        modules.push_back(sourceModules.back().get());
+    }
+
+    // resolve imports
+    for (auto &module : sourceModules)
+    {
+        if (!module->addImportedModules(modules))
+        {
+            return TypeOrCodeGenerationError;
+        }
     }
 
     auto targetTriple = llvm::sys::getDefaultTargetTriple(); // 32 bit "i386-pc-windows-msvc"
@@ -177,25 +215,45 @@ int main(int argc, char *argv[])
     int result = createDataLayout(targetTriple, dataLayout);
     if (result) { return result; }
 
-    llvmModule->setTargetTriple(targetTriple);
-    llvmModule->setDataLayout(dataLayout);
-
-    if (output == "-")
+    for (auto &module : sourceModules)
     {
-        // if binary
-        // else
-        llvm::outs() << (*llvmModule);
+        llfp::codegen::CodeGenerator codeGen(module.get());
+
+        auto llvmModule = codeGen.generate(module);
+        if (llvmModule == nullptr)
+        {
+            return TypeOrCodeGenerationError;
+        }
+        
+        llvmModule->setTargetTriple(targetTriple);
+        llvmModule->setDataLayout(dataLayout);
+
+        module->setLLVM(std::move(llvmModule));
+    }
+
+    llvm::SmallString<128> output;
+    if (sourceModules.size() == 1)
+    {
+        auto module = sourceModules.front().get();
+        output = OutputFilename.empty() ? InputFilenames.front() : OutputFilename;
+        if (output == "-")
+        {
+            auto llvmModule = module->getLLVM();
+            llvm::outs() << (*llvmModule);
+        }
+        else
+        {
+            return write(module, output);
+        }
     }
     else
     {
-        result = writeIR(llvmModule, output);
-        if (result) { return result; }
-        result = writeBitcode(llvmModule, output);
-        if (result) { return result; }
-        result = writeDefFile(module, output);
-        if (result) { return result; }
-        result = writeHeaderFile(module, output);
-        if (result) { return result; }
+        for (auto &module : sourceModules)
+        {
+            output = module->filePath();
+            result = write(module.get(), output);
+            if (result != 0) { return result; }
+        }
     }
 
     return NoError;

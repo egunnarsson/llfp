@@ -12,6 +12,7 @@
 #pragma warning(pop)
 
 #include "Ast.h"
+#include "Module.h"
 #include "Type.h"
 
 
@@ -24,20 +25,20 @@ class ExpCodeGenerator;
 
 struct Function
 {
-    ast::FunctionDeclaration *ast;
-    llvm::Function *llvm;
+    const ast::FunctionDeclaration* ast;
+    llvm::Function*                 llvm;
 };
 
 struct Value
 {
-    type::Type *type;
-    llvm::Value *value;
+    type::Type*  type;
+    llvm::Value* value;
 };
 
 class CodeGenerator
 {
-    llvm::LLVMContext llvmContext; // one context per module, one module compiled per thread
-    llvm::IRBuilder<> llvmBuilder;
+    SourceModule*                 sourceModule;
+    llvm::IRBuilder<>             llvmBuilder;
     std::unique_ptr<llvm::Module> llvmModule;
 
     // should be map<pair<string, TypeEnv>, Function> functions; for "generic" functions
@@ -46,13 +47,16 @@ class CodeGenerator
 
 public:
 
-    CodeGenerator();
+    CodeGenerator(SourceModule *sourceModule_);
 
-    std::unique_ptr<llvm::Module> generate(const std::unique_ptr<ast::Module> &module);
+    std::unique_ptr<llvm::Module> generate(const std::unique_ptr<SourceModule> &module);
 
 private:
 
-    void AddDllMain();
+    void            AddDllMain();
+    // lookup, global functions, generate llvmFunction if first external reference
+    Function*       getFunction(llvm::StringRef module, llvm::StringRef functionName);
+    llvm::Function* generateFunctionDeclaration(const std::string &name, const ast::FunctionDeclaration *ast);
 
     friend ExpCodeGenerator;
 };
@@ -65,6 +69,7 @@ class ExpCodeGenerator : public ast::ExpVisitor, public type::TypeEnvironment
     CodeGenerator* const         generator;
     type::Type* const            expectedType;
     std::map<std::string, Value> values;
+    //std::map<string, .> letExpFunctions; localFunction
     llvm::Value*                 result;
 
 public:
@@ -75,9 +80,12 @@ public:
 
     static llvm::Value* generate(ast::Exp &exp, type::Type *type, ExpCodeGenerator *parent);
 
+    // lookup, local functions, global functions,
+    Function* getFunction(llvm::StringRef module, llvm::StringRef functionName);
+
     type::Type*  getTypeByName(llvm::StringRef variable) override;
     type::Type*  getVariableType(llvm::StringRef variable) override;
-    type::Type*  getFunctionReturnType(llvm::StringRef variable) override;
+    type::Type*  getFunctionReturnType(llvm::StringRef module, llvm::StringRef functionName) override;
     llvm::Value* getResult();
 
     void visit(ast::LetExp &exp) override;
@@ -93,7 +101,7 @@ private:
 
     const Value& getNamedValue(const std::string &name);
 
-    auto& llvmContext() { return generator->llvmContext; }
+    auto& llvmContext() { return generator->sourceModule->context(); }
     auto& llvmBuilder() { return generator->llvmBuilder; }
     auto& llvmModule() { return generator->llvmModule; }
     auto& functions() { return generator->functions; }
