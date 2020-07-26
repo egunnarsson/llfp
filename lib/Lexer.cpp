@@ -29,9 +29,10 @@ int StdinInput::getCharInt()
     return getchar();
 }
 
-FileInput::FileInput(const char*filename)
+FileInput::FileInput(const char* fileName) :
+    Input(fileName)
 {
-    file = fopen(filename, "r");
+    file = fopen(fileName, "r");
 }
 
 FileInput::~FileInput()
@@ -128,6 +129,7 @@ const std::string& Lexer::getString() const
     return tokenString;
 }
 
+// TODO: should get location of current token, not current input position
 SourceLocation Lexer::getLocation() const
 {
     return input->getLocation();

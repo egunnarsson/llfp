@@ -11,6 +11,7 @@
 
 #include "Ast.h"
 #include "Lexer.h"
+#include "Log.h"
 
 #include "Parser.h"
 
@@ -78,7 +79,8 @@ bool Parser::expect(lex::Token token)
 {
     if (lexer->getToken() != token)
     {
-        llvm::errs() << llvm::formatv("expected '{0}'", lex::Lexer::tokenName(token));
+        // should not be token name? but token char
+        Log(lexer->getLocation(), "expected '", lex::Lexer::tokenName(token), '\'');
         __debugbreak();
         return false;
     }
@@ -88,6 +90,8 @@ bool Parser::expect(lex::Token token)
 
 std::unique_ptr<ast::Module> Parser::parse()
 {
+    auto location = lexer->getLocation();
+
     if (!expect(lex::tok_module)) { return nullptr; }
 
     if (lexer->getToken() != lex::tok_identifier)
@@ -97,7 +101,7 @@ std::unique_ptr<ast::Module> Parser::parse()
     std::string name = lexer->getString();
     lexer->nextToken();
 
-    auto module = std::make_unique<ast::Module>(name);
+    auto module = std::make_unique<ast::Module>(location, name);
 
     if (lexer->getToken() == lex::tok_open_parenthesis)
     {
@@ -108,7 +112,7 @@ std::unique_ptr<ast::Module> Parser::parse()
             {
                 return Error<ast::Module>("expected identifier");
             }
-            module->publicDeclarations.push_back(lexer->getString());
+            module->publicDeclarations.push_back(ast::PublicDeclaration(lexer->getLocation(), lexer->getString()));
 
             lexer->nextToken();
             if (lexer->getToken() == lex::tok_close_parenthesis)
@@ -132,7 +136,7 @@ std::unique_ptr<ast::Module> Parser::parse()
         {
             return Error<ast::Module>("expected identifier");
         }
-        module->imports.push_back(lexer->getString());
+        module->imports.push_back(ast::ImportDeclaration(lexer->getLocation(), lexer->getString()));
         lexer->nextToken();
         if (!expect(lex::tok_semicolon)) { return nullptr; }
     }
@@ -159,9 +163,9 @@ bool Parser::parseDeclaration(const std::unique_ptr<ast::Module> &module)
     }
     switch (lexer->getToken())
     {
-    case lex::tok_data: llvm::errs() << "data declaration not implemented"; break;
-    case lex::tok_class: llvm::errs() << "class declaration not implemented"; break;
-    case lex::tok_instance: llvm::errs() << "instance declaration not implemented"; break;
+    case lex::tok_data: Log(lexer->getLocation(), "data declaration not implemented"); break;
+    case lex::tok_class: Log(lexer->getLocation(), "class declaration not implemented"); break;
+    case lex::tok_instance: Log(lexer->getLocation(), "instance declaration not implemented"); break;
     case lex::tok_identifier:
     {
         if (auto function = parseFunction(exported))
@@ -172,13 +176,15 @@ bool Parser::parseDeclaration(const std::unique_ptr<ast::Module> &module)
     }
     break;
 
-    default: llvm::errs() << "unexpected token: " << lex::Lexer::tokenName(lexer->getToken()); break;
+    default: Log(lexer->getLocation(), "unexpected token: ", lex::Lexer::tokenName(lexer->getToken())); break;
     }
     return false;
 }
 
 std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
 {
+    auto location = lexer->getLocation();
+
     if (lexer->getToken() != lex::tok_identifier)
     {
         return Error<ast::FunctionDeclaration>("expected type identifier");
@@ -204,7 +210,7 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
             if (lexer->nextToken() != lex::tok_identifier) { return Error<ast::FunctionDeclaration>("expected identifier"); }
             std::string argIdentifier = lexer->getString();
 
-            parameters.push_back(std::make_unique<ast::Parameter>(std::move(argTypeName), std::move(argIdentifier)));
+            parameters.push_back(std::make_unique<ast::Parameter>(lexer->getLocation(), std::move(argTypeName), std::move(argIdentifier)));
 
             lexer->nextToken();
 
@@ -224,6 +230,7 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
     if (!expect(lex::tok_semicolon)) { return nullptr; }
 
     return std::make_unique<ast::FunctionDeclaration>(
+        location,
         std::move(identifier),
         std::move(typeName),
         std::move(parameters),
@@ -233,10 +240,11 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
 
 std::unique_ptr<ast::Exp> Parser::parseLiteralExp()
 {
+    auto location = lexer->getLocation();
     lex::Token token = lexer->getToken();
     std::string value = lexer->getString();
     lexer->nextToken();
-    return std::make_unique<ast::LiteralExp>(token, std::move(value));
+    return std::make_unique<ast::LiteralExp>(location, token, std::move(value));
 }
 
 std::unique_ptr<ast::Exp> Parser::parseParenthesizedExp()
@@ -260,6 +268,8 @@ std::unique_ptr<ast::Exp> Parser::parseParenthesizedExp()
 // identifier and call
 std::unique_ptr<ast::Exp> Parser::parseIdentifierExp()
 {
+    auto location = lexer->getLocation();
+
     if (lexer->getToken() != lex::tok_identifier)
     {
         return nullptr;
@@ -281,7 +291,7 @@ std::unique_ptr<ast::Exp> Parser::parseIdentifierExp()
 
     if (token != lex::tok_open_parenthesis)
     {
-        return std::make_unique<ast::VariableExp>(std::move(moduleName), std::move(identifier));
+        return std::make_unique<ast::VariableExp>(location, std::move(moduleName), std::move(identifier));
     }
 
     // call
@@ -309,11 +319,13 @@ std::unique_ptr<ast::Exp> Parser::parseIdentifierExp()
     }
     lexer->nextToken(); // eat ')'
 
-    return std::make_unique<ast::CallExp>(std::move(moduleName), std::move(identifier), std::move(args));
+    return std::make_unique<ast::CallExp>(location, std::move(moduleName), std::move(identifier), std::move(args));
 }
 
 std::unique_ptr<ast::Exp> Parser::parseIfExp()
 {
+    auto location = lexer->getLocation();
+
     lexer->nextToken(); // eat if
 
     auto cond = parseExp();
@@ -338,11 +350,13 @@ std::unique_ptr<ast::Exp> Parser::parseIfExp()
         return nullptr;
     }
 
-    return std::make_unique<ast::IfExp>(std::move(cond), std::move(thenExp), std::move(elseExp));
+    return std::make_unique<ast::IfExp>(location, std::move(cond), std::move(thenExp), std::move(elseExp));
 }
 
 std::unique_ptr<ast::Exp> Parser::parseLetExp()
 {
+    auto location = lexer->getLocation();
+
     lexer->nextToken(); // eat let
 
     std::vector<std::unique_ptr<ast::FunctionDeclaration>> declarations;
@@ -371,7 +385,7 @@ std::unique_ptr<ast::Exp> Parser::parseLetExp()
         return nullptr;
     }
 
-    return std::make_unique<ast::LetExp>(std::move(declarations), std::move(exp));
+    return std::make_unique<ast::LetExp>(location, std::move(declarations), std::move(exp));
 }
 
 std::unique_ptr<ast::Exp> Parser::parsePrimaryExp()
@@ -393,6 +407,8 @@ std::unique_ptr<ast::Exp> Parser::parsePrimaryExp()
 
 std::unique_ptr<ast::Exp> Parser::parseUnaryExp()
 {
+    auto location = lexer->getLocation();
+
     if (lexer->getToken() != lex::tok_operator)
     {
         return parsePrimaryExp();
@@ -402,7 +418,7 @@ std::unique_ptr<ast::Exp> Parser::parseUnaryExp()
     lexer->nextToken();
     if (auto operand = parseUnaryExp())
     {
-        return std::make_unique<ast::UnaryExp>(std::move(op), std::move(operand));
+        return std::make_unique<ast::UnaryExp>(location, std::move(op), std::move(operand));
     }
     return nullptr;
 }
@@ -418,6 +434,7 @@ std::unique_ptr<ast::Exp> Parser::parseBinaryExp(int exprPrec, std::unique_ptr<a
             return LHS;
         }
 
+        auto location = lexer->getLocation();
         std::string op = lexer->getString();
         lexer->nextToken();
 
@@ -437,7 +454,7 @@ std::unique_ptr<ast::Exp> Parser::parseBinaryExp(int exprPrec, std::unique_ptr<a
             }
         }
 
-        LHS = std::make_unique<ast::BinaryExp>(op, std::move(LHS), std::move(RHS));
+        LHS = std::make_unique<ast::BinaryExp>(location, op, std::move(LHS), std::move(RHS));
     }
 }
 

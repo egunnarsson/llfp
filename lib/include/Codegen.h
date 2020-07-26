@@ -55,7 +55,7 @@ private:
 
     void            AddDllMain();
     // lookup, global functions, generate llvmFunction if first external reference
-    Function*       getFunction(llvm::StringRef module, llvm::StringRef functionName);
+    Function*       getFunction(ast::Node &ast, llvm::StringRef module, llvm::StringRef functionName);
     llvm::Function* generateFunctionDeclaration(const std::string &name, const ast::FunctionDeclaration *ast);
 
     friend ExpCodeGenerator;
@@ -81,11 +81,11 @@ public:
     static llvm::Value* generate(ast::Exp &exp, type::Type *type, ExpCodeGenerator *parent);
 
     // lookup, local functions, global functions,
-    Function* getFunction(llvm::StringRef module, llvm::StringRef functionName);
+    Function* getFunction(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName);
 
     type::Type*  getTypeByName(llvm::StringRef variable) override;
     type::Type*  getVariableType(llvm::StringRef variable) override;
-    type::Type*  getFunctionReturnType(llvm::StringRef module, llvm::StringRef functionName) override;
+    type::Type*  getFunctionReturnType(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName) override;
     llvm::Value* getResult();
 
     void visit(ast::LetExp &exp) override;
@@ -114,12 +114,12 @@ private:
             ExpCodeGenerator::generate(*exp.rhs, type, this));
     }
 
-    typedef bool(*TypeCheckFunction)(type::Type*);
+    typedef bool(*TypeCheckFunction)(ast::Exp &exp, type::Type*);
 
     template<class T>
     void generateBinary(ast::BinaryExp &exp, TypeCheckFunction tcf, T create)
     {
-        if (tcf(expectedType))
+        if (tcf(exp, expectedType))
         {
             auto args = generateBinary(expectedType, exp);
             auto arg1 = std::get<0>(args), arg2 = std::get<1>(args);
@@ -134,7 +134,7 @@ private:
     template<class F, class T>
     void generateBinary(ast::BinaryExp &exp, TypeCheckFunction tcf, F createFloat, T createInteger)
     {
-        if (tcf(expectedType))
+        if (tcf(exp, expectedType))
         {
             auto args = generateBinary(expectedType, exp);
             auto arg1 = std::get<0>(args), arg2 = std::get<1>(args);
@@ -156,7 +156,7 @@ private:
     template<class F, class T, class U>
     void generateBinary(ast::BinaryExp &exp, TypeCheckFunction tcf, F createFloat, T createSigned, U createUsigned)
     {
-        if (tcf(expectedType))
+        if (tcf(exp, expectedType))
         {
             auto args = generateBinary(expectedType, exp);
             auto arg1 = std::get<0>(args), arg2 = std::get<1>(args);

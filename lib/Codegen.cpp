@@ -1,5 +1,7 @@
 
 #pragma warning(push, 0)
+// C4996 use of function, class member, variable, or typedef that's marked deprecated
+#pragma warning(disable : 4996)
 
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Verifier.h"
@@ -7,6 +9,8 @@
 #include "llvm/Support/FormatVariadic.h"
 
 #pragma warning(pop)
+
+#include "Log.h"
 
 #include "Codegen.h"
 
@@ -44,7 +48,7 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<Sour
                 auto type = typeContext.getType(p->typeName);
                 if (type == nullptr)
                 {
-                    llvm::errs() << "unknown type: " << p->typeName;
+                    Log(f->location, "unknown type: ", p->typeName);
                     return nullptr;
                 }
                 parameterTypes.push_back(type->llvmType());
@@ -52,7 +56,7 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<Sour
             auto returnType = typeContext.getType(f->typeName)->llvmType();
             if (returnType == nullptr)
             {
-                llvm::errs() << "unknown type: " << f->typeName;
+                Log(f->location, "unknown type: ", f->typeName);
                 return nullptr;
             }
             llvm::FunctionType *functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
@@ -68,7 +72,7 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<Sour
         }
         else
         {
-            llvm::errs() << "duplicate function definition: " << f->name;
+            Log(f->location, "duplicate function definition: ", f->name); 
             return nullptr;
         }
     }
@@ -87,7 +91,7 @@ std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<Sour
             auto& llvmArg = *(f.llvm->arg_begin() + i);
             if (namedValues.find(llvmArg.getName()) != namedValues.end())
             {
-                llvm::errs() << "duplicate parameter: " << llvmArg.getName();
+                Log(f.ast->location, "duplicate parameter: ", llvmArg.getName());
                 return nullptr;
             }
             auto &typeName = f.ast->parameters[i]->typeName;
@@ -127,7 +131,7 @@ void CodeGenerator::AddDllMain()
     llvmBuilder.CreateRet(value);
 }
 
-Function* CodeGenerator::getFunction(llvm::StringRef module, llvm::StringRef functionName)
+Function* CodeGenerator::getFunction(ast::Node &ast, llvm::StringRef module, llvm::StringRef functionName)
 {
     if (module.empty())
     {
@@ -153,13 +157,13 @@ Function* CodeGenerator::getFunction(llvm::StringRef module, llvm::StringRef fun
         }
         else if (!modules.empty())
         {
-            llvm::errs() << "reference to " << functionName << " is ambiguous";
+            Log(ast.location, "reference to ", functionName, " is ambiguous");
             return nullptr;
         }
 
         if (module.empty())
         {
-            llvm::errs() << "undefined function " << functionName;
+            Log(ast.location, "undefined function ", functionName);
             return nullptr;
         }
     }
@@ -198,12 +202,12 @@ Function* CodeGenerator::getFunction(llvm::StringRef module, llvm::StringRef fun
         }
         else
         {
-            llvm::errs() << "undefined module " << module;
+            Log(ast.location, "undefined module ", module);
             return nullptr;
         }
     }
 
-    llvm::errs() << "undefined function " << module << ":" << functionName;
+    Log(ast.location, "undefined function ", module, ':', functionName);
     return nullptr;
 }
 
@@ -216,7 +220,7 @@ llvm::Function* CodeGenerator::generateFunctionDeclaration(const std::string &na
         auto type = typeContext.getType(arg->typeName);
         if (type == nullptr)
         {
-            llvm::errs() << "unknown type " << arg->typeName;
+            Log(ast->location, "unknown type ", arg->typeName);
             return nullptr;
         }
         parameterTypes.push_back(type->llvmType());
@@ -225,7 +229,7 @@ llvm::Function* CodeGenerator::generateFunctionDeclaration(const std::string &na
     auto returnType = typeContext.getType(ast->typeName);
     if (returnType == nullptr)
     {
-        llvm::errs() << "unknown type " << ast->typeName;
+        Log(ast->location, "unknown type ", ast->typeName);
         return nullptr;
     }
 
@@ -269,7 +273,7 @@ void ExpCodeGenerator::visit(ast::LetExp &exp)
     {
         if (var->parameters.size() != 0)
         {
-            llvm::errs() << "let function definitions not implemented";
+            Log(exp.location, "let function definitions not implemented");
             return;
         }
 
@@ -295,7 +299,7 @@ void ExpCodeGenerator::visit(ast::LetExp &exp)
         }
         if (values.find(var->name) != values.end())
         {
-            llvm::errs() << "already defined";
+            Log(exp.location, "already defined");
             return;
         }
         else
@@ -358,42 +362,42 @@ void ExpCodeGenerator::visit(ast::IfExp &exp)
 
 void ExpCodeGenerator::visit(ast::CaseExp &exp)
 {
-    llvm::errs() << "case not implemented";
+    Log(exp.location, "case not implemented");
 }
 
 namespace
 {
 
-void typeError(llvm::StringRef expected, llvm::StringRef actual)
+void typeError(ast::Exp &exp, llvm::StringRef expected, llvm::StringRef actual)
 {
-    llvm::errs() << llvm::formatv("type mismatch, expected '{0}' actual '{1}'", expected, actual);
+    Log(exp.location, "type mismatch, expected '", expected, "' actual '", actual, '\'');
 }
 
-bool checkNum(type::Type *type)
+bool checkNum(ast::Exp &exp, type::Type *type)
 {
     if (!type->isNum())
     {
-        typeError(type->name(), "Num"); // TODO: TypeClass name
+        typeError(exp, type->name(), "Num"); // TODO: TypeClass name
         return false;
     }
     return true;
 }
 
-bool checkInteger(type::Type *type)
+bool checkInteger(ast::Exp &exp, type::Type *type)
 {
     if (!type->isInteger())
     {
-        typeError(type->name(), "Integer"); // TODO: TypeClass name
+        typeError(exp, type->name(), "Integer"); // TODO: TypeClass name
         return false;
     }
     return true;
 }
 
-bool checkBool(type::Type *type)
+bool checkBool(ast::Exp &exp, type::Type *type)
 {
     if (*type != type::name::Bool)
     {
-        typeError(type->name(), "Bool"); // TODO: TypeClass name
+        typeError(exp, type->name(), "Bool"); // TODO: TypeClass name
         return false;
     }
     return true;
@@ -489,7 +493,7 @@ void ExpCodeGenerator::visit(ast::BinaryExp &exp)
     }
     else
     {
-        llvm::errs() << "unknown operator: " << exp.op;
+        Log(exp.location, "unknown operator: ", exp.op);
     }
 }
 
@@ -530,7 +534,7 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
 {
     if (*expectedType != type::name::Bool)
     {
-        typeError(expectedType->name(), type::name::Bool);
+        typeError(exp, expectedType->name(), type::name::Bool);
     }
     else
     {
@@ -566,7 +570,7 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
         }
         else
         {
-            llvm::errs() << "failed to unify types: " << lhsT->name() << " and " << rhsT->name();
+            Log(exp.location, "failed to unify types: ", lhsT->name(), " and ", rhsT->name());
         }
     }
 }
@@ -577,7 +581,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     {
         if (!expectedType->isSigned())
         {
-            typeError(expectedType->name(), "Signed"); // TODO: TypeClass name
+            typeError(exp, expectedType->name(), "Signed"); // TODO: TypeClass name
         }
         else
         {
@@ -599,7 +603,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     {
         if (*expectedType != type::name::Bool)
         {
-            typeError(expectedType->name(), type::name::Bool);
+            typeError(exp, expectedType->name(), type::name::Bool);
         }
         else
         {
@@ -614,7 +618,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     {
         if (!expectedType->isInteger())
         {
-            typeError(expectedType->name(), "Integer"); // TODO: TypeClass name
+            typeError(exp, expectedType->name(), "Integer"); // TODO: TypeClass name
         }
         else
         {
@@ -627,7 +631,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     }
     else
     {
-        llvm::errs() << "unknown unary operator: " << exp.op;
+        Log(exp.location,"unknown unary operator: ", exp.op);
     }
 }
 
@@ -651,7 +655,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
         }
         else
         {
-            typeError(expectedType->name(), "Num"); // TODO: TypeClass name
+            typeError(exp, expectedType->name(), "Num"); // TODO: TypeClass name
         }
         break;
 
@@ -659,7 +663,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
         if (!expectedType->isFloating())
         {
-            typeError(expectedType->name(), "Floating"); // TODO: TypeClass name
+            typeError(exp, expectedType->name(), "Floating"); // TODO: TypeClass name
         }
         else
         {
@@ -671,7 +675,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
         if (*expectedType != type::name::Char)
         {
-            typeError(expectedType->name(), type::name::Char);
+            typeError(exp, expectedType->name(), type::name::Char);
         }
         else
         {
@@ -682,14 +686,14 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
     case lex::tok_string:
 
-        llvm::errs() << "string not supported";
+        Log(exp.location, "string not supported");
         break;
 
     case lex::tok_bool:
 
         if (*expectedType != type::name::Bool)
         {
-            typeError(expectedType->name(), type::name::Bool);
+            typeError(exp, expectedType->name(), type::name::Bool);
         }
         else
         {
@@ -718,22 +722,22 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
 void ExpCodeGenerator::visit(ast::CallExp &exp)
 {
-    auto function = getFunction(exp.moduleName, exp.name);
+    auto function = getFunction(exp, exp.moduleName, exp.name);
     if (function == nullptr)
     {
-        llvm::errs() << "unknown function: " << exp.name;
+        Log(exp.location, "unknown function: ", exp.name);
     }
     else
     {
         if (*expectedType != function->ast->typeName)
         {
-            typeError(expectedType->name(), function->ast->typeName);
+            typeError(exp, expectedType->name(), function->ast->typeName);
             return;
         }
 
         if (function->ast->parameters.size() != exp.arguments.size())
         {
-            llvm::errs() << "parameter count mismatch";
+            Log(exp.location, "parameter count mismatch");
             return;
         }
 
@@ -762,7 +766,7 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
             // check type
             if (x.type != expectedType)
             {
-                typeError(expectedType->name(), x.type->name());
+                typeError(exp, expectedType->name(), x.type->name());
                 return;
             }
             result = x.value;
@@ -770,7 +774,7 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
         }
     }
 
-    auto y = getFunction(exp.moduleName, exp.name); // functions().find(exp.name); // replace with lookup
+    auto y = getFunction(exp, exp.moduleName, exp.name); // functions().find(exp.name); // replace with lookup
     if (y != nullptr)//functions().end())
     {
         auto &function = *y;//->second;
@@ -779,19 +783,19 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
             // generate call
             if (*expectedType != function.ast->typeName)
             {
-                typeError(expectedType->name(), function.ast->typeName);
+                typeError(exp, expectedType->name(), function.ast->typeName);
                 return;
             }
             result = llvmBuilder().CreateCall(function.llvm, std::vector<llvm::Value*>{}, "call");
         }
         else
         {
-            llvm::errs() << exp.name << " is not a zero parameter function";
+            Log(exp.location, exp.name, " is not a zero parameter function");
         }
     }
     else
     {
-        llvm::errs() << "unknown identifier: " << exp.name;
+        Log(exp.location, "unknown identifier: ", exp.name);
     }
 }
 
@@ -822,18 +826,18 @@ type::Type* ExpCodeGenerator::getVariableType(llvm::StringRef variable)
     return getNamedValue(variable).type;
 }
 
-Function* ExpCodeGenerator::getFunction(llvm::StringRef module, llvm::StringRef functionName)
+Function* ExpCodeGenerator::getFunction(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName)
 {
     // TODO: add local functions
-    return generator->getFunction(module, functionName);
+    return generator->getFunction(exp, module, functionName);
 }
 
-type::Type* ExpCodeGenerator::getFunctionReturnType(llvm::StringRef module, llvm::StringRef functionName)
+type::Type* ExpCodeGenerator::getFunctionReturnType(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName)
 {
-    auto f = getFunction(module, functionName);
+    auto f = getFunction(exp, module, functionName);
     if (f == nullptr)
     {
-        llvm::errs() << "unknown function: " << module << ":" << functionName;
+        Log(exp.location, "unknown function: ", module, ':', functionName);
         return nullptr;
     }
     return typeContext().getType(f->ast->typeName);

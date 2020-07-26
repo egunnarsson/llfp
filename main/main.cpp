@@ -1,11 +1,11 @@
 
+#pragma warning(push, 0)
 // C4244 conversion, possible loss of data
 // BitcodeWriter.h includes ScaledNumber.h which does a bunch of conversions of std::pair with numbers
-#define _STL_EXTRA_DISABLED_WARNINGS 4244
+// C4996 use of function, class member, variable, or typedef that's marked deprecated
+#pragma warning(disable : 4244 4996)
 
 #include <string>
-
-#pragma warning(push, 0)
 
 #include "llvm/Bitcode/BitcodeWriter.h"
 
@@ -24,6 +24,7 @@
 #include "Codegen.h"
 #include "HeaderWriter.h"
 #include "Lexer.h"
+#include "Log.h"
 #include "Parser.h"
 
 
@@ -43,7 +44,7 @@ InputFilenames(llvm::cl::Positional, llvm::cl::desc("<Input files>"), llvm::cl::
 static llvm::cl::opt<std::string>
 OutputFilename("o", llvm::cl::desc("Output filename"), llvm::cl::value_desc("filename"));
 
-std::unique_ptr<llfp::lex::Input> makeInput(std::string &inputFilename)
+std::unique_ptr<llfp::lex::Input> makeInput(const std::string &inputFilename)
 {
     if (inputFilename == "-")
     {
@@ -63,13 +64,13 @@ int write(llvm::SmallString<128> &output, llvm::StringRef extention, T writeFun)
     llvm::raw_fd_ostream os(output, ec);
     if (ec)
     {
-        llvm::errs() << ec.message() << "\n";
+        llvm::errs() << ec.message() << '\n';
         return IOError;
     }
     writeFun(os);
     if (os.has_error())
     {
-        llvm::errs() << os.error().message() << "\n";
+        llvm::errs() << os.error().message() << '\n';
         return IOError;
     }
     return NoError;
@@ -183,8 +184,9 @@ int main(int argc, char *argv[])
     for (auto &inputFile : InputFilenames)
     {
         sourceModules.push_back(std::make_unique<llfp::SourceModule>(inputFile));
+        auto &sourceModule = sourceModules.back();
 
-        auto input = makeInput(inputFile);
+        auto input = makeInput(sourceModule->filePath());
         llfp::lex::Lexer lexer(input.get());
         llfp::parse::Parser parser(&lexer);
         auto astModule = parser.parse();
@@ -193,12 +195,12 @@ int main(int argc, char *argv[])
             return ParseOrLexerError;
         }
 
-        if (!sourceModules.back()->setAST(std::move(astModule)))
+        if (!sourceModule->setAST(std::move(astModule)))
         {
             return TypeOrCodeGenerationError;
         }
 
-        modules.push_back(sourceModules.back().get());
+        modules.push_back(sourceModule.get());
     }
 
     // resolve imports

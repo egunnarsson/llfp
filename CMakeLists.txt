@@ -3,6 +3,9 @@
 cmake_minimum_required(VERSION 3.4.3)
 project(LLFP VERSION 0.1)
 
+set(CMAKE_CXX_STANDARD 17)
+# set(CMAKE_CXX_STANDARD_REQUIRED ON) not required
+
 set(LLVM_PATH_TO_USE "" CACHE STRING "Where to look for llvm")
 find_package(LLVM REQUIRED CONFIG PATHS ${LLVM_PATH_TO_USE} NO_DEFAULT_PATH)
 

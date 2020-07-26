@@ -5,6 +5,8 @@
 
 #pragma warning(pop)
 
+#include "Log.h"
+
 #include "Type.h"
 
 
@@ -199,7 +201,7 @@ void TypeInferer::visit(ast::LetExp &exp)
     {
         if (var->parameters.size() != 0)
         {
-            llvm::errs() << "let function definitions not implemented";
+            Log(exp.location, "let function definitions not implemented");
             return;
         }
 
@@ -219,7 +221,7 @@ void TypeInferer::visit(ast::LetExp &exp)
 
         if (variables.find(var->name) != variables.end())
         {
-            llvm::errs() << "already defined";
+            Log(exp.location, var->name, " already defined");
             return;
         }
         else
@@ -238,7 +240,7 @@ void TypeInferer::visit(ast::IfExp &exp)
 
 void TypeInferer::visit(ast::CaseExp &exp)
 {
-    llvm::errs() << "case not implemented";
+    Log(exp.location, "case not implemented");
 }
 
 namespace
@@ -257,7 +259,7 @@ Type* inferMathExp(TypeInferer *inferer, ast::BinaryExp &exp)
         }
         else
         {
-            llvm::errs() << "operand of math expression is not a number";
+            Log(exp.location, "operand of math expression is not a number");
         }
     }
     return nullptr;
@@ -276,7 +278,7 @@ Type* inferBitExp(TypeInferer *inferer, ast::BinaryExp &exp)
         }
         else
         {
-            llvm::errs() << "operand of bitwise expression is not an integer";
+            Log(exp.location, "operand of bitwise expression is not an integer");
         }
     }
     return nullptr;
@@ -312,7 +314,7 @@ void TypeInferer::visit(ast::BinaryExp &exp)
     else if (exp.op == "||") { result = getTypeByName(name::Bool); }
     else
     {
-        llvm::errs() << "unknown operator: " << exp.op;
+        Log(exp.location, "unknown operator: ", exp.op);
     }
 }
 
@@ -356,7 +358,7 @@ void TypeInferer::visit(ast::LiteralExp &exp)
 
     case lex::tok_string:
 
-        llvm::errs() << "string not supported";
+        Log(exp.location, "string not supported");
         break;
 
     case lex::tok_bool:
@@ -379,7 +381,7 @@ void TypeInferer::visit(ast::CallExp &exp)
 
     // infer exp of body in the new environment
 
-    result = env->getFunctionReturnType(exp.moduleName, exp.name);
+    result = env->getFunctionReturnType(exp, exp.moduleName, exp.name);
 }
 
 void TypeInferer::visit(ast::VariableExp &exp)
@@ -394,7 +396,7 @@ void TypeInferer::visit(ast::VariableExp &exp)
     }
 
     // possibly 0 arity function
-    result = getFunctionReturnType(exp.moduleName, exp.name);
+    result = getFunctionReturnType(exp, exp.moduleName, exp.name);
 }
 
 Type* TypeInferer::getTypeByName(llvm::StringRef name)
@@ -412,9 +414,9 @@ Type* TypeInferer::getVariableType(llvm::StringRef name)
     return env->getVariableType(name);
 }
 
-Type* TypeInferer::getFunctionReturnType(llvm::StringRef module, llvm::StringRef functionName)
+Type* TypeInferer::getFunctionReturnType(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName)
 {
-    return env->getFunctionReturnType(module, functionName);
+    return env->getFunctionReturnType(exp, module, functionName);
 }
 
 } // namespace Type

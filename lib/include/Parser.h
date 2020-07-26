@@ -2,11 +2,11 @@
 
 #include <memory>
 
-//#pragma warning(push, 0)
+#pragma warning(push, 0)
 
 #include "llvm/Support/raw_ostream.h"
 
-//#pragma warning(pop)
+#pragma warning(pop)
 
 #include "Ast.h"
 #include "Lexer.h"
@@ -34,7 +34,7 @@ private:
     template<class T>
     std::unique_ptr<T> Error(const char *msg)
     {
-        llvm::errs() << msg;
+        Log(lexer->getLocation(), msg);
         __debugbreak();
         return nullptr;
     }

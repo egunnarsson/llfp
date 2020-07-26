@@ -1,4 +1,6 @@
 
+#include "Log.h"
+
 #include "Module.h"
 
 
@@ -16,53 +18,50 @@ SourceModule::~SourceModule() {}
 
 bool SourceModule::setAST(std::unique_ptr<ast::Module> module)
 {
+    bool result = true;
+
     astModule = std::move(module);
-    auto publics = astModule->publicDeclarations;
-    for (auto &function : astModule->functionDeclarations)
+
+    for (auto &publicDecl : astModule->publicDeclarations)
     {
-        auto it = std::find(publics.begin(), publics.end(), function->name);
-        if (it != publics.end())
+        auto predicate = [&publicDecl](std::unique_ptr<ast::FunctionDeclaration> &function) { return publicDecl.name == function->name; };
+        auto it = std::find_if(astModule->functionDeclarations.begin(), astModule->functionDeclarations.end(), predicate);
+        if (it != astModule->functionDeclarations.end())
         {
+            auto &function = *it;
             functions.insert(std::make_pair(function->name, function.get()));
         }
-    }
-
-    // make sure everything listed as public is available
-    for (auto &functionName : publics)
-    {
-        if (functions.find(functionName) == functions.end())
+        else
         {
-            llvm::errs() << "function declared as public is not defined " << functionName;
-            return false;
+            Log(publicDecl.location, "function declared as public is not defined ", publicDecl.name);
+            result = false;
         }
     }
 
-    return true;
+    return result;
 }
 
 bool SourceModule::addImportedModules(const std::vector<const ImportedModule*> &moduleList)
 {
-    auto &imports = astModule->imports;
-    for (auto module : moduleList)
+    bool result = true;
+
+    for (auto &importDecl : astModule->imports)
     {
-        auto it = std::find(imports.begin(), imports.end(), module->name());
-        if (it != imports.end())
+        auto predicate = [&importDecl](const ImportedModule *module) { return module->name() == importDecl.name; };
+        auto it = std::find_if(moduleList.begin(), moduleList.end(), predicate);
+        if (it != moduleList.end())
         {
+            auto module = *it;
             importedModules.insert(std::make_pair(module->name(), module));
         }
-    }
-
-    // make sure everything was resolved
-    for (auto &moduleName : imports)
-    {
-        if (importedModules.find(moduleName) == importedModules.end())
+        else
         {
-            llvm::errs() << "unresolved imported module " << moduleName;
-            return false;
+            Log(importDecl.location, "unresolved imported module ", importDecl.name);
+            result = false;
         }
     }
 
-    return true;
+    return result;
 }
 
 void SourceModule::setLLVM(std::unique_ptr<llvm::Module> module)

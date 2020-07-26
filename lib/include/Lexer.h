@@ -3,6 +3,14 @@
 #include <stdio.h>
 #include <string>
 
+#pragma warning(push, 0)
+
+#include <llvm/Support/raw_ostream.h>
+
+#pragma warning(pop)
+
+#include "SourceLocation.h"
+
 
 namespace llfp
 {
@@ -46,27 +54,20 @@ enum Token
     tok_comment,
 };
 
-struct SourceLocation
-{
-    int Line;
-    int Column;
-};
-
 class Input
 {
     SourceLocation location;
 
 public:
 
-    Input() :
-        location{ 0, 0 }
-    {
-    }
+    Input(llvm::StringRef inputFile) :
+        location{ 0, 0, inputFile }
+    {}
     virtual ~Input() {}
 
     int            getChar();
     // mark() ? to mark start of token
-    SourceLocation getLocation() { return location; };
+    SourceLocation getLocation() const { return location; };
 
 protected:
 
@@ -81,6 +82,7 @@ class StringInput : public Input
 public:
 
     StringInput(const char *_input) :
+        Input("string"),
         input(_input)
     {
     }
@@ -107,7 +109,7 @@ class FileInput : public Input
 
 public:
 
-    FileInput(const char*filename);
+    FileInput(const char* fileName_);
     virtual ~FileInput();
 
 protected:
@@ -119,6 +121,7 @@ class StdinInput : public Input
 {
 public:
 
+    StdinInput() : Input("stdin") {}
     virtual ~StdinInput() {}
 
 protected:

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "Lexer.h"
+#include "SourceLocation.h"
 
 
 namespace llfp
@@ -41,7 +42,13 @@ protected: // ?
 
 class Node
 {
-    //SourceLocation Loc;
+public:
+
+    SourceLocation location;
+
+protected:
+
+    Node(SourceLocation location_);
 };
 
 class DataDeclaration
@@ -55,6 +62,10 @@ class ClassDeclaration
 
 class Exp : public Node
 {
+protected:
+
+    Exp(SourceLocation location_);
+
 public:
 
     virtual void accept(ExpVisitor *visitor) = 0;
@@ -62,17 +73,15 @@ public:
     virtual ~Exp();
 };
 
-class Parameter
+class Parameter : public Node
 {
 public:
 
     std::string typeName;
     std::string identifier;
 
-    Parameter(std::string typeName_, std::string identifier_) :
-        typeName{ std::move(typeName_) },
-        identifier{ std::move(identifier_) }
-    {}
+    Parameter(SourceLocation location_, std::string typeName_, std::string identifier_);
+    virtual ~Parameter();
 };
 
 class FunctionDeclaration : public Node
@@ -86,6 +95,7 @@ public:
     bool                 exported;
 
     FunctionDeclaration(
+        SourceLocation location_,
         std::string name_,
         std::string typeName_,
         std::vector<std::unique_ptr<Parameter>> parameters_,
@@ -94,16 +104,36 @@ public:
     virtual ~FunctionDeclaration();
 };
 
+class PublicDeclaration : public Node
+{
+public:
+
+    std::string name;
+
+    PublicDeclaration(SourceLocation location_, std::string name_);
+    virtual ~PublicDeclaration();
+};
+
+class ImportDeclaration : public Node
+{
+public:
+
+    std::string name;
+
+    ImportDeclaration(SourceLocation location_, std::string name_);
+    virtual ~ImportDeclaration();
+};
+
 class Module : public Node
 {
 public:
 
-    std::string              name;
-    std::vector<std::string> publicDeclarations;
-    std::vector<std::string> imports;
+    std::string                    name;
+    std::vector<PublicDeclaration> publicDeclarations;
+    std::vector<ImportDeclaration> imports;
     std::vector<std::unique_ptr<FunctionDeclaration>> functionDeclarations;
 
-    Module(std::string name_);
+    Module(SourceLocation location_, std::string name_);
     virtual ~Module();
 };
 
@@ -114,7 +144,7 @@ public:
     std::vector<std::unique_ptr<FunctionDeclaration>> letStatments;
     std::unique_ptr<Exp> exp;
 
-    LetExp(std::vector<std::unique_ptr<FunctionDeclaration>> letStatments_, std::unique_ptr<Exp> exp_);
+    LetExp(SourceLocation location_, std::vector<std::unique_ptr<FunctionDeclaration>> letStatments_, std::unique_ptr<Exp> exp_);
     virtual ~LetExp();
 
     void accept(ExpVisitor *visitor) override;
@@ -128,7 +158,7 @@ public:
     std::unique_ptr<Exp> thenExp;
     std::unique_ptr<Exp> elseExp;
 
-    IfExp(std::unique_ptr<Exp> condition_, std::unique_ptr<Exp> thenExp_, std::unique_ptr<Exp> elseExp_);
+    IfExp(SourceLocation location_, std::unique_ptr<Exp> condition_, std::unique_ptr<Exp> thenExp_, std::unique_ptr<Exp> elseExp_);
     virtual ~IfExp();
 
     void accept(ExpVisitor *visitor) override;
@@ -153,7 +183,7 @@ public:
     std::unique_ptr<Exp> lhs;
     std::unique_ptr<Exp> rhs;
 
-    BinaryExp(std::string op_, std::unique_ptr<Exp> lhs_, std::unique_ptr<Exp> rhs_);
+    BinaryExp(SourceLocation location_, std::string op_, std::unique_ptr<Exp> lhs_, std::unique_ptr<Exp> rhs_);
     virtual ~BinaryExp();
 
     void accept(ExpVisitor *visitor) override;
@@ -166,7 +196,7 @@ public:
     std::string          op;
     std::unique_ptr<Exp> operand;
 
-    UnaryExp(std::string op_, std::unique_ptr<Exp> operand_);
+    UnaryExp(SourceLocation location_, std::string op_, std::unique_ptr<Exp> operand_);
     virtual ~UnaryExp();
 
     void accept(ExpVisitor *visitor) override;
@@ -179,7 +209,7 @@ public:
     lex::Token  tokenType;
     std::string value;
 
-    LiteralExp(lex::Token tokenType_, std::string value_);
+    LiteralExp(SourceLocation location_, lex::Token tokenType_, std::string value_);
     virtual ~LiteralExp();
 
     void accept(ExpVisitor *visitor) override;
@@ -192,7 +222,7 @@ public:
     std::string moduleName;
     std::string name;
 
-    VariableExp(std::string moduleName, std::string name_);
+    VariableExp(SourceLocation location_, std::string moduleName, std::string name_);
     virtual ~VariableExp();
 
     void accept(ExpVisitor *visitor) override;
@@ -206,7 +236,7 @@ public:
     std::string name;
     std::vector<std::unique_ptr<Exp>> arguments;
 
-    CallExp(std::string moduleName_, std::string name_, std::vector<std::unique_ptr<Exp>> args);
+    CallExp(SourceLocation location_, std::string moduleName_, std::string name_, std::vector<std::unique_ptr<Exp>> args);
     virtual ~CallExp();
 
     void accept(ExpVisitor *visitor) override;
