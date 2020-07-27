@@ -81,7 +81,6 @@ bool Parser::expect(lex::Token token)
     {
         // should not be token name? but token char
         Log(lexer->getLocation(), "expected '", lex::Lexer::tokenName(token), '\'');
-        __debugbreak();
         return false;
     }
     lexer->nextToken(); // eat token

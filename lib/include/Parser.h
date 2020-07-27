@@ -35,7 +35,6 @@ private:
     std::unique_ptr<T> Error(const char *msg)
     {
         Log(lexer->getLocation(), msg);
-        __debugbreak();
         return nullptr;
     }
     bool expect(lex::Token token);

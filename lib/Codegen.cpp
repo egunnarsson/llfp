@@ -32,7 +32,7 @@ CodeGenerator::CodeGenerator(SourceModule *sourceModule_) :
 
 std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<SourceModule> &module)
 {
-    llvmModule = llvm::make_unique<llvm::Module>(module->name(), sourceModule->context());
+    llvmModule = std::make_unique<llvm::Module>(module->name(), sourceModule->context());
 
     // TODO: I only need to do this when I want to call it, start generating exported functions instead
     for (auto& f : module->getAST()->functionDeclarations)
