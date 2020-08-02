@@ -19,6 +19,7 @@ namespace lex
 
 enum Token
 {
+    tok_invalid = -3,
     tok_error = -2,
     tok_eof = -1,
 

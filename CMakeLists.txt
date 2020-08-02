@@ -6,8 +6,19 @@ project(LLFP VERSION 0.1)
 set(CMAKE_CXX_STANDARD 17)
 # set(CMAKE_CXX_STANDARD_REQUIRED ON) not required
 
-set(LLVM_PATH_TO_USE "" CACHE STRING "Where to look for llvm")
-find_package(LLVM REQUIRED CONFIG PATHS ${LLVM_PATH_TO_USE} NO_DEFAULT_PATH)
+set(LLFP_GTEST_PATH "" CACHE FILEPATH "Where to look for google test")
+# find_package(GTest REQUIRED CONFIG PATHS ${LLFP_GTEST_PATH} NO_DEFAULT_PATH)
+
+if (LLFP_GTEST_PATH)
+    set(BUILD_GMOCK OFF CACHE BOOL "Builds the googlemock subproject")
+    set(INSTALL_GTEST OFF CACHE BOOL "Enable installation of googletest. (Projects embedding googletest may want to turn this OFF.)")
+    add_subdirectory(${LLFP_GTEST_PATH})
+    set(GTEST_INCLUDE_DIR "${LLFP_GTEST_PATH}/googletest/include")
+# set (GMOCK_INCLUDE_DIR "${LLFP_GTEST_PATH}/googlemock/include")
+endif()
+
+set(LLFP_LLVM_PATH "" CACHE FILEPATH "Where to look for llvm")
+find_package(LLVM REQUIRED CONFIG PATHS ${LLFP_LLVM_PATH} NO_DEFAULT_PATH)
 
 message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
@@ -22,15 +33,12 @@ add_definitions(${LLVM_DEFINITIONS})
 # Find the libraries that correspond to the LLVM components
 # that we wish to use
 llvm_map_components_to_libnames(llvm_libs core executionengine object orcjit support native)
-#Core
-#ExecutionEngine
-#Object
-#OrcJIT
-#Support
-#native
 
 set (LLFP_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/lib/include")
 
 add_subdirectory(lib)
 add_subdirectory(main)
-add_subdirectory(test)
+
+if (LLFP_GTEST_PATH)
+    add_subdirectory(test)
+endif()

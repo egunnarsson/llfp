@@ -140,7 +140,6 @@ std::unique_ptr<ast::Module> Parser::parse()
         if (!expect(lex::tok_semicolon)) { return nullptr; }
     }
 
-    std::vector<std::unique_ptr<ast::FunctionDeclaration>> functionDeclarations;
     while (lexer->getToken() != lex::tok_eof)
     {
         if (!parseDeclaration(module))

@@ -46,7 +46,8 @@ int FileInput::getCharInt()
 }
 
 Lexer::Lexer(Input *input) :
-    input(input)
+    input(input),
+    currentToken(tok_invalid)
 {
     lastChar = input->getChar();
     nextToken();
@@ -84,8 +85,8 @@ constexpr bool isoperator(int _C)
     case '=': return true;
     case '>': return true;
     case '?': return true;
-    case '[': return true;
-    case ']': return true;
+    case '[': return true; // should not be operator
+    case ']': return true; // should not be operator
     case '^': return true;
     case '|': return true;
     case '~': return true;
@@ -135,16 +136,21 @@ SourceLocation Lexer::getLocation() const
     return input->getLocation();
 }
 
-// lots of EOF in middle errors, like string not ending etc
 Token Lexer::parseToken()
 {
+    if (currentToken == tok_error)
+    {
+        return currentToken;
+    }
+    
     // Skip any whitespace.
     while (isspace(lastChar))
-        lastChar = input->getChar();
-
-    if (isalpha(lastChar)) // identifier: [a-zA-Z][a-zA-Z0-9]*
     {
-        // identifier: letter (letter | digit | '_' | '\'')*
+        lastChar = input->getChar();
+    }
+
+    if (isalpha(lastChar)) // identifier: letter (letter | digit | '_' | '\'')*
+    {
         tokenString = static_cast<char>(lastChar);
 
         while (isidentifier(lastChar = input->getChar()))
@@ -229,7 +235,6 @@ Token Lexer::parseToken()
             default: return error("invalid escape character");
             }
             lastChar = input->getChar();
-            return tok_char;
         }
         else
         {
