@@ -104,24 +104,31 @@ std::unique_ptr<ast::Module> Parser::parse()
 
     if (lexer->getToken() == lex::tok_open_parenthesis)
     {
-        while (true)
+        lexer->nextToken();
+        if (lexer->getToken() == lex::tok_close_parenthesis)
         {
-            lexer->nextToken();
-            if (lexer->getToken() != lex::tok_identifier)
+            lexer->nextToken(); // eat ')'
+        }
+        else
+        {
+            while (true)
             {
-                return Error<ast::Module>("expected identifier");
-            }
-            module->publicDeclarations.push_back(ast::PublicDeclaration(lexer->getLocation(), lexer->getString()));
-
-            lexer->nextToken();
-            if (lexer->getToken() == lex::tok_close_parenthesis)
-            {
+                if (lexer->getToken() != lex::tok_identifier)
+                {
+                    return Error<ast::Module>("expected identifier");
+                }
+                module->publicDeclarations.push_back(ast::PublicDeclaration(lexer->getLocation(), lexer->getString()));
+                
                 lexer->nextToken();
-                break;
-            }
-            else
-            {
-                if (!expect(lex::tok_comma)) { return nullptr; }
+                if (lexer->getToken() == lex::tok_close_parenthesis)
+                {
+                    lexer->nextToken(); // eat ')'
+                    break;
+                }
+                else
+                {
+                    if (!expect(lex::tok_comma)) { return nullptr; }
+                }
             }
         }
     }
@@ -190,12 +197,17 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
     std::string typeName = lexer->getString();
     lexer->nextToken();
 
+    std::string identifier;
     if (lexer->getToken() != lex::tok_identifier)
     {
-        return Error<ast::FunctionDeclaration>("expected identifier");
+        identifier = std::move(typeName);
+        typeName = "";
     }
-    std::string identifier = lexer->getString();
-    lexer->nextToken();
+    else
+    {
+        identifier = lexer->getString();
+        lexer->nextToken();
+    }
 
     std::vector<std::unique_ptr<ast::Parameter>> parameters;
     if (lexer->getToken() == lex::tok_open_parenthesis)
@@ -205,13 +217,20 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
             if (lexer->nextToken() != lex::tok_identifier) { return Error<ast::FunctionDeclaration>("expected identifier"); }
             std::string argTypeName = lexer->getString();
 
-            if (lexer->nextToken() != lex::tok_identifier) { return Error<ast::FunctionDeclaration>("expected identifier"); }
-            std::string argIdentifier = lexer->getString();
-
+            std::string argIdentifier;
+            if (lexer->nextToken() != lex::tok_identifier)
+            {
+                argIdentifier = std::move(argTypeName);
+                argTypeName = "";
+            }
+            else
+            {
+                argIdentifier = lexer->getString();
+                lexer->nextToken();
+            }
+            
             parameters.push_back(std::make_unique<ast::Parameter>(lexer->getLocation(), std::move(argTypeName), std::move(argIdentifier)));
-
-            lexer->nextToken();
-
+            
         } while (lexer->getToken() == lex::tok_comma);
 
         if (!expect(lex::tok_close_parenthesis)) { return nullptr; }
@@ -372,9 +391,6 @@ std::unique_ptr<ast::Exp> Parser::parseLetExp()
             lexer->nextToken(); // eat in
             break;
         }
-
-        // "expected a ',' or in"
-        if (!expect(lex::tok_comma)) { return nullptr; }
     }
 
     auto exp = parseExp();
@@ -445,7 +461,7 @@ std::unique_ptr<ast::Exp> Parser::parseBinaryExp(int exprPrec, std::unique_ptr<a
         int nextPrec = precedence(lexer->getString());
         if (tokPrec < nextPrec)
         {
-            RHS = parseBinaryExp(tokPrec + 1, std::move(LHS));
+            RHS = parseBinaryExp(tokPrec + 1, std::move(RHS));
             if (!RHS)
             {
                 return nullptr;

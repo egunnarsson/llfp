@@ -10,6 +10,7 @@
 
 #include "Ast.h"
 #include "Lexer.h"
+#include "Log.h"
 
 
 namespace llfp
