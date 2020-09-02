@@ -99,7 +99,7 @@ protected:
         }
         else
         {
-            return *(input++);
+            return (unsigned char)*(input++);
         }
     }
 };
