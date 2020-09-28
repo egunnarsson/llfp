@@ -12,10 +12,24 @@
 #pragma warning(pop)
 
 #include "Ast.h"
+#include "Type.h"
 
 
 namespace llfp
 {
+
+namespace codegen
+{
+
+class CodeGenerator;
+
+} // codegen
+
+struct FunctionIdentifier
+{
+    llvm::StringRef           name;
+    std::vector<type::Type*>* types;
+};
 
 class ImportedModule
 {
@@ -25,38 +39,54 @@ public:
 
     virtual const std::string&              name() const = 0;
     virtual const ast::FunctionDeclaration* getFunction(const std::string &name) const = 0;
-    virtual std::string                     getFullFunctionName(const ast::FunctionDeclaration *function) const = 0;
+    virtual std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const = 0;
+    virtual std::string                     getExportedName(const ast::FunctionDeclaration *function) = 0;
+    //virtual Type* getType(std::string name) = 0;
+
+    //TODO: thread safe!
+    virtual void requireFunctionInstance(FunctionIdentifier function) = 0;
 };
 
 // a module generted from source code
-class SourceModule : public ImportedModule 
+class SourceModule : public ImportedModule
 {
-    llvm::LLVMContext             llvmContext; // one context per module, one module compiled per thread
-    std::string                   path;
-    std::unique_ptr<ast::Module>  astModule;
+    std::string                             path;
+    std::unique_ptr<ast::Module>            astModule;
+    std::unique_ptr<codegen::CodeGenerator> codeGenerator; // should be its own thing?
+
     std::unordered_map<std::string, ast::FunctionDeclaration*> functions;
-    std::unordered_map<std::string, const ImportedModule*> importedModules;
-    std::unique_ptr<llvm::Module> llvmModule;
+    std::unordered_map<std::string, ast::FunctionDeclaration*> publicFunctions;
+    std::unordered_map<std::string, ImportedModule*>           importedModules;
+
+    std::vector<FunctionIdentifier>         pendingGeneration; // Driver
 
 public:
 
     SourceModule(std::string path_);
     ~SourceModule();
 
-    bool setAST(std::unique_ptr<ast::Module> module);
-    bool addImportedModules(const std::vector<const ImportedModule*> &moduleList);
-    void setLLVM(std::unique_ptr<llvm::Module> module);
+    bool setAST(std::unique_ptr<ast::Module> astModule_);
+    bool addImportedModules(const std::vector<ImportedModule*> &moduleList);
+    void createCodeGenerator();
 
-    llvm::LLVMContext&              context();
     const std::string&              filePath() const;
     const std::string&              name() const override;
-    const ast::FunctionDeclaration* getFunction(const std::string &name) const override;
-    std::string                     getFullFunctionName(const ast::FunctionDeclaration *function) const override;
-    std::string                     getFullFunctionName(llvm::StringRef functionName) const;
+    const ast::FunctionDeclaration* getFunction(const std::string &name) const override; // lookup public function
+    std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const override;
+    std::string                     getExportedName(const ast::FunctionDeclaration *function) override;
     //void                            getType(const std::string &typeName) const;
-    const std::unordered_map<std::string, const ImportedModule*>& getImportedModules() const;
+
     ast::Module*                    getAST();
     llvm::Module*                   getLLVM();
+
+    // lookup local function or global from imported modules
+    bool lookupFunction(llvm::StringRef moduleIdentifier, llvm::StringRef identifier, ImportedModule*& module, const ast::FunctionDeclaration*& ast);
+
+    void requireFunctionInstance(FunctionIdentifier function) override;
+
+    // Driver
+    bool generateExportedFunctions();
+    bool generateNextFunction();
 };
 
 class StandardModule : public ImportedModule
@@ -67,7 +97,11 @@ public:
 
     const std::string&              name() const override;
     const ast::FunctionDeclaration* getFunction(const std::string &name) const override;
-    std::string                     getFullFunctionName(const ast::FunctionDeclaration *function) const override;
+    std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const override;
+    std::string                     getExportedName(const ast::FunctionDeclaration *function) override;
+
+    // only type check
+    void requireFunctionInstance(FunctionIdentifier function) override;
 };
 
 } // llfp

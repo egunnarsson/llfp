@@ -12,12 +12,15 @@
 #pragma warning(pop)
 
 #include "Ast.h"
-#include "Module.h"
 #include "Type.h"
 
 
 namespace llfp
 {
+
+class ImportedModule;
+class SourceModule;
+
 namespace codegen
 {
 
@@ -27,6 +30,7 @@ struct Function
 {
     const ast::FunctionDeclaration* ast;
     llvm::Function*                 llvm;
+    std::vector<type::Type*>        types;
 };
 
 struct Value
@@ -38,30 +42,39 @@ struct Value
 class CodeGenerator
 {
     SourceModule*                 sourceModule;
+
+    llvm::LLVMContext             llvmContext; // one context per module, one module compiled per thread
     llvm::IRBuilder<>             llvmBuilder;
     std::unique_ptr<llvm::Module> llvmModule;
 
-    // should be map<pair<string, TypeEnv>, Function> functions; for "generic" functions
+    // mangled name as id
     std::unordered_map<std::string, Function> functions;
-    type::TypeContext typeContext;
+    type::TypeContext             typeContext; // move to source module
 
 public:
 
     CodeGenerator(SourceModule *sourceModule_);
 
-    std::unique_ptr<llvm::Module> generate(const std::unique_ptr<SourceModule> &module);
+    bool               generateFunction(const ast::FunctionDeclaration *ast);
+    bool               generateFunction(const ast::FunctionDeclaration *ast, std::vector<type::Type*> types);
+
+    llvm::Module*      getLLVM() { return llvmModule.get(); }
+    type::TypeContext* getTypeContext() { return &typeContext; }
 
 private:
 
-    void            AddDllMain();
+    Function*          generatePrototype(const ImportedModule* module, const ast::FunctionDeclaration *ast, std::vector<type::Type*> types);
+    bool               generateFunctionBody(Function *function);
+
+    void               AddDllMain(); // should be done on dll not on one module
+
     // lookup, global functions, generate llvmFunction if first external reference
-    Function*       getFunction(ast::Node &ast, llvm::StringRef module, llvm::StringRef functionName);
-    llvm::Function* generateFunctionDeclaration(const std::string &name, const ast::FunctionDeclaration *ast);
+    Function*          getFunction(llvm::StringRef moduleName, llvm::StringRef name, std::vector<type::Type*> types);
 
     friend ExpCodeGenerator;
 };
 
-class ExpCodeGenerator : public ast::ExpVisitor, public type::TypeEnvironment
+class ExpCodeGenerator : public ast::ExpVisitor, public type::TypeScope
 {
     static const Value EmptyValue;
 
@@ -81,12 +94,12 @@ public:
     static llvm::Value* generate(ast::Exp &exp, type::Type *type, ExpCodeGenerator *parent);
 
     // lookup, local functions, global functions,
-    Function* getFunction(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName);
+    Function*           getFunction(llvm::StringRef moduleName, llvm::StringRef name, std::vector<type::Type*> types);
 
-    type::Type*  getTypeByName(llvm::StringRef variable) override;
-    type::Type*  getVariableType(llvm::StringRef variable) override;
-    type::Type*  getFunctionReturnType(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName) override;
-    llvm::Value* getResult();
+    type::TypeContext*  getTypeContext() override { return generator->getTypeContext(); }
+    type::Type*         getVariableType(llvm::StringRef variable) override;
+    const ast::FunctionDeclaration* getFunctionAST(llvm::StringRef module, llvm::StringRef functionName) override;
+    llvm::Value*        getResult();
 
     void visit(ast::LetExp &exp) override;
     void visit(ast::IfExp &exp) override;
@@ -101,10 +114,8 @@ private:
 
     const Value& getNamedValue(const std::string &name);
 
-    auto& llvmContext() { return generator->sourceModule->context(); }
+    auto& llvmContext() { return generator->llvmContext; }
     auto& llvmBuilder() { return generator->llvmBuilder; }
-    auto& llvmModule() { return generator->llvmModule; }
-    auto& functions() { return generator->functions; }
     auto& typeContext() { return generator->typeContext; }
 
     auto generateBinary(type::Type* type, ast::BinaryExp &exp)

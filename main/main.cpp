@@ -86,16 +86,19 @@ int writeBitcode(llvm::Module *llvmModule, llvm::SmallString<128> &output)
     return write(output, ".bc", [llvmModule](llvm::raw_fd_ostream &os) { llvm::WriteBitcodeToFile(*llvmModule, os); });
 }
 
-int writeDefFile(llfp::SourceModule *module, llvm::SmallString<128> &output)
+int writeDefFile(llfp::SourceModule *sourceModule, llvm::SmallString<128> &output)
 {
     return write(output, ".def",
-        [&module](llvm::raw_fd_ostream &os)
+        [&sourceModule](llvm::raw_fd_ostream &os)
         {
-            os << "LIBRARY " << module->name() << "\n";
+            os << "LIBRARY " << sourceModule->name() << "\n";
             os << "EXPORTS\n";
-            for (auto &f : module->getAST()->functionDeclarations)
+            for (auto &f : sourceModule->getAST()->functionDeclarations)
             {
-                os << "    " << module->getFullFunctionName(f.get()) << "\n";
+                if (f->exported)
+                {
+                    os << "    " << sourceModule->getExportedName(f.get()) << "\n";
+                }
             }
         });
 }
@@ -179,7 +182,7 @@ int main(int argc, char *argv[])
         return CommandLineArgumentError;
     }
 
-    std::vector<const llfp::ImportedModule*> modules; // will later contain standard modules
+    std::vector<llfp::ImportedModule*> modules; // will later contain standard modules
     std::vector<std::unique_ptr<llfp::SourceModule>> sourceModules;
     for (auto &inputFile : InputFilenames)
     {
@@ -204,9 +207,9 @@ int main(int argc, char *argv[])
     }
 
     // resolve imports
-    for (auto &module : sourceModules)
+    for (auto &sourceModule : sourceModules)
     {
-        if (!module->addImportedModules(modules))
+        if (!sourceModule->addImportedModules(modules))
         {
             return TypeOrCodeGenerationError;
         }
@@ -217,21 +220,35 @@ int main(int argc, char *argv[])
     int result = createDataLayout(targetTriple, dataLayout);
     if (result) { return result; }
 
-    for (auto &module : sourceModules)
+    for (auto &sourceModule : sourceModules)
     {
-        llfp::codegen::CodeGenerator codeGen(module.get());
+        sourceModule->createCodeGenerator();
 
-        auto llvmModule = codeGen.generate(module);
-        if (llvmModule == nullptr)
-        {
-            return TypeOrCodeGenerationError;
-        }
-        
+        auto llvmModule = sourceModule->getLLVM();
         llvmModule->setTargetTriple(targetTriple);
         llvmModule->setDataLayout(dataLayout);
 
-        module->setLLVM(std::move(llvmModule));
+        if (!sourceModule->generateExportedFunctions())
+        {
+            return TypeOrCodeGenerationError;
+        }
     }
+
+    bool done = false;
+    while (!done)
+    {
+        done = true;
+        for (auto &module : sourceModules)
+        {
+            if (module->generateNextFunction())
+            {
+                while (module->generateNextFunction()) {}
+                done = false;
+            }
+        }
+    }
+
+    // on error quit?
 
     llvm::SmallString<128> output;
     if (sourceModules.size() == 1)
@@ -250,10 +267,10 @@ int main(int argc, char *argv[])
     }
     else
     {
-        for (auto &module : sourceModules)
+        for (auto &sourceModule : sourceModules)
         {
-            output = module->filePath();
-            result = write(module.get(), output);
+            output = sourceModule->filePath();
+            result = write(sourceModule.get(), output);
             if (result != 0) { return result; }
         }
     }

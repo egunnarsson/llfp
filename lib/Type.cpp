@@ -74,59 +74,65 @@ bool Type::isLiteral() const
     return !name_.empty() && name_.front() == '@';
 }
 
-Type* Type::unify(Type* other, TypeEnvironment* env)
+Type* Type::unify(Type* other, TypeContext* env)
 {
     if (this == other)
     {
         return this;
     }
+    assert(this->name_ != other->name_);
+    if (other->name_ == name::Any)
+    {
+        return this;
+    }
+    if (this->name_ == name::Any)
+    {
+        return other;
+    }
 
-    Type *floatType, *intType, *uintType;
     if (isLiteral() && other->isLiteral())
     {
         // TODO: unify to smallest bitsize
-        floatType = env->getTypeByName(name::Double);
-        intType = env->getTypeByName(name::I64);
-        uintType = env->getTypeByName(name::U64);
+        if (isFloating() && other->isFloating())
+        {
+            return env->getType(name::Double);
+        }
+        if (isSigned() || other->isSigned())
+        {
+            return env->getType(name::I64);
+        }
+        else
+        {
+            return env->getType(name::U64);
+        }
     }
-    else
+    else if (isLiteral() || other->isLiteral())
     {
+        Type *nonLiteralType = this;
+        Type *literalType = other;
         if (isLiteral())
         {
-            floatType = other;
-            intType = other;
-            uintType = other;
+            std::swap(nonLiteralType, literalType);
         }
-        else
-        {
-            floatType = this;
-            intType = this;
-            uintType = this;
-        }
-    }
 
-    if (isFloating() && other->isFloating())
-    {
-        return floatType;
-    }
-    if (isInteger() && other->isInteger())
-    {
-        if (isSigned())
+        if (isFloating() && other->isFloating())
         {
-            if (other->isSigned())
+            return nonLiteralType;
+        }
+
+        if (literalType->isSigned())
+        {
+            if (!nonLiteralType->isSigned())
             {
-                return intType;
+                Log({}, "failed to unify types: ", name_, " with ", other->name_);
+                return nullptr;
             }
         }
-        else
-        {
-            if (!other->isSigned())
-            {
-                return uintType;
-            }
-        }
+        return nonLiteralType;
     }
 
+    // neither is literal and they are not the same
+    Log({}, "failed to unify types: ", name_, " with ", other->name_);
     return nullptr;
 }
 
@@ -158,6 +164,7 @@ TypeContext::TypeContext(llvm::LLVMContext &llvmContext)
 
     ADD_TYPE(name::Char, getInt8Ty, false);
 
+    ADD_TYPE_L(name::Any, false, false);
     ADD_TYPE_L(name::IntegerLiteral, false, false);
     ADD_TYPE_L(name::SignedIntegerLiteral, false, true);
     ADD_TYPE_L(name::FloatingLiteral, true, true);
@@ -175,25 +182,39 @@ Type* TypeContext::getType(llvm::StringRef name)
 }
 
 
-TypeInferer::TypeInferer(TypeEnvironment *env_) :
-    env{ env_ }
+EmptyTypeScope::EmptyTypeScope(TypeScope *parent_) :
+    parent{ parent_ }
+{
+}
+
+TypeContext* EmptyTypeScope::getTypeContext()
+{
+    return parent->getTypeContext();
+}
+
+Type* EmptyTypeScope::getVariableType(llvm::StringRef variable)
+{
+    return parent->getTypeContext()->getType(variable);
+}
+
+const ast::FunctionDeclaration* EmptyTypeScope::getFunctionAST(llvm::StringRef module, llvm::StringRef functionName)
+{
+    return parent->getFunctionAST(module, functionName);
+}
+
+
+TypeInferer::TypeInferer(TypeScope *scope_) :
+    env{ scope_ }
 {
     assert(env != nullptr);
 }
 
-Type* TypeInferer::infer(ast::Exp &exp, TypeEnvironment *env)
+Type* TypeInferer::infer(ast::Exp &exp, TypeScope *scope_)
 {
-    TypeInferer inferer(env);
+    TypeInferer inferer(scope_);
     exp.accept(&inferer);
     return inferer.result;
 }
-
-/*Type* TypeInferer::infer(ast::Exp &exp, TypeInferer *parent)
-{
-    TypeInferer inferer(parent);
-    exp.accept(&inferer);
-    return inferer.result;
-}*/
 
 void TypeInferer::visit(ast::LetExp &exp)
 {
@@ -250,7 +271,7 @@ Type* inferMathExp(TypeInferer *inferer, ast::BinaryExp &exp)
 {
     auto lhs = TypeInferer::infer(*exp.lhs, inferer);
     auto rhs = TypeInferer::infer(*exp.rhs, inferer);
-    auto result = lhs->unify(rhs, inferer);
+    auto result = lhs->unify(rhs, inferer->getTypeContext());
     if (result != nullptr)
     {
         if (result->isNum())
@@ -269,7 +290,7 @@ Type* inferBitExp(TypeInferer *inferer, ast::BinaryExp &exp)
 {
     auto lhs = TypeInferer::infer(*exp.lhs, inferer);
     auto rhs = TypeInferer::infer(*exp.rhs, inferer);
-    auto result = lhs->unify(rhs, inferer);
+    auto result = lhs->unify(rhs, inferer->getTypeContext());
     if (result != nullptr)
     {
         if (result->isInteger())
@@ -375,13 +396,33 @@ void TypeInferer::visit(ast::LiteralExp &exp)
 
 void TypeInferer::visit(ast::CallExp &exp)
 {
-    // if types not specified
+    auto ast = env->getFunctionAST(exp.moduleName, exp.name);
+    if (ast != nullptr)
+    {
+        if (ast->typeName.empty())
+        {
+            if (exp.arguments.size() != ast->parameters.size())
+            {
+                Log(exp.location, "parameter count mismatch");
+                return;
+            }
 
-    // infer types of argument expresions and assign to argument names in a new env
+            EmptyTypeScope scope(this);
+            TypeInferer inferer(&scope);
+            for (int i = 0; i < exp.arguments.size(); ++i)
+            {
+                inferer.variables[ast->parameters[i]->identifier] = TypeInferer::infer(*exp.arguments[i].get(), this);
+            }
 
-    // infer exp of body in the new environment
-
-    result = env->getFunctionReturnType(exp, exp.moduleName, exp.name);
+            //FIXME: standard library does not have bodies?
+            ast->functionBody->accept(&inferer);
+            result = inferer.result;
+        }
+        else
+        {
+            result = env->getTypeByName(ast->typeName);
+        }
+    }
 }
 
 void TypeInferer::visit(ast::VariableExp &exp)
@@ -395,13 +436,35 @@ void TypeInferer::visit(ast::VariableExp &exp)
         }
     }
 
-    // possibly 0 arity function
-    result = getFunctionReturnType(exp, exp.moduleName, exp.name);
+    // not a local variable
+    auto ast = env->getFunctionAST(exp.moduleName, exp.name);
+    if (ast != nullptr)
+    {
+        if (ast->typeName.empty())
+        {
+            if (0 != ast->parameters.size())
+            {
+                Log(exp.location, "constant does not take arguments");
+                return;
+            }
+
+            EmptyTypeScope scope(this);
+            TypeInferer inferer(&scope);
+
+            //FIXME: standard library does not have bodies?
+            ast->functionBody->accept(&inferer);
+            result = inferer.result;
+        }
+        else
+        {
+            result = env->getTypeByName(ast->typeName);
+        }
+    }
 }
 
-Type* TypeInferer::getTypeByName(llvm::StringRef name)
+TypeContext* TypeInferer::getTypeContext()
 {
-    return env->getTypeByName(name);
+    return env->getTypeContext();
 }
 
 Type* TypeInferer::getVariableType(llvm::StringRef name)
@@ -414,9 +477,9 @@ Type* TypeInferer::getVariableType(llvm::StringRef name)
     return env->getVariableType(name);
 }
 
-Type* TypeInferer::getFunctionReturnType(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName)
+const ast::FunctionDeclaration* TypeInferer::getFunctionAST(llvm::StringRef module, llvm::StringRef functionName)
 {
-    return env->getFunctionReturnType(exp, module, functionName);
+    return env->getFunctionAST(module, functionName);
 }
 
 } // namespace Type

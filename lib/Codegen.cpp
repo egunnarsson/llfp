@@ -11,6 +11,7 @@
 #pragma warning(pop)
 
 #include "Log.h"
+#include "Module.h"
 
 #include "Codegen.h"
 
@@ -24,99 +25,170 @@ const Value ExpCodeGenerator::EmptyValue{ nullptr, nullptr };
 
 CodeGenerator::CodeGenerator(SourceModule *sourceModule_) :
     sourceModule{ sourceModule_ },
-    llvmBuilder(sourceModule_->context()),
-    typeContext(sourceModule_->context())
+    llvmContext{},
+    llvmBuilder(llvmContext),
+    typeContext(llvmContext)
 {
-    // fill functions with default functions
+    llvmModule = std::make_unique<llvm::Module>(sourceModule->name(), llvmContext);
 }
 
-std::unique_ptr<llvm::Module> CodeGenerator::generate(const std::unique_ptr<SourceModule> &module)
+bool CodeGenerator::generateFunction(const ast::FunctionDeclaration *ast)
 {
-    llvmModule = std::make_unique<llvm::Module>(module->name(), sourceModule->context());
+    std::vector<type::Type*> types;
 
-    // TODO: I only need to do this when I want to call it, start generating exported functions instead
-    for (auto& f : module->getAST()->functionDeclarations)
+    if (ast->typeName.empty())
     {
-        std::string functionName = module->getFullFunctionName(f.get());
-        // make prototypes so that we can call them before generating code
-        // check no duplicated
-        if (functions.find(functionName) == functions.end())
+        Log(ast->location, "generating exported function with unbound return type");
+        return false;
+    }
+    auto retType = typeContext.getType(ast->typeName);
+    if (retType == nullptr)
+    {
+        Log(ast->location, "unknown type:", ast->typeName);
+        return false;
+    }
+    types.push_back(retType);
+
+    for (auto &param : ast->parameters)
+    {
+        if (param->typeName.empty())
         {
-            std::vector<llvm::Type*> parameterTypes;
-            for (auto& p : f->parameters)
-            {
-                auto type = typeContext.getType(p->typeName);
-                if (type == nullptr)
-                {
-                    Log(f->location, "unknown type: ", p->typeName);
-                    return nullptr;
-                }
-                parameterTypes.push_back(type->llvmType());
-            }
-            auto returnType = typeContext.getType(f->typeName)->llvmType();
-            if (returnType == nullptr)
-            {
-                Log(f->location, "unknown type: ", f->typeName);
-                return nullptr;
-            }
-            llvm::FunctionType *functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
+            Log(ast->location, "generating exported function containing unbound paramter types");
+            return false;
+        }
+        auto type = typeContext.getType(param->typeName);
+        if (type == nullptr)
+        {
+            Log(ast->location, "unknown type:", param->typeName);
+            return false;
+        }
+        types.push_back(type);
+    }
 
-            auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, functionName, llvmModule.get());
-            functions[functionName] = { f.get(), llvmFunction };
+    auto f = generatePrototype(sourceModule, ast, std::move(types));
+    if (f->llvm->empty())
+    {
+        return generateFunctionBody(f);
+    }
+    return true;
+}
 
-            size_t i = 0;
-            for (auto &p : llvmFunction->args())
+bool CodeGenerator::generateFunction(const ast::FunctionDeclaration *ast, std::vector<type::Type*> types)
+{
+    auto f = generatePrototype(sourceModule, ast, std::move(types));
+    if (f != nullptr && f->llvm->empty())
+    {
+        return generateFunctionBody(f);
+    }
+    return f != nullptr;
+}
+
+Function* CodeGenerator::generatePrototype(const ImportedModule* module, const ast::FunctionDeclaration *ast, std::vector<type::Type*> types)
+{
+    if (types.empty())
+    {
+        Log(ast->location, "no return type specified");
+        return nullptr;
+    }
+    if (types.size() - 1 != ast->parameters.size())
+    {
+        Log(ast->location, "wrong number of paramters"); // location should be called..., maybe we check at call site also?
+        return nullptr;
+    }
+
+    // unify types / type check / remove literals (requires the value...)
+
+    types[0] = types[0]->unify(typeContext.getType(ast->typeName), &typeContext);
+    for (size_t i = 1; i < types.size(); ++i)
+    {
+        types[i] = types[i]->unify(typeContext.getType(ast->parameters[i - 1]->typeName), &typeContext);
+    }
+
+    if (std::any_of(types.begin(), types.end(), [](auto x) { return x == nullptr; }))
+    {
+        Log(ast->location, "failed to unify function types");
+        return nullptr;
+    }
+
+    auto name = module->getMangledName(ast, types);
+
+    auto funIt = functions.find(name);
+    if (funIt == functions.end())
+    {
+        auto returnType = types.front()->llvmType();
+
+        std::vector<llvm::Type*> parameterTypes;
+        for (auto typeIt = types.begin() + 1; typeIt != types.end(); ++typeIt)
+        {
+            parameterTypes.push_back((*typeIt)->llvmType());
+        }
+
+        auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
+        auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule.get());
+
+        size_t i = 0;
+        for (auto &p : llvmFunction->args())
+        {
+            p.setName(ast->parameters[i++]->identifier);
+        }
+
+        Function fun{ ast, llvmFunction, std::move(types) };
+        funIt = functions.insert(std::make_pair(std::move(name), std::move(fun))).first;
+    }
+    return &funIt->second;
+}
+
+bool CodeGenerator::generateFunctionBody(Function *function)
+{
+    auto llvmFunction = function->llvm;
+    auto ast = function->ast;
+    auto& types = function->types;
+
+    auto bb = llvm::BasicBlock::Create(llvmContext, "entry", llvmFunction);
+    llvmBuilder.SetInsertPoint(bb);
+
+    std::map<std::string, Value> namedValues;
+    for (size_t i = 0; i < ast->parameters.size(); ++i)
+    {
+        auto& llvmArg = *(llvmFunction->arg_begin() + i);
+        if (namedValues.find(llvmArg.getName()) != namedValues.end())
+        {
+            Log(ast->location, "duplicate parameter: ", llvmArg.getName());
+            return false;
+        }
+
+        if (!ast->parameters[i]->typeName.empty())
+        {
+            if (*types[i + 1] != ast->parameters[i]->typeName)
             {
-                p.setName(f->parameters[i++]->identifier);
+                Log(ast->location, "type mismatch, expected '", ast->parameters[i]->typeName, "' actual '", types[i + 1]->name(), '\'');
+                return false;
             }
         }
-        else
+
+        namedValues[llvmArg.getName()] = { types[i + 1], &llvmArg };
+    }
+
+    // type check return
+    if (!ast->typeName.empty())
+    {
+        if (*types[0] != ast->typeName)
         {
-            Log(f->location, "duplicate function definition: ", f->name); 
-            return nullptr;
+            Log(ast->location, "type mismatch, expected '", ast->typeName, "' actual '", types[0]->name(), '\'');
+            return false;
         }
     }
 
-    for (auto f_ : functions)
-    {
-        // actually generate code
-        auto f = f_.second;
+    ExpCodeGenerator expGenerator(types[0], this, std::move(namedValues));
+    ast->functionBody->accept(&expGenerator);
+    llvmBuilder.CreateRet(expGenerator.getResult());
 
-        auto bb = llvm::BasicBlock::Create(sourceModule->context(), "entry", f.llvm);
-        llvmBuilder.SetInsertPoint(bb);
-
-        std::map<std::string, Value> namedValues;
-        for (size_t i = 0; i < f.ast->parameters.size(); ++i)
-        {
-            auto& llvmArg = *(f.llvm->arg_begin() + i);
-            if (namedValues.find(llvmArg.getName()) != namedValues.end())
-            {
-                Log(f.ast->location, "duplicate parameter: ", llvmArg.getName());
-                return nullptr;
-            }
-            auto &typeName = f.ast->parameters[i]->typeName;
-            auto type = typeContext.getType(typeName);
-            assert(type != nullptr); // already checked in module->functionDeclarations loop
-            namedValues[llvmArg.getName()] = { type, &llvmArg };
-        }
-
-        ExpCodeGenerator expGenerator(typeContext.getType(f.ast->typeName), this, std::move(namedValues));
-        f.ast->functionBody->accept(&expGenerator);
-        llvmBuilder.CreateRet(expGenerator.getResult());
-    }
-
-    // TODO: Should not be an ifdef for cross compile support
-#ifdef _WIN32
-    AddDllMain();
-#endif
-
-    return std::move(llvmModule);
+    return expGenerator.getResult() != nullptr;
 }
 
 // TODO: only once per dll
 void CodeGenerator::AddDllMain()
 {
-    auto &llvmContext = sourceModule->context();
     std::vector<llvm::Type*> parameterTypes;
     parameterTypes.push_back(llvm::Type::getInt8PtrTy(llvmContext));
     parameterTypes.push_back(llvm::Type::getInt32Ty(llvmContext));
@@ -131,110 +203,21 @@ void CodeGenerator::AddDllMain()
     llvmBuilder.CreateRet(value);
 }
 
-Function* CodeGenerator::getFunction(ast::Node &ast, llvm::StringRef module, llvm::StringRef functionName)
+Function* CodeGenerator::getFunction(llvm::StringRef moduleName, llvm::StringRef name, std::vector<type::Type*> types)
 {
-    if (module.empty())
+    ImportedModule *importedModule = nullptr;
+    const ast::FunctionDeclaration *function = nullptr;
+    if (sourceModule->lookupFunction(moduleName, name, importedModule, function))
     {
-        std::vector<llvm::StringRef> modules;
-
-        if (functions.find(sourceModule->getFullFunctionName(functionName)) != functions.end())
+        auto proto = generatePrototype(importedModule, function, std::move(types));
+        if (proto != nullptr)
         {
-            modules.push_back(sourceModule->name());
+            importedModule->requireFunctionInstance({ name, &proto->types });
         }
-
-        for (auto &importedModules : sourceModule->getImportedModules())
-        {
-            auto function = importedModules.second->getFunction(functionName);
-            if (function != nullptr)
-            {
-                modules.push_back(importedModules.second->name());
-            }
-        }
-
-        if (modules.size() == 1)
-        {
-            module = modules.front();
-        }
-        else if (!modules.empty())
-        {
-            Log(ast.location, "reference to ", functionName, " is ambiguous");
-            return nullptr;
-        }
-
-        if (module.empty())
-        {
-            Log(ast.location, "undefined function ", functionName);
-            return nullptr;
-        }
+        return proto;
     }
-
-    if (module == sourceModule->name())
-    {
-        auto it = functions.find(sourceModule->getFullFunctionName(functionName));
-        if (it != functions.end())
-        {
-            return &it->second;
-        }
-    }
-    else
-    {
-        auto map = sourceModule->getImportedModules();
-        auto itm = map.find(module);
-        if (itm != map.end())
-        {
-            auto importedModule = itm->second;
-            auto astFunction = importedModule->getFunction(functionName);
-
-            if (astFunction != nullptr)
-            {
-                std::string fullName = importedModule->getFullFunctionName(astFunction);
-                auto itf = functions.find(fullName);
-                if (itf == functions.end())
-                {
-                    Function f;
-                    f.ast = astFunction;
-                    f.llvm = generateFunctionDeclaration(fullName, astFunction);
-                    if (f.llvm == nullptr) { return nullptr; }
-                    itf = functions.insert(std::make_pair(fullName, f)).first;
-                }
-                return &itf->second;
-            }
-        }
-        else
-        {
-            Log(ast.location, "undefined module ", module);
-            return nullptr;
-        }
-    }
-
-    Log(ast.location, "undefined function ", module, ':', functionName);
+    Log({}, "unknown function: ", moduleName, ":", name);
     return nullptr;
-}
-
-llvm::Function* CodeGenerator::generateFunctionDeclaration(const std::string &name, const ast::FunctionDeclaration *ast)
-{
-    std::vector<llvm::Type*> parameterTypes;
-
-    for (auto &arg : ast->parameters)
-    {
-        auto type = typeContext.getType(arg->typeName);
-        if (type == nullptr)
-        {
-            Log(ast->location, "unknown type ", arg->typeName);
-            return nullptr;
-        }
-        parameterTypes.push_back(type->llvmType());
-    }
-
-    auto returnType = typeContext.getType(ast->typeName);
-    if (returnType == nullptr)
-    {
-        Log(ast->location, "unknown type ", ast->typeName);
-        return nullptr;
-    }
-
-    llvm::FunctionType *functionType = llvm::FunctionType::get(returnType->llvmType(), parameterTypes, false);
-    return llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule.get());
 }
 
 ExpCodeGenerator::ExpCodeGenerator(type::Type *type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_) :
@@ -546,7 +529,7 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
             return;
         }
 
-        auto type = lhsT->unify(rhsT, this);
+        auto type = lhsT->unify(rhsT, getTypeContext());
         if (type != nullptr)
         {
             auto args = generateBinary(type, exp);
@@ -631,7 +614,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     }
     else
     {
-        Log(exp.location,"unknown unary operator: ", exp.op);
+        Log(exp.location, "unknown unary operator: ", exp.op);
     }
 }
 
@@ -722,25 +705,28 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
 void ExpCodeGenerator::visit(ast::CallExp &exp)
 {
-    auto function = getFunction(exp, exp.moduleName, exp.name);
+    std::vector<type::Type*> types;
+    types.push_back(expectedType);
+    for (auto &arg : exp.arguments)
+    {
+        auto type = type::TypeInferer::infer(*arg, this);
+        if (type == nullptr)
+        {
+            return;
+        }
+        else
+        {
+            types.push_back(type);
+        }
+    }
+
+    auto function = getFunction(exp.moduleName, exp.name, std::move(types));
     if (function == nullptr)
     {
-        Log(exp.location, "unknown function: ", exp.name);
+        Log(exp.location, "error calling: ", exp.moduleName, ":", exp.name);
     }
     else
     {
-        if (*expectedType != function->ast->typeName)
-        {
-            typeError(exp, expectedType->name(), function->ast->typeName);
-            return;
-        }
-
-        if (function->ast->parameters.size() != exp.arguments.size())
-        {
-            Log(exp.location, "parameter count mismatch");
-            return;
-        }
-
         std::vector<llvm::Value*> arguments;
         for (size_t i = 0; i < exp.arguments.size(); ++i)
         {
@@ -774,10 +760,13 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
         }
     }
 
-    auto y = getFunction(exp, exp.moduleName, exp.name); // functions().find(exp.name); // replace with lookup
-    if (y != nullptr)//functions().end())
+    std::vector<type::Type*> types;
+    types.push_back(expectedType);
+
+    auto y = getFunction(exp.moduleName, exp.name, std::move(types));
+    if (y != nullptr)
     {
-        auto &function = *y;//->second;
+        auto &function = *y;
         if (function.ast->parameters.empty())
         {
             // generate call
@@ -816,31 +805,23 @@ const Value& ExpCodeGenerator::getNamedValue(const std::string &name)
     return it->second;
 }
 
-type::Type* ExpCodeGenerator::getTypeByName(llvm::StringRef name)
-{
-    return typeContext().getType(name);
-}
-
 type::Type* ExpCodeGenerator::getVariableType(llvm::StringRef variable)
 {
     return getNamedValue(variable).type;
 }
 
-Function* ExpCodeGenerator::getFunction(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName)
+Function* ExpCodeGenerator::getFunction(llvm::StringRef moduleName, llvm::StringRef name, std::vector<type::Type*> types)
 {
     // TODO: add local functions
-    return generator->getFunction(exp, module, functionName);
+    return generator->getFunction(moduleName, name, std::move(types));
 }
 
-type::Type* ExpCodeGenerator::getFunctionReturnType(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName)
+const ast::FunctionDeclaration* ExpCodeGenerator::getFunctionAST(llvm::StringRef moduleIdent, llvm::StringRef functionName)
 {
-    auto f = getFunction(exp, module, functionName);
-    if (f == nullptr)
-    {
-        Log(exp.location, "unknown function: ", module, ':', functionName);
-        return nullptr;
-    }
-    return typeContext().getType(f->ast->typeName);
+    llfp::ImportedModule *module = nullptr;
+    const ast::FunctionDeclaration *ast = nullptr;
+    generator->sourceModule->lookupFunction(moduleIdent, functionName, module, ast);
+    return ast;
 }
 
 llvm::Value* ExpCodeGenerator::getResult()

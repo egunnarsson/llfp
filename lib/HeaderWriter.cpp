@@ -86,7 +86,9 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
 
     for (auto &f : module.getAST()->functionDeclarations)
     {
-        os << convertType(f->typeName) << ' ' << module.getFullFunctionName(f.get()) << '(';
+        if (!f->exported) { continue; }
+
+        os << convertType(f->typeName) << ' ' << module.getExportedName(f.get()) << '(';
         if (f->parameters.size() >= 1)
         {
             writeParameter(os, f->parameters.front());

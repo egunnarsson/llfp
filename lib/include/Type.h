@@ -44,6 +44,7 @@ static constexpr auto Double = "double";
 static constexpr auto Char = "char";
 
 // special internal
+static constexpr auto Any = "";
 static constexpr auto IntegerLiteral = "@IntegerLiteral";
 static constexpr auto SignedIntegerLiteral = "@SignedIntegerLiteral";
 static constexpr auto FloatingLiteral = "@FloatingLiteral";
@@ -59,12 +60,12 @@ enum TypeClass
     Bits
 };
 
-class TypeEnvironment;
+class TypeContext;
 
 class Type
 {
     const std::string  name_;
-    llvm::Type * const llvmType_;
+    llvm::Type * const llvmType_; // without this Types could be shared between contexts...
     const bool         isSigned_;
 
 public:
@@ -82,7 +83,7 @@ public:
     bool isSigned() const;
     bool isLiteral() const;
 
-    Type* unify(Type* other, TypeEnvironment* context);
+    Type* unify(Type* other, TypeContext* context);
 
     bool operator ==(const std::string &b) const;
     bool operator !=(const std::string &b) const;
@@ -99,31 +100,47 @@ public:
     Type* getType(llvm::StringRef name);
 };
 
-class TypeEnvironment
+class TypeScope
 {
 public:
 
-    virtual Type* getTypeByName(llvm::StringRef variable) = 0;
+    virtual TypeContext* getTypeContext() = 0;
     virtual Type* getVariableType(llvm::StringRef variable) = 0;
-    virtual Type* getFunctionReturnType(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName) = 0;
+    virtual Type* getTypeByName(llvm::StringRef name) { return getTypeContext()->getType(name); }
+    // a bit out of place but...
+    virtual const ast::FunctionDeclaration* getFunctionAST(llvm::StringRef module, llvm::StringRef functionName) = 0;
 
 protected:
 
-    virtual ~TypeEnvironment() {}
+    virtual ~TypeScope() {}
 };
 
-class TypeInferer : public ast::ExpVisitor, public TypeEnvironment
+class EmptyTypeScope : public TypeScope
 {
-    TypeEnvironment* const       env;
+    TypeScope *parent;
+
+public:
+
+    EmptyTypeScope(TypeScope *parent_);
+    virtual ~EmptyTypeScope() {}
+
+    TypeContext*                    getTypeContext() override;
+    Type*                           getVariableType(llvm::StringRef variable) override;
+    const ast::FunctionDeclaration* getFunctionAST(llvm::StringRef module, llvm::StringRef functionName) override;
+};
+
+class TypeInferer : public ast::ExpVisitor, public TypeScope
+{
+    TypeScope* const             env;
     std::map<std::string, Type*> variables;
     Type*                        result;
 
-    TypeInferer(TypeEnvironment *env_);
+    TypeInferer(TypeScope *env_);
     ~TypeInferer() {}
 
 public:
 
-    static Type* infer(ast::Exp &exp, TypeEnvironment *env);
+    static Type* infer(ast::Exp &exp, TypeScope *env);
 
     void visit(ast::LetExp &exp) override;
     void visit(ast::IfExp &exp) override;
@@ -134,9 +151,9 @@ public:
     void visit(ast::CallExp &exp) override;
     void visit(ast::VariableExp &exp) override;
 
-    Type* getTypeByName(llvm::StringRef name) override;
-    Type* getVariableType(llvm::StringRef variable) override;
-    Type* getFunctionReturnType(ast::Exp &exp, llvm::StringRef module, llvm::StringRef functionName) override;
+    TypeContext* getTypeContext() override;
+    Type*        getVariableType(llvm::StringRef variable) override;
+    const ast::FunctionDeclaration* getFunctionAST(llvm::StringRef module, llvm::StringRef functionName) override;
 };
 
 } // namespace type
