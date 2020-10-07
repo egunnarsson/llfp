@@ -47,6 +47,16 @@ public:
     void visit(llfp::ast::VariableExp &exp) override { os << exp.moduleName << ':' << exp.name; }
 };
 
+std::ostream& operator<<(std::ostream &os, const llfp::ast::Field &f)
+{
+    return os << f.typeName << ' ' <<  f.identifier;
+}
+
+std::ostream& operator<<(std::ostream &os, const llfp::ast::DataDeclaration &d)
+{
+    return os << '{' << (d.exported ? '+' : '-') << d.name << ' ' << d.fields << '}';
+}
+
 std::ostream& operator<<(std::ostream &os, llfp::ast::Exp &e)
 {
     return ExpPrint::visit(os, e);
@@ -59,5 +69,5 @@ std::ostream& operator<<(std::ostream &os, const llfp::ast::FunctionDeclaration 
 
 std::ostream& operator<<(std::ostream &os, const llfp::ast::Module &m)
 {
-    return os << '{' << m.name << ", " << m.publicDeclarations << ", " << m.imports << ", " << m.functionDeclarations << '}';
+    return os << '{' << m.name << ", " << m.publicDeclarations << ", " << m.imports << ", " << m.functionDeclarations << ", " << m.dataDeclarations << '}';
 }

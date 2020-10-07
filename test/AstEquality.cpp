@@ -234,6 +234,16 @@ bool operator==(const PublicDeclaration &p1, const PublicDeclaration &p2)
     return p1.name == p2.name;
 }
 
+bool operator==(const Field &f1, const Field &f2)
+{
+    return f1.typeName == f2.typeName && f1.identifier == f2.identifier;
+}
+
+bool operator==(const DataDeclaration &d1, const DataDeclaration &d2)
+{
+    return d1.name == d2.name && EqV(d1.fields, d2.fields) && d1.exported == d2.exported;
+}
+
 bool operator==(const FunctionDeclaration &f1, const FunctionDeclaration &f2)
 {
     return f1.name == f2.name &&

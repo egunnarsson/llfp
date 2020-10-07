@@ -59,13 +59,20 @@ ModulePtr MakeModule(llfp::SourceLocation sourceLocation,
                           std::string name,
                           std::vector<PublicDeclaration> publicDeclarations,
                           std::vector<ImportDeclaration> imports,
-                          std::initializer_list<movable_il<std::unique_ptr<FunctionDeclaration>>> functionDeclarations)
+                          std::initializer_list<movable_il<std::unique_ptr<FunctionDeclaration>>> functionDeclarations,
+                          std::initializer_list<movable_il<std::unique_ptr<DataDeclaration>>> dataDeclarations)
 {
-    auto module = std::make_unique<llfp::ast::Module>(sourceLocation, std::move(name));
+    auto module = std::make_unique<Module>(sourceLocation, std::move(name));
     module->publicDeclarations = std::move(publicDeclarations);
     module->imports = std::move(imports);
     module->functionDeclarations = vector_from_il(functionDeclarations);
+    module->dataDeclarations = vector_from_il(dataDeclarations);
     return module;
+}
+
+auto MakeDataDecl(llfp::SourceLocation location, std::string name, std::vector<Field> fields, bool exported)
+{
+    return std::make_unique<DataDeclaration>(location, std::move(name), std::move(fields), exported);
 }
 
 auto MakeFunctionDecl(llfp::SourceLocation location,
@@ -75,7 +82,7 @@ auto MakeFunctionDecl(llfp::SourceLocation location,
                       std::unique_ptr<Exp> functionBody,
                       bool exported)
 {
-    return std::make_unique<llfp::ast::FunctionDeclaration>(location, name, typeName, vector_from_il(parameters), std::move(functionBody), exported);
+    return std::make_unique<FunctionDeclaration>(location, name, typeName, vector_from_il(parameters), std::move(functionBody), exported);
 }
 
 auto MakeParameter(llfp::SourceLocation location, std::string typeName, std::string name)
@@ -131,18 +138,18 @@ std::unique_ptr<Exp> MakeVariable(llfp::SourceLocation location, std::string mod
 TEST(ParserTest, Imports)
 {
     // no imports
-    EXPECT_EQ(Parse("module m;"), MakeModule({0,0}, "m", {}, {}, {}));
+    EXPECT_EQ(Parse("module m;"), MakeModule({ 0,0 }, "m", {}, {}, {}, {}));
     
     // one import
     EXPECT_EQ(Parse("module m;"
                     "import m2;"),
-              MakeModule({0,0}, "m", {}, {ImportDeclaration({0,0}, "m2")}, {}));
+              MakeModule({0,0}, "m", {}, {ImportDeclaration({0,0}, "m2")}, {}, {}));
     
     // multiple imports
     EXPECT_EQ(Parse("module m;"
                     "import m2;"
                     "import m3;"),
-              MakeModule({0,0}, "m", {}, {ImportDeclaration({0,0}, "m2"), ImportDeclaration({0,0}, "m3")}, {}));
+              MakeModule({0,0}, "m", {}, {ImportDeclaration({0,0}, "m2"), ImportDeclaration({0,0}, "m3")}, {}, {}));
     
     // from, select symbols
 }
@@ -150,76 +157,98 @@ TEST(ParserTest, Imports)
 TEST(ParserTest, PublicDeclarations)
 {
     // no decls
-    EXPECT_EQ(Parse("module m;"), MakeModule({0,0}, "m", {}, {}, {}));
-    EXPECT_EQ(Parse("module m();"), MakeModule({0,0}, "m", {}, {}, {}));
+    EXPECT_EQ(Parse("module m;"), MakeModule({0,0}, "m", {}, {}, {}, {}));
+    EXPECT_EQ(Parse("module m();"), MakeModule({0,0}, "m", {}, {}, {}, {}));
     
     // one decls
-    EXPECT_EQ(Parse("module m(x);"), MakeModule({0,0}, "m", {PublicDeclaration({0,0}, "x")}, {}, {}));
+    EXPECT_EQ(Parse("module m(x);"), MakeModule({0,0}, "m", {PublicDeclaration({0,0}, "x")}, {}, {}, {}));
     
     // multiple decls
-    EXPECT_EQ(Parse("module m(x,y);"), MakeModule({0,0}, "m", {PublicDeclaration({0,0}, "x"), PublicDeclaration({0,0}, "y")}, {}, {}));
+    EXPECT_EQ(Parse("module m(x,y);"), MakeModule({0,0}, "m", {PublicDeclaration({0,0}, "x"), PublicDeclaration({0,0}, "y")}, {}, {}, {}));
 }
 
 #define M "module m;\n"
+
+TEST(ParserTest, DataDeclarations)
+{
+    EXPECT_EQ(Parse(M"data a{}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({0,0}, "a", {}, false) }));
+    EXPECT_EQ(Parse(M"data a{t x;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a", { Field({ 0,0 },"t", "x") }, false) }));
+    EXPECT_EQ(Parse(M"data a{t1 x; t2 y;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a", { Field({ 0,0 }, "t1", "x"), Field({ 0,0 }, "t2", "y") }, false) }));
+    EXPECT_EQ(Parse(M"export data a{}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a",{}, true) }));
+}
 
 TEST(ParserTest, Functions)
 {
     // untyped function
     EXPECT_EQ(Parse(M"f = 1;"),
         MakeModule({0,0}, "m", {}, {}, {
-            MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}));
+            MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}, {}));
     
     // no params
     EXPECT_EQ(Parse(M"t f = 1;"),
         MakeModule({0,0}, "m", {}, {}, {
-            MakeFunctionDecl({0,0}, "f", "t", {}, MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}));
+            MakeFunctionDecl({0,0}, "f", "t", {}, MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}, {}));
 
     // one params
     EXPECT_EQ(Parse(M"t f(x) = 1;"),
         MakeModule({0,0}, "m", {}, {}, {
             MakeFunctionDecl({0,0}, "f", "t",
                 {MakeParameter({0,0}, "", "x")},
-                MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}));
+                MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}, {}));
     
     // multiple params
     EXPECT_EQ(Parse(M"t f(x,y) = 1;"),
         MakeModule({0,0}, "m", {}, {}, {
             MakeFunctionDecl({0,0}, "f", "t", 
                 {MakeParameter({0,0}, "", "x"), MakeParameter({0,0}, "", "y")},
-                MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}));
+                MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}, {}));
     
     // typed params
     EXPECT_EQ(Parse(M"t f(t x) = 1;"),
         MakeModule({0,0}, "m", {}, {}, {
             MakeFunctionDecl({0,0}, "f", "t",
                 {MakeParameter({0,0}, "t", "x")},
-                MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}));
+                MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}, {}));
     EXPECT_EQ(Parse(M"t f(t x, t2 y) = 1;"),
         MakeModule({0,0}, "m", {}, {}, {
             MakeFunctionDecl({0,0}, "f", "t",
                 {MakeParameter({0,0}, "t", "x"), MakeParameter({0,0}, "t2", "y")},
-                MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}));
+                MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}, {}));
+}
+
+TEST(ParserTest, Declarations)
+{
+    EXPECT_EQ(Parse(
+        M"data a{}"
+         "f = 1;"
+         "data b{}"
+         "g = 2;"),
+        MakeModule({ 0,0 }, "m", {}, {},
+            { MakeFunctionDecl({0,0},"f", "", {}, MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"), false),
+            MakeFunctionDecl({ 0,0 },"g", "",{}, MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "2"), false) },
+            { MakeDataDecl({ 0,0 }, "a",{}, false),
+            MakeDataDecl({ 0,0 }, "b",{}, false) }));
 }
 
 TEST(ParserTest, Literals)
 {
     // integer
     EXPECT_EQ(Parse(M"f = 1;"),
-        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}));
+        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}, {}));
     // float
     EXPECT_EQ(Parse(M"f = 1.0;"),
-        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_float, "1.0"), false)}));
+        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_float, "1.0"), false)}, {}));
     // char
     EXPECT_EQ(Parse(M"f = \'c\';"),
-        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_char, "c"), false)}));
+        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_char, "c"), false)}, {}));
     // string
     EXPECT_EQ(Parse(M"f = \"ac\";"),
-        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_string, "ac"), false)}));
+        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_string, "ac"), false)}, {}));
     // bool
     EXPECT_EQ(Parse(M"f = true;"),
-        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_bool, "true"), false)}));
+        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_bool, "true"), false)}, {}));
     EXPECT_EQ(Parse(M"f = false;"),
-        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_bool, "false"), false)}));
+        MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_bool, "false"), false)}, {}));
 }
 
 TEST(ParserTest, LetExp)
@@ -230,7 +259,7 @@ TEST(ParserTest, LetExp)
                                            MakeLet({0,0},
                                                    {MakeFunctionDecl({0,0}, "x", "", {},
                                                                      MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)},
-                                                   MakeLiteral({0,0}, llfp::lex::tok_integer, "2")), false)}));
+                                                   MakeLiteral({0,0}, llfp::lex::tok_integer, "2")), false)}, {}));
     EXPECT_EQ(Parse(M"f = let x = 1; y = 2; in 3;"),
               MakeModule({0,0}, "m", {}, {},
                          {MakeFunctionDecl({0,0}, "f", "", {},
@@ -239,7 +268,7 @@ TEST(ParserTest, LetExp)
                                                                      MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false),
                                                     MakeFunctionDecl({0,0}, "y", "", {},
                                                                      MakeLiteral({0,0}, llfp::lex::tok_integer, "2"), false)},
-                                                   MakeLiteral({0,0}, llfp::lex::tok_integer, "3")), false)}));
+                                                   MakeLiteral({0,0}, llfp::lex::tok_integer, "3")), false)}, {}));
 }
 
 TEST(ParserTest, IfExp)
@@ -250,7 +279,7 @@ TEST(ParserTest, IfExp)
                                            MakeIf({0,0},
                                                   MakeVariable({0,0}, "", "x"),
                                                   MakeVariable({0,0}, "", "y"),
-                                                  MakeVariable({0,0}, "", "z")), false)}));
+                                                  MakeVariable({0,0}, "", "z")), false)}, {}));
 }
 
 TEST(ParserTest, CaseExp)
@@ -264,7 +293,7 @@ TEST(ParserTest, BinaryExp)
                          {MakeFunctionDecl({0,0}, "f", "", {},
                                            MakeBinary({0,0}, "+",
                                                       MakeVariable({0,0}, "", "x"),
-                                                      MakeVariable({0,0}, "", "y")), false)}));
+                                                      MakeVariable({0,0}, "", "y")), false)}, {}));
     EXPECT_EQ(Parse(M"f = x + y + z;"),
               MakeModule({0,0}, "m", {}, {},
                          {MakeFunctionDecl({0,0}, "f", "", {},
@@ -272,7 +301,7 @@ TEST(ParserTest, BinaryExp)
                                                       MakeBinary({0,0}, "+",
                                                                  MakeVariable({0,0}, "", "x"),
                                                                  MakeVariable({0,0}, "", "y")),
-                                                      MakeVariable({0,0}, "", "z")), false)}));
+                                                      MakeVariable({0,0}, "", "z")), false)}, {}));
     EXPECT_EQ(Parse(M"f = x + y * z;"),
               MakeModule({0,0}, "m", {}, {},
                          {MakeFunctionDecl({0,0}, "f", "", {},
@@ -280,7 +309,7 @@ TEST(ParserTest, BinaryExp)
                                                       MakeVariable({0,0}, "", "x"),
                                                       MakeBinary({0,0}, "*",
                                                                  MakeVariable({0,0}, "", "y"),
-                                                                 MakeVariable({0,0}, "", "z"))), false)}));
+                                                                 MakeVariable({0,0}, "", "z"))), false)}, {}));
     EXPECT_EQ(Parse(M"f = x * y + z;"),
               MakeModule({0,0}, "m", {}, {},
                          {MakeFunctionDecl({0,0}, "f", "", {},
@@ -288,7 +317,7 @@ TEST(ParserTest, BinaryExp)
                                                       MakeBinary({0,0}, "*",
                                                                  MakeVariable({0,0}, "", "x"),
                                                                  MakeVariable({0,0}, "", "y")),
-                                                      MakeVariable({0,0}, "", "z")), false)}));
+                                                      MakeVariable({0,0}, "", "z")), false)}, {}));
     
     EXPECT_EQ(Parse(M"f = x * (y + z);"),
               MakeModule({0,0}, "m", {}, {},
@@ -297,7 +326,7 @@ TEST(ParserTest, BinaryExp)
                                                       MakeVariable({0,0}, "", "x"),
                                                       MakeBinary({0,0}, "+",
                                                                  MakeVariable({0,0}, "", "y"),
-                                                                 MakeVariable({0,0}, "", "z"))), false)}));
+                                                                 MakeVariable({0,0}, "", "z"))), false)}, {}));
     EXPECT_EQ(Parse(M"f = (x + y) * z;"),
               MakeModule({0,0}, "m", {}, {},
                          {MakeFunctionDecl({0,0}, "f", "", {},
@@ -305,11 +334,12 @@ TEST(ParserTest, BinaryExp)
                                                       MakeBinary({0,0}, "+",
                                                                  MakeVariable({0,0}, "", "x"),
                                                                  MakeVariable({0,0}, "", "y")),
-                                                      MakeVariable({0,0}, "", "z")), false)}));
+                                                      MakeVariable({0,0}, "", "z")), false)}, {}));
 }
 
 TEST(ParserTest, UnaryExp)
 {
+    // why did I skip this?
 }
 
 TEST(ParserTest, CallExp)
@@ -319,14 +349,14 @@ TEST(ParserTest, CallExp)
               MakeModule({0,0}, "m", {}, {},
                          {MakeFunctionDecl({0,0}, "f", "", {},
                                            MakeCall({0,0}, "", "f2",
-                                                    {MakeVariable({0,0}, "", "x")}), false)}));
+                                                    {MakeVariable({0,0}, "", "x")}), false)}, {}));
     // multiple params
     EXPECT_EQ(Parse(M"f = f2(x,y);"),
               MakeModule({0,0}, "m", {}, {},
                          {MakeFunctionDecl({0,0}, "f", "", {},
                                            MakeCall({0,0}, "", "f2",
                                                     {MakeVariable({0,0}, "", "x"),
-                                                     MakeVariable({0,0}, "", "y")}), false)}));
+                                                     MakeVariable({0,0}, "", "y")}), false)}, {}));
     
     // local function
     
@@ -335,13 +365,13 @@ TEST(ParserTest, CallExp)
               MakeModule({0,0}, "m", {}, {},
                          {MakeFunctionDecl({0,0}, "f", "", {},
                                            MakeCall({0,0}, "m2", "f1",
-                                                    {MakeVariable({0,0}, "", "x")}), false)}));
+                                                    {MakeVariable({0,0}, "", "x")}), false)}, {}));
     EXPECT_EQ(Parse(M"f = m2:f1(x,y);"),
               MakeModule({0,0}, "m", {}, {},
                          {MakeFunctionDecl({0,0}, "f", "", {},
                                            MakeCall({0,0}, "m2", "f1",
                                                     {MakeVariable({0,0}, "", "x"),
-                                                     MakeVariable({0,0}, "", "y")}), false)}));
+                                                     MakeVariable({0,0}, "", "y")}), false)}, {}));
     
     // exp in params
     EXPECT_EQ(Parse(M"f = f2(x+y, f3(z));"),
@@ -352,15 +382,15 @@ TEST(ParserTest, CallExp)
                                                                 MakeVariable({0,0}, "", "x"),
                                                                 MakeVariable({0,0}, "", "y")),
                                                      MakeCall({0,0}, "", "f3",
-                                                        {MakeVariable({0,0}, "", "z")})}), false)}));
+                                                        {MakeVariable({0,0}, "", "z")})}), false)}, {}));
 }
 
 TEST(ParserTest, VariableExp)
 {
     EXPECT_EQ(Parse(M"f = x;"),
-              MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeVariable({0,0}, "", "x"), false)}));
+              MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeVariable({0,0}, "", "x"), false)}, {}));
     EXPECT_EQ(Parse(M"f = m:x;"),
-              MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeVariable({0,0}, "m", "x"), false)}));
+              MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeVariable({0,0}, "m", "x"), false)}, {}));
 }
 
 TEST(ParserTest, Comments)

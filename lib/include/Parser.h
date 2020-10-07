@@ -42,6 +42,7 @@ private:
 
     bool parseDeclaration(const std::unique_ptr<ast::Module> &module);
 
+    std::unique_ptr<ast::DataDeclaration>     parseData(bool exported);
     std::unique_ptr<ast::FunctionDeclaration> parseFunction(bool exported);
 
     std::unique_ptr<ast::Exp> parseLiteralExp();

@@ -85,8 +85,6 @@ constexpr bool isoperator(int _C)
     case '=': return true;
     case '>': return true;
     case '?': return true;
-    case '[': return true; // should not be operator
-    case ']': return true; // should not be operator
     case '^': return true;
     case '|': return true;
     case '~': return true;
@@ -104,6 +102,10 @@ constexpr Token punctuation(int _C)
     case ',': return tok_comma;
     case ':': return tok_colon;
     case ';': return tok_semicolon;
+    case '[': return tok_open_bracket;
+    case ']': return tok_close_bracket;
+    case '{': return tok_open_brace;
+    case '}': return tok_close_brace;
     default: return tok_error;
     }
 }
@@ -204,7 +206,6 @@ Token Lexer::parseToken()
         {
             tokenString += '.';
             lastChar = input->getChar();
-            // FIXME: if (!isDigit(lastChar)) could be member access (foo.x)
             while (isdigit(lastChar))
             {
                 tokenString += static_cast<char>(lastChar);
@@ -214,7 +215,14 @@ Token Lexer::parseToken()
             {
 
             }
-            return isalpha(lastChar) ? error("invalid number") : tok_float;
+            if (tokenString == ".")
+            {
+                return tok_operator;
+            }
+            else
+            {
+                return isalpha(lastChar) ? error("invalid number") : tok_float;
+            }
         }
     }
 

@@ -105,6 +105,11 @@ const ast::FunctionDeclaration* SourceModule::getFunction(const std::string &nam
 std::string SourceModule::getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const
 {
     assert(!types.empty());
+    if (function->exported)
+    {
+        return getExportedName(function);
+    }
+
     std::string result;
     result += name();
     result += '.';
@@ -124,7 +129,7 @@ std::string SourceModule::getMangledName(const ast::FunctionDeclaration *functio
     return result;
 }
 
-std::string SourceModule::getExportedName(const ast::FunctionDeclaration *function)
+std::string SourceModule::getExportedName(const ast::FunctionDeclaration *function) const
 {
     return name() + '_' + function->name;
 }

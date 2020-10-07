@@ -40,7 +40,7 @@ public:
     virtual const std::string&              name() const = 0;
     virtual const ast::FunctionDeclaration* getFunction(const std::string &name) const = 0;
     virtual std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const = 0;
-    virtual std::string                     getExportedName(const ast::FunctionDeclaration *function) = 0;
+    virtual std::string                     getExportedName(const ast::FunctionDeclaration *function) const = 0;
     //virtual Type* getType(std::string name) = 0;
 
     //TODO: thread safe!
@@ -73,7 +73,7 @@ public:
     const std::string&              name() const override;
     const ast::FunctionDeclaration* getFunction(const std::string &name) const override; // lookup public function
     std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const override;
-    std::string                     getExportedName(const ast::FunctionDeclaration *function) override;
+    std::string                     getExportedName(const ast::FunctionDeclaration *function) const override;
     //void                            getType(const std::string &typeName) const;
 
     ast::Module*                    getAST();
@@ -98,7 +98,7 @@ public:
     const std::string&              name() const override;
     const ast::FunctionDeclaration* getFunction(const std::string &name) const override;
     std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const override;
-    std::string                     getExportedName(const ast::FunctionDeclaration *function) override;
+    std::string                     getExportedName(const ast::FunctionDeclaration *function) const override;
 
     // only type check
     void requireFunctionInstance(FunctionIdentifier function) override;

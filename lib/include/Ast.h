@@ -51,8 +51,28 @@ protected:
     Node(SourceLocation location_);
 };
 
-class DataDeclaration
-{};
+class Field : public Node
+{
+public:
+
+    std::string typeName;
+    std::string identifier;
+
+    Field(SourceLocation location_, std::string typeName_, std::string identifier_);
+    virtual ~Field();
+};
+
+class DataDeclaration : public Node
+{
+public:
+
+    std::string        name;
+    std::vector<Field> fields;
+    bool               exported;
+
+    DataDeclaration(SourceLocation location_, std::string name_, std::vector<Field> fields_, bool exported_);
+    virtual ~DataDeclaration();
+};
 
 class InstanceDeclaration
 {};
@@ -131,6 +151,7 @@ public:
     std::string                    name;
     std::vector<PublicDeclaration> publicDeclarations;
     std::vector<ImportDeclaration> imports;
+    std::vector<std::unique_ptr<DataDeclaration>>     dataDeclarations;
     std::vector<std::unique_ptr<FunctionDeclaration>> functionDeclarations;
 
     Module(SourceLocation location_, std::string name_);
@@ -220,7 +241,7 @@ class VariableExp : public Exp
 public:
 
     std::string moduleName;
-    std::string name;
+    std::string name; // identifier
 
     VariableExp(SourceLocation location_, std::string moduleName, std::string name_);
     virtual ~VariableExp();

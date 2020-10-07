@@ -7,9 +7,30 @@ namespace llfp
 namespace ast
 {
 
-Node::Node(SourceLocation location_):
+Node::Node(SourceLocation location_) :
     location{ location_ }
 {}
+
+
+Field::Field(SourceLocation location_, std::string typeName_, std::string identifier_) :
+    Node(location_),
+    typeName{ std::move(typeName_) },
+    identifier{ std::move(identifier_) }
+{
+}
+
+Field::~Field() {}
+
+
+DataDeclaration::DataDeclaration(SourceLocation location_, std::string name_, std::vector<Field> fields_, bool exported_) :
+    Node(location_),
+    name{ std::move(name_) },
+    fields{ std::move(fields_) },
+    exported { exported_ }
+{
+}
+
+DataDeclaration::~DataDeclaration() {}
 
 
 Exp::Exp(SourceLocation location_) : Node(location_) {}
@@ -52,7 +73,7 @@ PublicDeclaration::PublicDeclaration(SourceLocation location_, std::string name_
 PublicDeclaration::~PublicDeclaration() {}
 
 
-ImportDeclaration::ImportDeclaration(SourceLocation location_, std::string name_):
+ImportDeclaration::ImportDeclaration(SourceLocation location_, std::string name_) :
     Node(location_),
     name{ std::move(name_) }
 {}

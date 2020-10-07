@@ -92,7 +92,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
     }
     if (types.size() - 1 != ast->parameters.size())
     {
-        Log(ast->location, "wrong number of paramters"); // location should be called..., maybe we check at call site also?
+        Log(ast->location, "wrong number of parameters"); // location should be called..., maybe we check at call site also?
         return nullptr;
     }
 
@@ -730,8 +730,7 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
         std::vector<llvm::Value*> arguments;
         for (size_t i = 0; i < exp.arguments.size(); ++i)
         {
-            auto parameterType = function->ast->parameters[i]->typeName;
-            arguments.push_back(generate(*exp.arguments[i], typeContext().getType(parameterType), this));
+            arguments.push_back(generate(*exp.arguments[i], function->types[i + 1], this));
             if (arguments.back() == nullptr)
             {
                 return;

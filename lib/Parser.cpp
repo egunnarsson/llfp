@@ -168,22 +168,70 @@ bool Parser::parseDeclaration(const std::unique_ptr<ast::Module> &module)
     }
     switch (lexer->getToken())
     {
-    case lex::tok_data: Log(lexer->getLocation(), "data declaration not implemented"); break;
+    case lex::tok_data:
+        if (auto data = parseData(exported))
+        {
+            module->dataDeclarations.push_back(std::move(data));
+            return true;
+        }
+        break;
+
     case lex::tok_class: Log(lexer->getLocation(), "class declaration not implemented"); break;
     case lex::tok_instance: Log(lexer->getLocation(), "instance declaration not implemented"); break;
     case lex::tok_identifier:
-    {
         if (auto function = parseFunction(exported))
         {
             module->functionDeclarations.push_back(std::move(function));
             return true;
         }
-    }
-    break;
+        break;
 
     default: Log(lexer->getLocation(), "unexpected token: ", lex::Lexer::tokenName(lexer->getToken())); break;
     }
     return false;
+}
+
+std::unique_ptr<ast::DataDeclaration> Parser::parseData(bool exported)
+{
+    auto location = lexer->getLocation();
+
+    if (!expect(lex::tok_data)) { return nullptr; }
+
+    if (lexer->getToken() != lex::tok_identifier)
+    {
+        return Error<ast::DataDeclaration>("expected identifier");
+    }
+    std::string name = lexer->getString();
+    lexer->nextToken();
+
+    if (!expect(lex::tok_open_brace)) { return nullptr; }
+
+    std::vector<ast::Field> fields;
+    while (lexer->getToken() != lex::tok_close_brace)
+    {
+        auto fieldLocation = lexer->getLocation();
+
+        if (lexer->getToken() != lex::tok_identifier)
+        {
+            return Error<ast::DataDeclaration>("expected identifier");
+        }
+        std::string fieldType = lexer->getString();
+        lexer->nextToken();
+
+        if (lexer->getToken() != lex::tok_identifier)
+        {
+            return Error<ast::DataDeclaration>("expected identifier");
+        }
+        std::string fieldName = lexer->getString();
+        lexer->nextToken();
+
+        if (!expect(lex::tok_semicolon)) { return nullptr; }
+
+        fields.push_back({ fieldLocation, std::move(fieldType), std::move(fieldName) });
+    }
+    lexer->nextToken(); // eat }
+
+    return std::make_unique<ast::DataDeclaration>(location, std::move(name), std::move(fields), exported);
 }
 
 std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
@@ -192,7 +240,7 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
 
     if (lexer->getToken() != lex::tok_identifier)
     {
-        return Error<ast::FunctionDeclaration>("expected type identifier");
+        return Error<ast::FunctionDeclaration>("expected identifier");
     }
     std::string typeName = lexer->getString();
     lexer->nextToken();
@@ -451,6 +499,8 @@ std::unique_ptr<ast::Exp> Parser::parseBinaryExp(int exprPrec, std::unique_ptr<a
         auto location = lexer->getLocation();
         std::string op = lexer->getString();
         lexer->nextToken();
+
+        // if (op == ".") { only allow identifier } ?
 
         auto RHS = parseUnaryExp();
         if (!RHS)

@@ -49,6 +49,10 @@ enum Token
     tok_semicolon,
     tok_open_parenthesis,
     tok_close_parenthesis,
+    tok_open_bracket,
+    tok_close_bracket,
+    tok_open_brace,
+    tok_close_brace,
     tok_comma,
     tok_equal,
 
@@ -171,6 +175,10 @@ public:
         case tok_semicolon: return "semicolon";
         case tok_open_parenthesis: return "parenthesis";
         case tok_close_parenthesis: return "parenthesis";
+        case tok_open_bracket: return "bracket";
+        case tok_close_bracket: return "bracket";
+        case tok_open_brace: return "brace";
+        case tok_close_brace: return "brace";
         case tok_comma: return "comma";
         case tok_equal: return "equal";
         case tok_comment: return "comment";

@@ -116,6 +116,7 @@ TEST(LexerTest, Tokens)
     
     PARSE_TOKEN("import", tok_import, "import");
     PARSE_TOKEN("export", tok_export, "export");
+    PARSE_TOKEN("data", tok_data, "data");
     PARSE_TOKEN("true", tok_bool, "true");
     PARSE_TOKEN("false", tok_bool, "false");
     PARSE_TOKEN("if", tok_if, "if");
@@ -128,6 +129,10 @@ TEST(LexerTest, Tokens)
     
     PARSE_TOKEN("(", tok_open_parenthesis, "(");
     PARSE_TOKEN(")", tok_close_parenthesis, ")");
+    PARSE_TOKEN("[", tok_open_bracket, "[");
+    PARSE_TOKEN("]", tok_close_bracket, "]");
+    PARSE_TOKEN("{", tok_open_brace, "{");
+    PARSE_TOKEN("}", tok_close_brace, "}");
     PARSE_TOKEN(",", tok_comma, ",");
     PARSE_TOKEN(":", tok_colon, ":");
     PARSE_TOKEN(";", tok_semicolon, ";");
@@ -184,10 +189,14 @@ TEST(LexerTest, Operators)
     PARSE_TOKEN("!", tok_operator, "!");
     PARSE_TOKEN("~", tok_operator, "~");
     
-    // "a.b"
-    
+    PARSE_TOKEN(".", tok_operator, ".");
+
     std::initializer_list<TestToken> tokens;
-    
+
+    tokens = { { tok_identifier, "a" }, { tok_operator, ".",  }, { tok_identifier, "b" } };
+    PARSE_TOKENS("a.b", tokens);
+    //tokens = { { tok_identifier, "a" },{ tok_float, ".2" } };
+    //PARSE_TOKENS("a.2", tokens);
     tokens = { {tok_operator, "!"}, {tok_open_parenthesis, "("}, {tok_operator, "+"} };
     PARSE_TOKENS("!(+", tokens);
     tokens = { {tok_operator, "-"}, {tok_close_parenthesis, ")"}, {tok_operator, "/"} };
