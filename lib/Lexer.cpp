@@ -244,11 +244,16 @@ Token Lexer::parseToken()
             }
             lastChar = input->getChar();
         }
+        else if (lastChar == '\'')
+        {
+            return error("empty character");
+        }
         else
         {
             tokenString = static_cast<char>(lastChar);
             lastChar = input->getChar();
         }
+
         if (lastChar != '\'')
         {
             return error("unclosed character");
