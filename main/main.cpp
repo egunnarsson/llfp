@@ -228,6 +228,11 @@ int main(int argc, char *argv[])
         llvmModule->setTargetTriple(targetTriple);
         llvmModule->setDataLayout(dataLayout);
 
+        if (!sourceModule->generateTypes())
+        {
+            return TypeOrCodeGenerationError;
+        }
+
         if (!sourceModule->generateExportedFunctions())
         {
             return TypeOrCodeGenerationError;

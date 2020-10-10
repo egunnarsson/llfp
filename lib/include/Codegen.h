@@ -55,6 +55,8 @@ public:
 
     CodeGenerator(SourceModule *sourceModule_);
 
+    bool               generateDataDeclarations(std::vector<std::unique_ptr<ast::DataDeclaration>> &dataDeclarations);
+
     bool               generateFunction(const ast::FunctionDeclaration *ast);
     bool               generateFunction(const ast::FunctionDeclaration *ast, std::vector<type::Type*> types);
 

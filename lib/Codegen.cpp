@@ -32,6 +32,41 @@ CodeGenerator::CodeGenerator(SourceModule *sourceModule_) :
     llvmModule = std::make_unique<llvm::Module>(sourceModule->name(), llvmContext);
 }
 
+bool CodeGenerator::generateDataDeclarations(std::vector<std::unique_ptr<ast::DataDeclaration>> &dataDeclarations)
+{
+    std::vector<llvm::StructType*> llvmTypes;
+
+    for (auto &dataDecl : dataDeclarations)
+    {
+        auto llvmType = llvm::StructType::create(llvmContext, dataDecl->name);
+        llvmTypes.push_back(llvmType);
+        if (!typeContext.addType(std::make_unique<llfp::type::Type>(dataDecl->name, llvmType, false)))
+        {
+            return false;
+        }
+    }
+
+    int i = 0;
+    for (auto &dataDecl : dataDeclarations)
+    {
+        assert(llvmTypes[i]->getName() == dataDecl->name);
+
+        std::vector<llvm::Type*> fieldTypes;
+        for (auto &field : dataDecl->fields)
+        {
+            fieldTypes.push_back(typeContext.getType(field.typeName)->llvmType());
+            if (fieldTypes.back() == nullptr)
+            {
+                Log(field.location, "unkown type:", field.typeName);
+                return false;
+            }
+        }
+
+        llvmTypes[i]->setBody(fieldTypes);
+        ++i;
+    }
+}
+
 bool CodeGenerator::generateFunction(const ast::FunctionDeclaration *ast)
 {
     std::vector<type::Type*> types;

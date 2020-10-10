@@ -232,6 +232,11 @@ void SourceModule::requireFunctionInstance(FunctionIdentifier function)
     pendingGeneration.push_back(function);
 }
 
+bool SourceModule::generateTypes()
+{
+    return codeGenerator->generateDataDeclarations(astModule->dataDeclarations);
+}
+
 bool SourceModule::generateExportedFunctions()
 {
     bool result = true;

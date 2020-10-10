@@ -181,6 +181,10 @@ Type* TypeContext::getType(llvm::StringRef name)
     return it->second.get();
 }
 
+bool TypeContext::addType(std::unique_ptr<Type> type)
+{
+    return types.insert({ type->name(), std::move(type) }).second;
+}
 
 EmptyTypeScope::EmptyTypeScope(TypeScope *parent_) :
     parent{ parent_ }

@@ -98,6 +98,7 @@ public:
     TypeContext(llvm::LLVMContext &llvmContext);
 
     Type* getType(llvm::StringRef name);
+    bool  addType(std::unique_ptr<Type> type);
 };
 
 class TypeScope

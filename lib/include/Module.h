@@ -85,6 +85,7 @@ public:
     void requireFunctionInstance(FunctionIdentifier function) override;
 
     // Driver
+    bool generateTypes();
     bool generateExportedFunctions();
     bool generateNextFunction();
 };
