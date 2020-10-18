@@ -65,28 +65,56 @@ class TypeContext;
 class Type
 {
     const std::string  name_;
-    llvm::Type * const llvmType_; // without this Types could be shared between contexts...
+    llvm::Type* const  llvmType_; // without this Types could be shared between contexts...
     const bool         isSigned_;
 
 public:
 
     Type(std::string name, llvm::Type* llvmType, bool isSigned = false);
     Type(std::string name, bool isFloating, bool isSigned = false);
+    virtual ~Type();
 
-    const std::string& name() const;
+    const std::string&   name() const;
 
-    llvm::Type *llvmType() const;
+    llvm::Type*          llvmType() const;
 
-    bool isNum() const;
-    bool isInteger() const;
-    bool isFloating() const;
-    bool isSigned() const;
-    bool isLiteral() const;
+    bool                 isNum() const;
+    bool                 isInteger() const;
+    bool                 isFloating() const;
+    bool                 isSigned() const;
+    bool                 isLiteral() const;
 
-    Type* unify(Type* other, TypeContext* context);
+    virtual bool         isStructType() const;
+    virtual Type*        getFieldType(const std::string &fieldIdentifier) const;
+    virtual unsigned int getFieldIndex(const std::string &fieldIdentifier) const;
+
+    Type*                unify(Type* other, TypeContext* context);
 
     bool operator ==(const std::string &b) const;
     bool operator !=(const std::string &b) const;
+};
+
+class StructType : public Type
+{
+    struct Field
+    {
+        unsigned int index;
+        Type*        type;
+    };
+
+    llvm::StructType* const  llvmType_; // without this Types could be shared between contexts...
+
+    std::unordered_map<std::string, Field> fields;
+
+public:
+
+    StructType(std::string name, llvm::StructType* llvmType);
+
+    bool         isStructType() const override;
+    Type*        getFieldType(const std::string &fieldIdentifier) const override;
+    unsigned int getFieldIndex(const std::string &fieldIdentifier) const override;
+
+    bool setFields(std::vector<ast::Field> &astFields, std::vector<type::Type*> &fieldTypes);
 };
 
 class TypeContext
@@ -97,8 +125,8 @@ public:
 
     TypeContext(llvm::LLVMContext &llvmContext);
 
-    Type* getType(llvm::StringRef name);
-    bool  addType(std::unique_ptr<Type> type);
+    Type*       getType(llvm::StringRef name);
+    StructType* addType(std::unique_ptr<StructType> type);
 };
 
 class TypeScope
@@ -151,6 +179,7 @@ public:
     void visit(ast::LiteralExp &exp) override;
     void visit(ast::CallExp &exp) override;
     void visit(ast::VariableExp &exp) override;
+    void visit(ast::FieldExp &exp) override;
 
     TypeContext* getTypeContext() override;
     Type*        getVariableType(llvm::StringRef variable) override;

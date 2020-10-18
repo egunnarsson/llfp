@@ -111,6 +111,7 @@ public:
     void visit(ast::LiteralExp &exp) override;
     void visit(ast::CallExp &exp) override;
     void visit(ast::VariableExp &exp) override;
+    void visit(ast::FieldExp &exp) override;
 
 private:
 
