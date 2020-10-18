@@ -30,6 +30,8 @@ Type::Type(std::string name, bool isFloating, bool isSigned) :
 {
 }
 
+Type::~Type() {}
+
 const std::string& Type::name() const
 {
     return name_;
@@ -72,6 +74,22 @@ bool Type::isSigned() const
 bool Type::isLiteral() const
 {
     return !name_.empty() && name_.front() == '@';
+}
+
+
+bool Type::isStructType() const
+{
+    return false;
+}
+
+Type* Type::getFieldType(const std::string &fieldIdentifier) const
+{
+    return nullptr;
+}
+
+unsigned int Type::getFieldIndex(const std::string &fieldIdentifier) const
+{
+    return (unsigned int)-1;
 }
 
 Type* Type::unify(Type* other, TypeContext* env)
@@ -139,6 +157,61 @@ Type* Type::unify(Type* other, TypeContext* env)
 bool Type::operator ==(const std::string &s) const { return name_ == s; }
 bool Type::operator !=(const std::string &s) const { return name_ != s; }
 
+
+StructType::StructType(std::string name, llvm::StructType* llvmType) :
+    Type(std::move(name), llvmType),
+    llvmType_{ llvmType }
+{
+}
+
+bool StructType::isStructType() const
+{
+    return true;
+}
+
+Type* StructType::getFieldType(const std::string &fieldIdentifier) const
+{
+    auto it = fields.find(fieldIdentifier);
+    if (it != fields.end())
+    {
+        return it->second.type;
+    }
+    return nullptr;
+}
+
+unsigned int StructType::getFieldIndex(const std::string &fieldIdentifier) const
+{
+    auto it = fields.find(fieldIdentifier);
+    if (it != fields.end())
+    {
+        return it->second.index;
+    }
+    return (unsigned int)-1;
+}
+
+bool StructType::setFields(std::vector<ast::Field> &astFields, std::vector<type::Type*> &fieldTypes)
+{
+    assert(fields.size() == 0);
+    assert(astFields.size() == fieldTypes.size()); // or if?
+
+    std::vector<llvm::Type*> llvmTypes;
+    for (unsigned int i = 0; i < astFields.size(); ++i)
+    {
+        Field f{ i, fieldTypes[i] };
+        auto inserted = fields.insert(std::make_pair(astFields[i].identifier, f)).second;
+        if (!inserted)
+        {
+            Log(astFields[i].location, "duplicate field: ", astFields[i].identifier);
+            return false;
+        }
+        llvmTypes.push_back(fieldTypes[i]->llvmType());
+    }
+
+    llvmType_->setBody(llvmTypes);
+    return true;
+}
+
+
 #define ADD_TYPE(name, get, sign) types.insert({ name, std::make_unique<Type>(name, llvm::Type::get(llvmContext), sign) })
 #define ADD_TYPE_L(name, floating, sign) types.insert({ name, std::make_unique<Type>(name, floating, sign) })
 
@@ -181,9 +254,14 @@ Type* TypeContext::getType(llvm::StringRef name)
     return it->second.get();
 }
 
-bool TypeContext::addType(std::unique_ptr<Type> type)
+StructType* TypeContext::addType(std::unique_ptr<StructType> type)
 {
-    return types.insert({ type->name(), std::move(type) }).second;
+    auto ptr = type.get();
+    if (types.insert({ type->name(), std::move(type) }).second)
+    {
+        return ptr;
+    }
+    return nullptr;
 }
 
 EmptyTypeScope::EmptyTypeScope(TypeScope *parent_) :
@@ -286,6 +364,10 @@ Type* inferMathExp(TypeInferer *inferer, ast::BinaryExp &exp)
         {
             Log(exp.location, "operand of math expression is not a number");
         }
+    }
+    else
+    {
+        Log(exp.location, "failed to unify types: ", lhs->name(), " and ", rhs->name());
     }
     return nullptr;
 }
@@ -462,6 +544,23 @@ void TypeInferer::visit(ast::VariableExp &exp)
         else
         {
             result = env->getTypeByName(ast->typeName);
+        }
+    }
+}
+
+void TypeInferer::visit(ast::FieldExp &exp)
+{
+    auto structType = TypeInferer::infer(*exp.lhs, this);
+    if (!structType->isStructType())
+    {
+        Log(exp.location, "");
+    }
+    else
+    {
+        result = structType->getFieldType(exp.fieldIdentifier);
+        if (result == nullptr)
+        {
+            Log(exp.location, "unknown field: ", exp.fieldIdentifier);
         }
     }
 }

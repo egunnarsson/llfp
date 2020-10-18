@@ -45,6 +45,7 @@ public:
     void visit(llfp::ast::LiteralExp &exp) override { os << litName(exp.tokenType) << ' ' << exp.value; }
     void visit(llfp::ast::CallExp &exp) override { os << exp.moduleName << ':' << exp.name << exp.arguments; }
     void visit(llfp::ast::VariableExp &exp) override { os << exp.moduleName << ':' << exp.name; }
+    void visit(llfp::ast::FieldExp &exp) override { os << exp.lhs << '.' << exp.fieldIdentifier; }
 };
 
 std::ostream& operator<<(std::ostream &os, const llfp::ast::Field &f)

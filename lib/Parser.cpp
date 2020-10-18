@@ -500,25 +500,38 @@ std::unique_ptr<ast::Exp> Parser::parseBinaryExp(int exprPrec, std::unique_ptr<a
         std::string op = lexer->getString();
         lexer->nextToken();
 
-        // if (op == ".") { only allow identifier } ?
-
-        auto RHS = parseUnaryExp();
-        if (!RHS)
+        if (op == ".")
         {
-            return nullptr;
+            if (lexer->getToken() != lex::tok_identifier)
+            {
+                return Error<ast::Exp>("expected field identifier");
+            }
+
+            std::string fieldIdentifier = lexer->getString();
+            lexer->nextToken();
+
+            LHS = std::make_unique<ast::FieldExp>(location, std::move(LHS), std::move(fieldIdentifier));
         }
-
-        int nextPrec = precedence(lexer->getString());
-        if (tokPrec < nextPrec)
+        else
         {
-            RHS = parseBinaryExp(tokPrec + 1, std::move(RHS));
+            auto RHS = parseUnaryExp();
             if (!RHS)
             {
                 return nullptr;
             }
-        }
 
-        LHS = std::make_unique<ast::BinaryExp>(location, op, std::move(LHS), std::move(RHS));
+            int nextPrec = precedence(lexer->getString());
+            if (tokPrec < nextPrec)
+            {
+                RHS = parseBinaryExp(tokPrec + 1, std::move(RHS));
+                if (!RHS)
+                {
+                    return nullptr;
+                }
+            }
+
+            LHS = std::make_unique<ast::BinaryExp>(location, op, std::move(LHS), std::move(RHS));
+        }
     }
 }
 

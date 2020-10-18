@@ -26,7 +26,7 @@ DataDeclaration::DataDeclaration(SourceLocation location_, std::string name_, st
     Node(location_),
     name{ std::move(name_) },
     fields{ std::move(fields_) },
-    exported { exported_ }
+    exported{ exported_ }
 {
 }
 
@@ -182,6 +182,18 @@ CallExp::CallExp(
 CallExp::~CallExp() {}
 
 void CallExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
+
+
+FieldExp::FieldExp(SourceLocation location_, std::unique_ptr<Exp> lhs_, std::string fieldIdentifier_) :
+    Exp(location_),
+    lhs{ std::move(lhs_) },
+    fieldIdentifier{ std::move(fieldIdentifier_) }
+{}
+
+FieldExp::~FieldExp() {}
+
+void FieldExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
+
 
 } // namespace ast
 } // namespace llfp

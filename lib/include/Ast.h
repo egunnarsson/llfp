@@ -21,6 +21,7 @@ class UnaryExp;
 class LiteralExp;
 class CallExp;
 class VariableExp;
+class FieldExp;
 
 class ExpVisitor
 {
@@ -34,6 +35,7 @@ public:
     virtual void visit(LiteralExp &exp) = 0;
     virtual void visit(CallExp &exp) = 0;
     virtual void visit(VariableExp &exp) = 0;
+    virtual void visit(FieldExp &exp) = 0;
 
 protected: // ?
 
@@ -263,6 +265,18 @@ public:
     void accept(ExpVisitor *visitor) override;
 };
 
+class FieldExp : public Exp
+{
+public:
+
+    std::unique_ptr<Exp> lhs;
+    std::string          fieldIdentifier;
+
+    FieldExp(SourceLocation location_, std::unique_ptr<Exp> lhs_, std::string fieldIdentifier_);
+    virtual ~FieldExp();
+
+    void accept(ExpVisitor *visitor) override;
+};
 
 } // ast
 } // llfp

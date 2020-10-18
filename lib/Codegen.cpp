@@ -34,37 +34,48 @@ CodeGenerator::CodeGenerator(SourceModule *sourceModule_) :
 
 bool CodeGenerator::generateDataDeclarations(std::vector<std::unique_ptr<ast::DataDeclaration>> &dataDeclarations)
 {
-    std::vector<llvm::StructType*> llvmTypes;
+    std::vector<type::StructType*> userTypes;
 
     for (auto &dataDecl : dataDeclarations)
     {
         auto llvmType = llvm::StructType::create(llvmContext, dataDecl->name);
-        llvmTypes.push_back(llvmType);
-        if (!typeContext.addType(std::make_unique<llfp::type::Type>(dataDecl->name, llvmType, false)))
+        auto userType = typeContext.addType(std::make_unique<llfp::type::StructType>(dataDecl->name, llvmType));
+        
+        if (userType == nullptr)
         {
+            Log(dataDecl->location, "duplicate type declaration: ", dataDecl->name);
             return false;
+        }
+        else
+        {
+            userTypes.push_back(userType);
         }
     }
 
     int i = 0;
     for (auto &dataDecl : dataDeclarations)
     {
-        assert(llvmTypes[i]->getName() == dataDecl->name);
+        assert(userTypes[i]->name() == dataDecl->name);
 
-        std::vector<llvm::Type*> fieldTypes;
+        std::vector<type::Type*> fieldTypes;
         for (auto &field : dataDecl->fields)
         {
-            fieldTypes.push_back(typeContext.getType(field.typeName)->llvmType());
+            fieldTypes.push_back(typeContext.getType(field.typeName));
             if (fieldTypes.back() == nullptr)
             {
-                Log(field.location, "unkown type:", field.typeName);
+                Log(field.location, "unknown type: ", field.typeName);
                 return false;
             }
         }
 
-        llvmTypes[i]->setBody(fieldTypes);
+        if (!userTypes[i]->setFields(dataDecl->fields, fieldTypes))
+        {
+            return false;
+        }
         ++i;
     }
+
+    return true;
 }
 
 bool CodeGenerator::generateFunction(const ast::FunctionDeclaration *ast)
@@ -820,6 +831,38 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
     {
         Log(exp.location, "unknown identifier: ", exp.name);
     }
+}
+
+void ExpCodeGenerator::visit(ast::FieldExp &exp)
+{
+    auto lhsType = type::TypeInferer::infer(*exp.lhs, this);
+    if (lhsType == nullptr)
+    {
+        return;
+    }
+
+    auto structValue = ExpCodeGenerator::generate(*exp.lhs, lhsType, this);
+    if (structValue == nullptr)
+    {
+        return;
+    }
+
+    auto fieldType = lhsType->getFieldType(exp.fieldIdentifier);
+    if (fieldType == nullptr)
+    {
+        Log(exp.location, "unknown field: ", exp.fieldIdentifier);
+        return;
+    }
+
+    // type check
+    if (expectedType->unify(fieldType, getTypeContext()) == nullptr)
+    {
+        Log(exp.location, "failed to unify types: ", expectedType->name(), " and ", fieldType->name());
+        return;
+    }
+
+    unsigned int index = lhsType->getFieldIndex(exp.fieldIdentifier);
+    result = llvmBuilder().CreateExtractValue(structValue, { index });
 }
 
 const Value& ExpCodeGenerator::getNamedValue(const std::string &name)

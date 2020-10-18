@@ -104,6 +104,7 @@ public:
     VISIT(LiteralExp)
     VISIT(CallExp)
     VISIT(VariableExp)
+    VISIT(FieldExp)
 };
 
 class ExpEq : public ExpVisitor
@@ -155,6 +156,7 @@ public:
     VISIT(LiteralExp)
     VISIT(CallExp)
     VISIT(VariableExp)
+    VISIT(FieldExp)
 };
 
 #undef VISIT
@@ -216,6 +218,11 @@ bool operator==(const CallExp &e1, const CallExp &e2)
 bool operator==(const VariableExp &e1, const VariableExp &e2)
 {
     return e1.moduleName == e2.moduleName && e1.name == e2.name;
+}
+
+bool operator==(const FieldExp &e1, const FieldExp &e2)
+{
+    return e1.fieldIdentifier == e2.fieldIdentifier && ExpEq::check(e1.lhs, e2.lhs);
 }
 
 bool operator==(const Parameter &p1, const Parameter &p2)

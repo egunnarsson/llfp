@@ -135,6 +135,11 @@ std::unique_ptr<Exp> MakeVariable(llfp::SourceLocation location, std::string mod
     return std::make_unique<VariableExp>(location, std::move(moduleName), std::move(name));
 }
 
+std::unique_ptr<Exp> MakeField(llfp::SourceLocation location, std::unique_ptr<Exp> lhs, std::string fieldName)
+{
+    return std::make_unique<FieldExp>(location, std::move(lhs), std::move(fieldName));
+}
+
 TEST(ParserTest, Imports)
 {
     // no imports
@@ -391,6 +396,16 @@ TEST(ParserTest, VariableExp)
               MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeVariable({0,0}, "", "x"), false)}, {}));
     EXPECT_EQ(Parse(M"f = m:x;"),
               MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeVariable({0,0}, "m", "x"), false)}, {}));
+}
+
+TEST(ParserTest, FieldExp)
+{
+    EXPECT_EQ(Parse(M"f = x.y;"),
+        MakeModule({ 0,0 }, "m", {}, {}, { MakeFunctionDecl({0,0}, "f", "", {}, MakeField({0,0}, MakeVariable({0,0}, "", "x"), "y"), false) }, {}));
+    EXPECT_EQ(Parse(M"f = x.y.z;"),
+        MakeModule({ 0,0 }, "m", {}, {}, { MakeFunctionDecl({0,0}, "f", "", {}, MakeField({0,0}, MakeField({0,0}, MakeVariable({0,0}, "", "x"), "y"), "z"), false) }, {}));
+    EXPECT_EQ(Parse(M"f = x:y.z;"),
+        MakeModule({ 0,0 }, "m", {}, {}, { MakeFunctionDecl({0,0}, "f", "", {}, MakeField({0,0}, MakeVariable({0,0}, "x", "y"), "z"), false) }, {}));
 }
 
 TEST(ParserTest, Comments)
