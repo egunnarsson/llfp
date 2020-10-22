@@ -191,6 +191,9 @@ TEST(LexerTest, Operators)
     
     PARSE_TOKEN(".", tok_operator, ".");
 
+    // not valid operator but should be parsed as an operator...
+    PARSE_TOKEN(".+", tok_operator, ".+");
+
     std::initializer_list<TestToken> tokens;
 
     tokens = { { tok_identifier, "a" }, { tok_operator, ".",  }, { tok_identifier, "b" } };

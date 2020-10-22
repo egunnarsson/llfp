@@ -43,5 +43,6 @@ add_subdirectory(lib)
 add_subdirectory(main)
 
 if (LLFP_GTEST_PATH)
+    enable_testing()
     add_subdirectory(test)
 endif()

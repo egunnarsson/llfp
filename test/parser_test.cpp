@@ -55,6 +55,13 @@ auto Parse(const char *string)
     return ModulePtr(parser.parse());
 }
 
+std::string ParseError(const char *string)
+{
+    testing::internal::CaptureStderr();
+    Parse(string);
+    return testing::internal::GetCapturedStderr();
+}
+
 ModulePtr MakeModule(llfp::SourceLocation sourceLocation,
                           std::string name,
                           std::vector<PublicDeclaration> publicDeclarations,
@@ -157,6 +164,10 @@ TEST(ParserTest, Imports)
               MakeModule({0,0}, "m", {}, {ImportDeclaration({0,0}, "m2"), ImportDeclaration({0,0}, "m3")}, {}, {}));
     
     // from, select symbols
+
+    // negative
+    EXPECT_EQ(ParseError("module m\nf = 1;"), "string(2,1): expected 'semicolon'\n");
+    EXPECT_EQ(ParseError("f = 1; module m;"), "string(1,1): expected 'module'\n");
 }
 
 TEST(ParserTest, PublicDeclarations)
@@ -170,6 +181,9 @@ TEST(ParserTest, PublicDeclarations)
     
     // multiple decls
     EXPECT_EQ(Parse("module m(x,y);"), MakeModule({0,0}, "m", {PublicDeclaration({0,0}, "x"), PublicDeclaration({0,0}, "y")}, {}, {}, {}));
+
+    // negative
+    EXPECT_EQ(ParseError("module m(x y);"), "string(1,12): expected 'comma'\n");
 }
 
 #define M "module m;\n"
@@ -180,6 +194,14 @@ TEST(ParserTest, DataDeclarations)
     EXPECT_EQ(Parse(M"data a{t x;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a", { Field({ 0,0 },"t", "x") }, false) }));
     EXPECT_EQ(Parse(M"data a{t1 x; t2 y;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a", { Field({ 0,0 }, "t1", "x"), Field({ 0,0 }, "t2", "y") }, false) }));
     EXPECT_EQ(Parse(M"export data a{}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a",{}, true) }));
+
+    // negative
+    EXPECT_EQ(ParseError(M"data a{x;}"),      "string(2,9): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"data a{x}"),       "string(2,9): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"data a{t x}"),     "string(2,11): expected 'semicolon'\n");
+    EXPECT_EQ(ParseError(M"data a{t x; y;}"), "string(2,14): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"data a{t x y;}"),  "string(2,12): expected 'semicolon'\n");
+    EXPECT_EQ(ParseError(M"data{t x;}"),      "string(2,5): expected an identifier\n");
 }
 
 TEST(ParserTest, Functions)
@@ -219,6 +241,9 @@ TEST(ParserTest, Functions)
             MakeFunctionDecl({0,0}, "f", "t",
                 {MakeParameter({0,0}, "t", "x"), MakeParameter({0,0}, "t2", "y")},
                 MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}, {}));
+
+    // negative
+    EXPECT_EQ(ParseError(M"f = ;"), "string(2,5): expected an expression\n");
 }
 
 TEST(ParserTest, Declarations)
@@ -233,6 +258,8 @@ TEST(ParserTest, Declarations)
             MakeFunctionDecl({ 0,0 },"g", "",{}, MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "2"), false) },
             { MakeDataDecl({ 0,0 }, "a",{}, false),
             MakeDataDecl({ 0,0 }, "b",{}, false) }));
+
+    // negative
 }
 
 TEST(ParserTest, Literals)
@@ -254,6 +281,8 @@ TEST(ParserTest, Literals)
         MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_bool, "true"), false)}, {}));
     EXPECT_EQ(Parse(M"f = false;"),
         MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_bool, "false"), false)}, {}));
+
+    // negative
 }
 
 TEST(ParserTest, LetExp)
@@ -274,6 +303,11 @@ TEST(ParserTest, LetExp)
                                                     MakeFunctionDecl({0,0}, "y", "", {},
                                                                      MakeLiteral({0,0}, llfp::lex::tok_integer, "2"), false)},
                                                    MakeLiteral({0,0}, llfp::lex::tok_integer, "3")), false)}, {}));
+
+    // negative
+    EXPECT_EQ(ParseError(M"f = let x = 1; 2;"),          "string(2,16): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"f = let x = 1; y 2;"),        "string(2,18): expected 'equal'\n");
+    EXPECT_EQ(ParseError(M"f = let x = 1 y = 2; in 3;"), "string(2,15): expected 'semicolon'\n");
 }
 
 TEST(ParserTest, IfExp)
@@ -285,6 +319,9 @@ TEST(ParserTest, IfExp)
                                                   MakeVariable({0,0}, "", "x"),
                                                   MakeVariable({0,0}, "", "y"),
                                                   MakeVariable({0,0}, "", "z")), false)}, {}));
+
+    // negative
+    EXPECT_EQ(ParseError(M"f = if x,a then y else z;"), "string(2,9): expected 'then'\n");
 }
 
 TEST(ParserTest, CaseExp)
@@ -340,6 +377,13 @@ TEST(ParserTest, BinaryExp)
                                                                  MakeVariable({0,0}, "", "x"),
                                                                  MakeVariable({0,0}, "", "y")),
                                                       MakeVariable({0,0}, "", "z")), false)}, {}));
+
+    //"f = a+-b;"; // ? or force a + - b or a+(-b)
+
+    // negative
+    EXPECT_EQ(ParseError(M"f = +;"),       "string(2,6): expected an expression\n");
+    EXPECT_EQ(ParseError(M"f = 1 + 2 +;"), "string(2,12): expected an expression\n");
+    EXPECT_EQ(ParseError(M"f = a + + ;"),  "string(2,11): expected an expression\n");
 }
 
 TEST(ParserTest, UnaryExp)
@@ -388,6 +432,9 @@ TEST(ParserTest, CallExp)
                                                                 MakeVariable({0,0}, "", "y")),
                                                      MakeCall({0,0}, "", "f3",
                                                         {MakeVariable({0,0}, "", "z")})}), false)}, {}));
+
+    // negative
+    EXPECT_EQ(ParseError(M"f = f2(x y);"), "string(2,10): expected 'comma'\n");
 }
 
 TEST(ParserTest, VariableExp)
@@ -396,6 +443,9 @@ TEST(ParserTest, VariableExp)
               MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeVariable({0,0}, "", "x"), false)}, {}));
     EXPECT_EQ(Parse(M"f = m:x;"),
               MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeVariable({0,0}, "m", "x"), false)}, {}));
+
+    // negative
+    EXPECT_EQ(ParseError(M"f = m:x:z;"), "string(2,8): expected 'semicolon'\n");
 }
 
 TEST(ParserTest, FieldExp)
@@ -406,6 +456,9 @@ TEST(ParserTest, FieldExp)
         MakeModule({ 0,0 }, "m", {}, {}, { MakeFunctionDecl({0,0}, "f", "", {}, MakeField({0,0}, MakeField({0,0}, MakeVariable({0,0}, "", "x"), "y"), "z"), false) }, {}));
     EXPECT_EQ(Parse(M"f = x:y.z;"),
         MakeModule({ 0,0 }, "m", {}, {}, { MakeFunctionDecl({0,0}, "f", "", {}, MakeField({0,0}, MakeVariable({0,0}, "x", "y"), "z"), false) }, {}));
+
+    // negative
+    EXPECT_EQ(ParseError(M"f = x.);"), "string(2,7): expected a field identifier\n");
 }
 
 TEST(ParserTest, Comments)
