@@ -259,7 +259,7 @@ bool SourceModule::generateNextFunction()
         auto it = functions.find(function.name);
         if (it == functions.end())
         {
-            Log({}, "undefined function: ", name(), ":", function.name);
+            Log({}, "undefined function: ", name(), ':', function.name);
             pendingGeneration.pop_back();
             return false;
         }
@@ -276,7 +276,7 @@ bool SourceModule::generateNextFunction()
 
         if (std::any_of(types.begin(), types.end(), [](auto x) { return x == nullptr; }))
         {
-            Log(ast->location, "unknown type in: ", name(), ":", function.name);
+            Log(ast->location, "unknown type in: ", name(), ':', function.name);
             pendingGeneration.pop_back();
             return false;
         }

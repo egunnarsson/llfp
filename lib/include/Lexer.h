@@ -66,7 +66,7 @@ class Input
 public:
 
     Input(llvm::StringRef inputFile) :
-        location{ 0, 0, inputFile }
+        location{ 1, 0, inputFile }
     {}
     virtual ~Input() {}
 
@@ -136,11 +136,12 @@ protected:
 
 class Lexer
 {
-    Input*      input;
-    Token       currentToken;
-    std::string tokenString;
-    int         lastChar;
-    bool        skipComments = true;
+    Input*         input;
+    Token          currentToken;
+    SourceLocation tokenLocation;
+    std::string    tokenString;
+    int            lastChar;
+    bool           skipComments = true;
 
 public:
 

@@ -262,7 +262,7 @@ Function* CodeGenerator::getFunction(llvm::StringRef moduleName, llvm::StringRef
         }
         return proto;
     }
-    Log({}, "unknown function: ", moduleName, ":", name);
+    Log({}, "unknown function: ", moduleName, ':', name);
     return nullptr;
 }
 
@@ -769,7 +769,7 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
     auto function = getFunction(exp.moduleName, exp.name, std::move(types));
     if (function == nullptr)
     {
-        Log(exp.location, "error calling: ", exp.moduleName, ":", exp.name);
+        Log(exp.location, "error calling: ", exp.moduleName, ':', exp.name);
     }
     else
     {

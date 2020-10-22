@@ -95,7 +95,7 @@ std::unique_ptr<ast::Module> Parser::parse()
 
     if (lexer->getToken() != lex::tok_identifier)
     {
-        return Error<ast::Module>("expected identifier");
+        return Error<ast::Module>("expected an identifier");
     }
     std::string name = lexer->getString();
     lexer->nextToken();
@@ -115,7 +115,7 @@ std::unique_ptr<ast::Module> Parser::parse()
             {
                 if (lexer->getToken() != lex::tok_identifier)
                 {
-                    return Error<ast::Module>("expected identifier");
+                    return Error<ast::Module>("expected an identifier");
                 }
                 module->publicDeclarations.push_back(ast::PublicDeclaration(lexer->getLocation(), lexer->getString()));
                 
@@ -140,7 +140,7 @@ std::unique_ptr<ast::Module> Parser::parse()
         lexer->nextToken();
         if (lexer->getToken() != lex::tok_identifier)
         {
-            return Error<ast::Module>("expected identifier");
+            return Error<ast::Module>("expected an identifier");
         }
         module->imports.push_back(ast::ImportDeclaration(lexer->getLocation(), lexer->getString()));
         lexer->nextToken();
@@ -186,7 +186,7 @@ bool Parser::parseDeclaration(const std::unique_ptr<ast::Module> &module)
         }
         break;
 
-    default: Log(lexer->getLocation(), "unexpected token: ", lex::Lexer::tokenName(lexer->getToken())); break;
+    default: Log(lexer->getLocation(), "unexpected token ", lex::Lexer::tokenName(lexer->getToken())); break;
     }
     return false;
 }
@@ -199,7 +199,7 @@ std::unique_ptr<ast::DataDeclaration> Parser::parseData(bool exported)
 
     if (lexer->getToken() != lex::tok_identifier)
     {
-        return Error<ast::DataDeclaration>("expected identifier");
+        return Error<ast::DataDeclaration>("expected an identifier");
     }
     std::string name = lexer->getString();
     lexer->nextToken();
@@ -213,14 +213,14 @@ std::unique_ptr<ast::DataDeclaration> Parser::parseData(bool exported)
 
         if (lexer->getToken() != lex::tok_identifier)
         {
-            return Error<ast::DataDeclaration>("expected identifier");
+            return Error<ast::DataDeclaration>("expected an identifier");
         }
         std::string fieldType = lexer->getString();
         lexer->nextToken();
 
         if (lexer->getToken() != lex::tok_identifier)
         {
-            return Error<ast::DataDeclaration>("expected identifier");
+            return Error<ast::DataDeclaration>("expected an identifier");
         }
         std::string fieldName = lexer->getString();
         lexer->nextToken();
@@ -240,7 +240,7 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
 
     if (lexer->getToken() != lex::tok_identifier)
     {
-        return Error<ast::FunctionDeclaration>("expected identifier");
+        return Error<ast::FunctionDeclaration>("expected an identifier");
     }
     std::string typeName = lexer->getString();
     lexer->nextToken();
@@ -262,7 +262,7 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
     {
         do
         {
-            if (lexer->nextToken() != lex::tok_identifier) { return Error<ast::FunctionDeclaration>("expected identifier"); }
+            if (lexer->nextToken() != lex::tok_identifier) { return Error<ast::FunctionDeclaration>("expected an identifier"); }
             std::string argTypeName = lexer->getString();
 
             std::string argIdentifier;
@@ -347,7 +347,7 @@ std::unique_ptr<ast::Exp> Parser::parseIdentifierExp()
     if (token == lex::tok_colon)
     {
         token = lexer->nextToken();
-        if (token != lex::tok_identifier) { return Error<ast::VariableExp>("expected identifier"); }
+        if (token != lex::tok_identifier) { return Error<ast::VariableExp>("expected an identifier"); }
 
         moduleName = std::move(identifier);
         identifier = lexer->getString();
@@ -463,7 +463,7 @@ std::unique_ptr<ast::Exp> Parser::parsePrimaryExp()
     case lex::tok_if:         return parseIfExp();
     case lex::tok_let:        return parseLetExp();
     case lex::tok_open_parenthesis: return parseParenthesizedExp();
-    default: return nullptr;
+    default: return Error<ast::Exp>("expected an expression");
     }
 }
 
@@ -504,7 +504,7 @@ std::unique_ptr<ast::Exp> Parser::parseBinaryExp(int exprPrec, std::unique_ptr<a
         {
             if (lexer->getToken() != lex::tok_identifier)
             {
-                return Error<ast::Exp>("expected field identifier");
+                return Error<ast::Exp>("expected a field identifier");
             }
 
             std::string fieldIdentifier = lexer->getString();

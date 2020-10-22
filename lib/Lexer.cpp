@@ -132,10 +132,9 @@ const std::string& Lexer::getString() const
     return tokenString;
 }
 
-// TODO: should get location of current token, not current input position
 SourceLocation Lexer::getLocation() const
 {
-    return input->getLocation();
+    return tokenLocation;
 }
 
 Token Lexer::parseToken()
@@ -150,6 +149,8 @@ Token Lexer::parseToken()
     {
         lastChar = input->getChar();
     }
+
+    tokenLocation = input->getLocation();
 
     if (isalpha(lastChar)) // identifier: letter (letter | digit | '_' | '\'')*
     {
@@ -217,7 +218,7 @@ Token Lexer::parseToken()
             }
             if (tokenString == ".")
             {
-                return tok_operator;
+                return tok_operator; // should continue parsing operator... even though there are no operators starting with '.'
             }
             else
             {
