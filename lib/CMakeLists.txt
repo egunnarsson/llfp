@@ -21,7 +21,7 @@ add_library(llfp_lib
 )
 
 if (MSVC)
-    target_compile_options(llfp_lib PUBLIC /W4)
+    target_compile_options(llfp_lib PUBLIC /W4 /permissive-)
 endif (MSVC)
 if ((MSVC) AND (MSVC_VERSION GREATER_EQUAL 1914))
 	target_compile_options(llfp_lib PUBLIC "/Zc:__cplusplus")
