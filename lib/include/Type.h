@@ -12,10 +12,15 @@
 #pragma warning(pop)
 
 #include "Ast.h"
+#include "Common.h"
 
 
 namespace llfp
 {
+
+class SourceModule;
+class ImportedModule;
+
 namespace type
 {
 
@@ -23,33 +28,48 @@ namespace type
 namespace name
 {
 
-static constexpr auto Bool = "bool";
+#define TypeID(id, name) static constexpr GlobalIdentifierRef id{ llvm::StringLiteral(""), llvm::StringLiteral(name)};
 
-static constexpr auto I8 = "i8";
-static constexpr auto I16 = "i16";
-static constexpr auto I32 = "i32";
-static constexpr auto I64 = "i64";
-static constexpr auto I128 = "i128";
+TypeID(Bool, "bool");
 
-static constexpr auto U8 = "u8";
-static constexpr auto U16 = "u16";
-static constexpr auto U32 = "u32";
-static constexpr auto U64 = "u64";
-static constexpr auto U128 = "u128";
+TypeID(I8, "i8");
+TypeID(I16,"i16");
+TypeID(I32, "i32");
+TypeID(I64, "i64");
+TypeID(I128, "i128");
 
-static constexpr auto Half = "half";
-static constexpr auto Float = "float";
-static constexpr auto Double = "double";
+TypeID(U8, "u8");
+TypeID(U16, "u16");
+TypeID(U32, "u32");
+TypeID(U64, "u64");
+TypeID(U128, "u128");
 
-static constexpr auto Char = "char";
+TypeID(Half, "half");
+TypeID(Float, "float");
+TypeID(Double, "double");
+
+TypeID(Char, "char");
 
 // special internal
-static constexpr auto Any = "";
-static constexpr auto IntegerLiteral = "@IntegerLiteral";
-static constexpr auto SignedIntegerLiteral = "@SignedIntegerLiteral";
-static constexpr auto FloatingLiteral = "@FloatingLiteral";
+TypeID(Any, "");
+TypeID(IntegerLiteral, "@IntegerLiteral");
+TypeID(SignedIntegerLiteral, "@SignedIntegerLiteral");
+TypeID(FloatingLiteral, "@FloatingLiteral");
+
+#undef TypeID
 
 } // namespace name
+
+namespace typeclass
+{
+
+// Num
+// Integer
+// Bool
+// Signed
+// Floating
+
+}
 
 enum TypeClass
 {
@@ -64,34 +84,34 @@ class TypeContext;
 
 class Type
 {
-    const std::string  name_;
+    GlobalIdentifier   identifier_;
     llvm::Type* const  llvmType_; // without this Types could be shared between contexts...
     const bool         isSigned_;
 
 public:
 
-    Type(std::string name, llvm::Type* llvmType, bool isSigned = false);
-    Type(std::string name, bool isFloating, bool isSigned = false);
+    Type(GlobalIdentifier identifier, llvm::Type* llvmType, bool isSigned = false);
+    Type(GlobalIdentifier identifier, bool isFloating, bool isSigned = false);
     virtual ~Type();
 
-    const std::string&   name() const;
+    const GlobalIdentifier& identifier() const;
 
-    llvm::Type*          llvmType() const;
+    llvm::Type*             llvmType() const;
 
-    bool                 isNum() const;
-    bool                 isInteger() const;
-    bool                 isFloating() const;
-    bool                 isSigned() const;
-    bool                 isLiteral() const;
+    bool                    isNum() const;
+    bool                    isInteger() const;
+    bool                    isFloating() const;
+    bool                    isSigned() const;
+    bool                    isLiteral() const;
 
-    virtual bool         isStructType() const;
-    virtual Type*        getFieldType(const std::string &fieldIdentifier) const;
-    virtual unsigned int getFieldIndex(const std::string &fieldIdentifier) const;
+    virtual bool            isStructType() const;
+    virtual Type*           getFieldType(const std::string &fieldIdentifier) const;
+    virtual unsigned int    getFieldIndex(const std::string &fieldIdentifier) const;
 
-    Type*                unify(Type* other, TypeContext* context);
+    Type*                   unify(Type* other, TypeContext* context);
 
-    bool operator ==(const std::string &b) const;
-    bool operator !=(const std::string &b) const;
+    bool operator ==(GlobalIdentifierRef id) const;
+    bool operator !=(GlobalIdentifierRef id) const;
 };
 
 class StructType : public Type
@@ -108,25 +128,32 @@ class StructType : public Type
 
 public:
 
-    StructType(std::string name, llvm::StructType* llvmType);
+    StructType(GlobalIdentifier identifier, llvm::StructType* llvmType);
 
     bool         isStructType() const override;
     Type*        getFieldType(const std::string &fieldIdentifier) const override;
     unsigned int getFieldIndex(const std::string &fieldIdentifier) const override;
 
-    bool setFields(std::vector<ast::Field> &astFields, std::vector<type::Type*> &fieldTypes);
+    bool setFields(const std::vector<ast::Field> &astFields, std::vector<type::Type*> &fieldTypes);
 };
 
 class TypeContext
 {
-    std::unordered_map<std::string, std::unique_ptr<Type>> types;
+    llvm::LLVMContext& llvmContext;
+    SourceModule*      sourceModule;
+
+    std::unordered_map<GlobalIdentifierRef, std::unique_ptr<Type>, GlobalIdentifierRefHash> types;
 
 public:
 
-    TypeContext(llvm::LLVMContext &llvmContext);
+    TypeContext(llvm::LLVMContext &llvmContext_, SourceModule *sourceModule_);
 
-    Type*       getType(llvm::StringRef name);
     StructType* addType(std::unique_ptr<StructType> type);
+    Type*       getType(GlobalIdentifierRef identifier);
+
+private:
+
+    Type *      getType(GlobalIdentifierRef identifier, const ImportedModule *module);
 };
 
 class TypeScope
@@ -135,9 +162,9 @@ public:
 
     virtual TypeContext* getTypeContext() = 0;
     virtual Type* getVariableType(llvm::StringRef variable) = 0;
-    virtual Type* getTypeByName(llvm::StringRef name) { return getTypeContext()->getType(name); }
+    virtual Type* getTypeByName(GlobalIdentifierRef identifier) { return getTypeContext()->getType(identifier); }
     // a bit out of place but...
-    virtual const ast::FunctionDeclaration* getFunctionAST(llvm::StringRef module, llvm::StringRef functionName) = 0;
+    virtual const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) = 0;
 
 protected:
 
@@ -155,7 +182,7 @@ public:
 
     TypeContext*                    getTypeContext() override;
     Type*                           getVariableType(llvm::StringRef variable) override;
-    const ast::FunctionDeclaration* getFunctionAST(llvm::StringRef module, llvm::StringRef functionName) override;
+    const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) override;
 };
 
 class TypeInferer : public ast::ExpVisitor, public TypeScope
@@ -183,7 +210,7 @@ public:
 
     TypeContext* getTypeContext() override;
     Type*        getVariableType(llvm::StringRef variable) override;
-    const ast::FunctionDeclaration* getFunctionAST(llvm::StringRef module, llvm::StringRef functionName) override;
+    const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) override;
 };
 
 } // namespace type

@@ -89,10 +89,25 @@ auto MakeFunctionDecl(llfp::SourceLocation location,
                       std::unique_ptr<Exp> functionBody,
                       bool exported)
 {
-    return std::make_unique<FunctionDeclaration>(location, name, typeName, vector_from_il(parameters), std::move(functionBody), exported);
+    return std::make_unique<FunctionDeclaration>(location, std::move(name), llfp::GlobalIdentifier{ "",  std::move(typeName) }, vector_from_il(parameters), std::move(functionBody), exported);
+}
+
+auto MakeFunctionDecl(llfp::SourceLocation location,
+                      std::string name,
+                      llfp::GlobalIdentifier typeName,
+                      std::initializer_list<movable_il<std::unique_ptr<Parameter>>> parameters,
+                      std::unique_ptr<Exp> functionBody,
+                      bool exported)
+{
+    return std::make_unique<FunctionDeclaration>(location, std::move(name), std::move(typeName), vector_from_il(parameters), std::move(functionBody), exported);
 }
 
 auto MakeParameter(llfp::SourceLocation location, std::string typeName, std::string name)
+{
+    return std::make_unique<Parameter>(location, llfp::GlobalIdentifier{ "",std::move(typeName) }, std::move(name));
+}
+
+auto MakeParameter(llfp::SourceLocation location, llfp::GlobalIdentifier typeName, std::string name)
 {
     return std::make_unique<Parameter>(location, std::move(typeName), std::move(name));
 }
@@ -134,12 +149,12 @@ std::unique_ptr<Exp> MakeCall(llfp::SourceLocation location,
                               std::string name,
                               std::initializer_list<movable_il<std::unique_ptr<Exp>>> args)
 {
-    return std::make_unique<CallExp>(location, std::move(moduleName), std::move(name), vector_from_il(args));
+    return std::make_unique<CallExp>(location, llfp::GlobalIdentifier{ std::move(moduleName), std::move(name) }, vector_from_il(args));
 }
 
 std::unique_ptr<Exp> MakeVariable(llfp::SourceLocation location, std::string moduleName, std::string name)
 {
-    return std::make_unique<VariableExp>(location, std::move(moduleName), std::move(name));
+    return std::make_unique<VariableExp>(location, llfp::GlobalIdentifier{ std::move(moduleName), std::move(name) });
 }
 
 std::unique_ptr<Exp> MakeField(llfp::SourceLocation location, std::unique_ptr<Exp> lhs, std::string fieldName)
@@ -191,8 +206,9 @@ TEST(ParserTest, PublicDeclarations)
 TEST(ParserTest, DataDeclarations)
 {
     EXPECT_EQ(Parse(M"data a{}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({0,0}, "a", {}, false) }));
-    EXPECT_EQ(Parse(M"data a{t x;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a", { Field({ 0,0 },"t", "x") }, false) }));
-    EXPECT_EQ(Parse(M"data a{t1 x; t2 y;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a", { Field({ 0,0 }, "t1", "x"), Field({ 0,0 }, "t2", "y") }, false) }));
+    EXPECT_EQ(Parse(M"data a{t x;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a", { Field({ 0,0 }, {"", "t"}, "x") }, false) }));
+    EXPECT_EQ(Parse(M"data a{m2:t x;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a",{ Field({ 0,0 },{ "m2", "t" }, "x") }, false) }));
+    EXPECT_EQ(Parse(M"data a{t1 x; t2 y;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a", { Field({ 0,0 }, {"", "t1"}, "x"), Field({ 0,0 }, { "", "t2"}, "y") }, false) }));
     EXPECT_EQ(Parse(M"export data a{}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a",{}, true) }));
 
     // negative
@@ -215,6 +231,9 @@ TEST(ParserTest, Functions)
     EXPECT_EQ(Parse(M"t f = 1;"),
         MakeModule({0,0}, "m", {}, {}, {
             MakeFunctionDecl({0,0}, "f", "t", {}, MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}, {}));
+    EXPECT_EQ(Parse(M"m2:t f = 1;"),
+        MakeModule({ 0,0 }, "m", {}, {}, {
+            MakeFunctionDecl({ 0,0 }, "f", llfp::GlobalIdentifier{"m2", "t"}, {}, MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"), false) }, {}));
 
     // one params
     EXPECT_EQ(Parse(M"t f(x) = 1;"),
@@ -241,9 +260,15 @@ TEST(ParserTest, Functions)
             MakeFunctionDecl({0,0}, "f", "t",
                 {MakeParameter({0,0}, "t", "x"), MakeParameter({0,0}, "t2", "y")},
                 MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}, {}));
+    EXPECT_EQ(Parse(M"t f(m:t x) = 1;"),
+        MakeModule({ 0,0 }, "m", {}, {}, {
+            MakeFunctionDecl({ 0,0 }, "f", "t",
+                { MakeParameter({ 0,0 }, llfp::GlobalIdentifier{"m", "t"}, "x") },
+                MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"), false) }, {}));
 
     // negative
     EXPECT_EQ(ParseError(M"f = ;"), "string(2,5): expected an expression\n");
+    EXPECT_EQ(ParseError(M"m2: f = 1;"), "string(2,7): expected an identifier\n");
 }
 
 TEST(ParserTest, Declarations)
@@ -445,6 +470,7 @@ TEST(ParserTest, VariableExp)
               MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeVariable({0,0}, "m", "x"), false)}, {}));
 
     // negative
+    EXPECT_EQ(ParseError(M"f = m:;"), "string(2,7): expected an identifier\n");
     EXPECT_EQ(ParseError(M"f = m:x:z;"), "string(2,8): expected 'semicolon'\n");
 }
 

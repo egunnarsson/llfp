@@ -39,9 +39,14 @@ public:
 
     virtual const std::string&              name() const = 0;
     virtual const ast::FunctionDeclaration* getFunction(const std::string &name) const = 0;
+    virtual const ast::DataDeclaration*     getType(const std::string &name) const = 0;
     virtual std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const = 0;
     virtual std::string                     getExportedName(const ast::FunctionDeclaration *function) const = 0;
-    //virtual Type* getType(std::string name) = 0;
+
+    virtual bool lookupType(GlobalIdentifierRef identifier, const ImportedModule*& module, const ast::DataDeclaration*& ast) const
+    {
+        return false;
+    }
 
     //TODO: thread safe!
     virtual void requireFunctionInstance(FunctionIdentifier function) = 0;
@@ -56,6 +61,7 @@ class SourceModule : public ImportedModule
 
     std::unordered_map<std::string, ast::FunctionDeclaration*> functions;
     std::unordered_map<std::string, ast::FunctionDeclaration*> publicFunctions;
+    std::unordered_map<std::string, ast::DataDeclaration*>     dataDeclarations;
     std::unordered_map<std::string, ImportedModule*>           importedModules;
 
     std::vector<FunctionIdentifier>         pendingGeneration; // Driver
@@ -72,22 +78,27 @@ public:
     const std::string&              filePath() const;
     const std::string&              name() const override;
     const ast::FunctionDeclaration* getFunction(const std::string &name) const override; // lookup public function
+    const ast::DataDeclaration*     getType(const std::string &name) const override;
     std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const override;
     std::string                     getExportedName(const ast::FunctionDeclaration *function) const override;
-    //void                            getType(const std::string &typeName) const;
 
     ast::Module*                    getAST();
     llvm::Module*                   getLLVM();
 
     // lookup local function or global from imported modules
-    bool lookupFunction(llvm::StringRef moduleIdentifier, llvm::StringRef identifier, ImportedModule*& module, const ast::FunctionDeclaration*& ast);
+    bool lookupFunction(GlobalIdentifierRef identifier, ImportedModule*& module, const ast::FunctionDeclaration*& ast);
+    bool lookupType(GlobalIdentifierRef identifier, const ImportedModule*& module, const ast::DataDeclaration*& ast) const override;
 
     void requireFunctionInstance(FunctionIdentifier function) override;
 
     // Driver
-    bool generateTypes();
     bool generateExportedFunctions();
     bool generateNextFunction();
+
+private:
+
+    template<class AstNode, class LocalFun, class GlobalFun>
+    bool lookup(GlobalIdentifierRef identifier, ImportedModule*& astModule, const AstNode*& ast, LocalFun localLookup, GlobalFun globalLookup) const;
 };
 
 class StandardModule : public ImportedModule

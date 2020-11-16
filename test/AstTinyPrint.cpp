@@ -4,7 +4,7 @@
 #include "AstTinyPrint.h"
 
 
-std::ostream& operator<<(std::ostream &os, const llfp::ast::Parameter &p) { return os << p.typeName << ' ' << p.identifier; }
+std::ostream& operator<<(std::ostream &os, const llfp::ast::Parameter &p) { return os << p.type.str() << ' ' << p.identifier; }
 std::ostream& operator<<(std::ostream &os, const llfp::ast::PublicDeclaration &p) { return os << p.name; }
 std::ostream& operator<<(std::ostream &os, const llfp::ast::ImportDeclaration &i) { return os << i.name; }
 
@@ -43,14 +43,14 @@ public:
     void visit(llfp::ast::BinaryExp &exp) override { os << exp.op << ' ' << exp.lhs << ' ' << exp.rhs; }
     void visit(llfp::ast::UnaryExp &exp) override { os << exp.op << ' ' << exp.operand; }
     void visit(llfp::ast::LiteralExp &exp) override { os << litName(exp.tokenType) << ' ' << exp.value; }
-    void visit(llfp::ast::CallExp &exp) override { os << exp.moduleName << ':' << exp.name << exp.arguments; }
-    void visit(llfp::ast::VariableExp &exp) override { os << exp.moduleName << ':' << exp.name; }
+    void visit(llfp::ast::CallExp &exp) override { os << exp.identifier.str() << exp.arguments; }
+    void visit(llfp::ast::VariableExp &exp) override { os << exp.identifier.str(); }
     void visit(llfp::ast::FieldExp &exp) override { os << exp.lhs << '.' << exp.fieldIdentifier; }
 };
 
 std::ostream& operator<<(std::ostream &os, const llfp::ast::Field &f)
 {
-    return os << f.typeName << ' ' <<  f.identifier;
+    return os << f.type.str() << ' ' <<  f.name;
 }
 
 std::ostream& operator<<(std::ostream &os, const llfp::ast::DataDeclaration &d)
@@ -65,7 +65,7 @@ std::ostream& operator<<(std::ostream &os, llfp::ast::Exp &e)
 
 std::ostream& operator<<(std::ostream &os, const llfp::ast::FunctionDeclaration &f)
 {
-    return os << '{' << (f.exported ? '+' : '-' ) << ' ' << f.typeName << ' ' << f.name << ' ' << f.parameters << f.functionBody << '}';
+    return os << '{' << (f.exported ? '+' : '-' ) << ' ' << f.type.str() << ' ' << f.name << ' ' << f.parameters << f.functionBody << '}';
 }
 
 std::ostream& operator<<(std::ostream &os, const llfp::ast::Module &m)

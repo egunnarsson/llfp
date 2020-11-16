@@ -49,13 +49,11 @@ class CodeGenerator
 
     // mangled name as id
     std::unordered_map<std::string, Function> functions;
-    type::TypeContext             typeContext; // move to source module
+    type::TypeContext             typeContext; // move to source module (if it should create types it needs the llvmContext)
 
 public:
 
     CodeGenerator(SourceModule *sourceModule_);
-
-    bool               generateDataDeclarations(std::vector<std::unique_ptr<ast::DataDeclaration>> &dataDeclarations);
 
     bool               generateFunction(const ast::FunctionDeclaration *ast);
     bool               generateFunction(const ast::FunctionDeclaration *ast, std::vector<type::Type*> types);
@@ -71,7 +69,7 @@ private:
     void               AddDllMain(); // should be done on dll not on one module
 
     // lookup, global functions, generate llvmFunction if first external reference
-    Function*          getFunction(llvm::StringRef moduleName, llvm::StringRef name, std::vector<type::Type*> types);
+    Function*          getFunction(GlobalIdentifierRef identifier, std::vector<type::Type*> types);
 
     friend ExpCodeGenerator;
 };
@@ -96,11 +94,11 @@ public:
     static llvm::Value* generate(ast::Exp &exp, type::Type *type, ExpCodeGenerator *parent);
 
     // lookup, local functions, global functions,
-    Function*           getFunction(llvm::StringRef moduleName, llvm::StringRef name, std::vector<type::Type*> types);
+    Function*           getFunction(GlobalIdentifierRef identifier, std::vector<type::Type*> types);
 
     type::TypeContext*  getTypeContext() override { return generator->getTypeContext(); }
     type::Type*         getVariableType(llvm::StringRef variable) override;
-    const ast::FunctionDeclaration* getFunctionAST(llvm::StringRef module, llvm::StringRef functionName) override;
+    const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) override;
     llvm::Value*        getResult();
 
     void visit(ast::LetExp &exp) override;

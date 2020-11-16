@@ -27,85 +27,39 @@ CodeGenerator::CodeGenerator(SourceModule *sourceModule_) :
     sourceModule{ sourceModule_ },
     llvmContext{},
     llvmBuilder(llvmContext),
-    typeContext(llvmContext)
+    typeContext(llvmContext, sourceModule)
 {
     llvmModule = std::make_unique<llvm::Module>(sourceModule->name(), llvmContext);
-}
-
-bool CodeGenerator::generateDataDeclarations(std::vector<std::unique_ptr<ast::DataDeclaration>> &dataDeclarations)
-{
-    std::vector<type::StructType*> userTypes;
-
-    for (auto &dataDecl : dataDeclarations)
-    {
-        auto llvmType = llvm::StructType::create(llvmContext, dataDecl->name);
-        auto userType = typeContext.addType(std::make_unique<llfp::type::StructType>(dataDecl->name, llvmType));
-        
-        if (userType == nullptr)
-        {
-            Log(dataDecl->location, "duplicate type declaration: ", dataDecl->name);
-            return false;
-        }
-        else
-        {
-            userTypes.push_back(userType);
-        }
-    }
-
-    int i = 0;
-    for (auto &dataDecl : dataDeclarations)
-    {
-        assert(userTypes[i]->name() == dataDecl->name);
-
-        std::vector<type::Type*> fieldTypes;
-        for (auto &field : dataDecl->fields)
-        {
-            fieldTypes.push_back(typeContext.getType(field.typeName));
-            if (fieldTypes.back() == nullptr)
-            {
-                Log(field.location, "unknown type: ", field.typeName);
-                return false;
-            }
-        }
-
-        if (!userTypes[i]->setFields(dataDecl->fields, fieldTypes))
-        {
-            return false;
-        }
-        ++i;
-    }
-
-    return true;
 }
 
 bool CodeGenerator::generateFunction(const ast::FunctionDeclaration *ast)
 {
     std::vector<type::Type*> types;
 
-    if (ast->typeName.empty())
+    if (ast->type.name.empty())
     {
         Log(ast->location, "generating exported function with unbound return type");
         return false;
     }
-    auto retType = typeContext.getType(ast->typeName);
+    auto retType = typeContext.getType(ast->type);
     if (retType == nullptr)
     {
-        Log(ast->location, "unknown type:", ast->typeName);
+        Log(ast->location, "unknown type: ", ast->type.str());
         return false;
     }
     types.push_back(retType);
 
     for (auto &param : ast->parameters)
     {
-        if (param->typeName.empty())
+        if (param->type.name.empty())
         {
             Log(ast->location, "generating exported function containing unbound paramter types");
             return false;
         }
-        auto type = typeContext.getType(param->typeName);
+        auto type = typeContext.getType(param->type);
         if (type == nullptr)
         {
-            Log(ast->location, "unknown type:", param->typeName);
+            Log(ast->location, "unknown type: ", param->type.str());
             return false;
         }
         types.push_back(type);
@@ -144,10 +98,10 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
 
     // unify types / type check / remove literals (requires the value...)
 
-    types[0] = types[0]->unify(typeContext.getType(ast->typeName), &typeContext);
+    types[0] = types[0]->unify(typeContext.getType(ast->type), &typeContext);
     for (size_t i = 1; i < types.size(); ++i)
     {
-        types[i] = types[i]->unify(typeContext.getType(ast->parameters[i - 1]->typeName), &typeContext);
+        types[i] = types[i]->unify(typeContext.getType(ast->parameters[i - 1]->type), &typeContext);
     }
 
     if (std::any_of(types.begin(), types.end(), [](auto x) { return x == nullptr; }))
@@ -203,11 +157,11 @@ bool CodeGenerator::generateFunctionBody(Function *function)
             return false;
         }
 
-        if (!ast->parameters[i]->typeName.empty())
+        if (!ast->parameters[i]->type.name.empty())
         {
-            if (*types[i + 1] != ast->parameters[i]->typeName)
+            if (*types[i + 1] != ast->parameters[i]->type)
             {
-                Log(ast->location, "type mismatch, expected '", ast->parameters[i]->typeName, "' actual '", types[i + 1]->name(), '\'');
+                Log(ast->location, "type mismatch, expected '", ast->parameters[i]->type.str(), "' actual '", types[i + 1]->identifier().str(), '\'');
                 return false;
             }
         }
@@ -216,11 +170,11 @@ bool CodeGenerator::generateFunctionBody(Function *function)
     }
 
     // type check return
-    if (!ast->typeName.empty())
+    if (!ast->type.name.empty())
     {
-        if (*types[0] != ast->typeName)
+        if (*types[0] != ast->type)
         {
-            Log(ast->location, "type mismatch, expected '", ast->typeName, "' actual '", types[0]->name(), '\'');
+            Log(ast->location, "type mismatch, expected '", ast->type.str(), "' actual '", types[0]->identifier().str(), '\'');
             return false;
         }
     }
@@ -249,20 +203,20 @@ void CodeGenerator::AddDllMain()
     llvmBuilder.CreateRet(value);
 }
 
-Function* CodeGenerator::getFunction(llvm::StringRef moduleName, llvm::StringRef name, std::vector<type::Type*> types)
+Function* CodeGenerator::getFunction(GlobalIdentifierRef identifier, std::vector<type::Type*> types)
 {
     ImportedModule *importedModule = nullptr;
     const ast::FunctionDeclaration *function = nullptr;
-    if (sourceModule->lookupFunction(moduleName, name, importedModule, function))
+    if (sourceModule->lookupFunction(identifier, importedModule, function))
     {
         auto proto = generatePrototype(importedModule, function, std::move(types));
         if (proto != nullptr)
         {
-            importedModule->requireFunctionInstance({ name, &proto->types });
+            importedModule->requireFunctionInstance({ identifier.name, &proto->types });
         }
         return proto;
     }
-    Log({}, "unknown function: ", moduleName, ':', name);
+    Log({}, "unknown function: ", identifier.str());
     return nullptr;
 }
 
@@ -307,13 +261,13 @@ void ExpCodeGenerator::visit(ast::LetExp &exp)
         }
 
         type::Type* varType;
-        if (var->typeName.empty())
+        if (var->type.name.empty())
         {
             varType = type::TypeInferer::infer(*var->functionBody, this);
         }
         else
         {
-            varType = typeContext().getType(var->typeName);
+            varType = typeContext().getType(var->type);
         }
         if (varType == nullptr)
         {
@@ -397,16 +351,16 @@ void ExpCodeGenerator::visit(ast::CaseExp &exp)
 namespace
 {
 
-void typeError(ast::Exp &exp, llvm::StringRef expected, llvm::StringRef actual)
+void typeError(ast::Exp &exp, type::Type* expected, llvm::StringRef actual)
 {
-    Log(exp.location, "type mismatch, expected '", expected, "' actual '", actual, '\'');
+    Log(exp.location, "type mismatch, expected '", expected->identifier().str(), "' actual '", actual, '\'');
 }
 
 bool checkNum(ast::Exp &exp, type::Type *type)
 {
     if (!type->isNum())
     {
-        typeError(exp, type->name(), "Num"); // TODO: TypeClass name
+        typeError(exp, type, "Num"); // TODO: TypeClass name
         return false;
     }
     return true;
@@ -416,7 +370,7 @@ bool checkInteger(ast::Exp &exp, type::Type *type)
 {
     if (!type->isInteger())
     {
-        typeError(exp, type->name(), "Integer"); // TODO: TypeClass name
+        typeError(exp, type, "Integer"); // TODO: TypeClass name
         return false;
     }
     return true;
@@ -426,7 +380,7 @@ bool checkBool(ast::Exp &exp, type::Type *type)
 {
     if (*type != type::name::Bool)
     {
-        typeError(exp, type->name(), "Bool"); // TODO: TypeClass name
+        typeError(exp, type, "Bool"); // TODO: TypeClass name
         return false;
     }
     return true;
@@ -563,7 +517,7 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
 {
     if (*expectedType != type::name::Bool)
     {
-        typeError(exp, expectedType->name(), type::name::Bool);
+        typeError(exp, expectedType, type::name::Bool.name);
     }
     else
     {
@@ -599,7 +553,7 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
         }
         else
         {
-            Log(exp.location, "failed to unify types: ", lhsT->name(), " and ", rhsT->name());
+            Log(exp.location, "failed to unify types: ", lhsT->identifier().str(), " and ", rhsT->identifier().str());
         }
     }
 }
@@ -610,7 +564,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     {
         if (!expectedType->isSigned())
         {
-            typeError(exp, expectedType->name(), "Signed"); // TODO: TypeClass name
+            typeError(exp, expectedType, "Signed"); // TODO: TypeClass name
         }
         else
         {
@@ -632,7 +586,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     {
         if (*expectedType != type::name::Bool)
         {
-            typeError(exp, expectedType->name(), type::name::Bool);
+            typeError(exp, expectedType, type::name::Bool.name);
         }
         else
         {
@@ -647,7 +601,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     {
         if (!expectedType->isInteger())
         {
-            typeError(exp, expectedType->name(), "Integer"); // TODO: TypeClass name
+            typeError(exp, expectedType, "Integer"); // TODO: TypeClass name
         }
         else
         {
@@ -684,7 +638,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
         }
         else
         {
-            typeError(exp, expectedType->name(), "Num"); // TODO: TypeClass name
+            typeError(exp, expectedType, "Num"); // TODO: TypeClass name
         }
         break;
 
@@ -692,7 +646,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
         if (!expectedType->isFloating())
         {
-            typeError(exp, expectedType->name(), "Floating"); // TODO: TypeClass name
+            typeError(exp, expectedType, "Floating"); // TODO: TypeClass name
         }
         else
         {
@@ -704,7 +658,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
         if (*expectedType != type::name::Char)
         {
-            typeError(exp, expectedType->name(), type::name::Char);
+            typeError(exp, expectedType, type::name::Char.name);
         }
         else
         {
@@ -722,7 +676,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
         if (*expectedType != type::name::Bool)
         {
-            typeError(exp, expectedType->name(), type::name::Bool);
+            typeError(exp, expectedType, type::name::Bool.name);
         }
         else
         {
@@ -766,10 +720,10 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
         }
     }
 
-    auto function = getFunction(exp.moduleName, exp.name, std::move(types));
+    auto function = getFunction(exp.identifier, std::move(types));
     if (function == nullptr)
     {
-        Log(exp.location, "error calling: ", exp.moduleName, ':', exp.name);
+        Log(exp.location, "error calling: ", exp.identifier.str());
     }
     else
     {
@@ -789,15 +743,15 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
 
 void ExpCodeGenerator::visit(ast::VariableExp &exp)
 {
-    if (exp.moduleName.empty())
+    if (exp.identifier.moduleName.empty())
     {
-        auto x = getNamedValue(exp.name);
+        auto x = getNamedValue(exp.identifier.name);
         if (x.value != nullptr)
         {
             // check type
             if (x.type != expectedType)
             {
-                typeError(exp, expectedType->name(), x.type->name());
+                typeError(exp, expectedType, x.type->identifier().str());
                 return;
             }
             result = x.value;
@@ -808,28 +762,28 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
     std::vector<type::Type*> types;
     types.push_back(expectedType);
 
-    auto y = getFunction(exp.moduleName, exp.name, std::move(types));
+    auto y = getFunction(exp.identifier, std::move(types));
     if (y != nullptr)
     {
         auto &function = *y;
         if (function.ast->parameters.empty())
         {
             // generate call
-            if (*expectedType != function.ast->typeName)
+            if (*expectedType != function.ast->type)
             {
-                typeError(exp, expectedType->name(), function.ast->typeName);
+                typeError(exp, expectedType, function.ast->type.str());
                 return;
             }
             result = llvmBuilder().CreateCall(function.llvm, std::vector<llvm::Value*>{}, "call");
         }
         else
         {
-            Log(exp.location, exp.name, " is not a zero parameter function");
+            Log(exp.location, exp.identifier.str(), " is not a zero parameter function");
         }
     }
     else
     {
-        Log(exp.location, "unknown identifier: ", exp.name);
+        Log(exp.location, "unknown identifier: ", exp.identifier.str());
     }
 }
 
@@ -857,7 +811,7 @@ void ExpCodeGenerator::visit(ast::FieldExp &exp)
     // type check
     if (expectedType->unify(fieldType, getTypeContext()) == nullptr)
     {
-        Log(exp.location, "failed to unify types: ", expectedType->name(), " and ", fieldType->name());
+        Log(exp.location, "failed to unify types: ", expectedType->identifier().str(), " and ", fieldType->identifier().str());
         return;
     }
 
@@ -887,17 +841,17 @@ type::Type* ExpCodeGenerator::getVariableType(llvm::StringRef variable)
     return getNamedValue(variable).type;
 }
 
-Function* ExpCodeGenerator::getFunction(llvm::StringRef moduleName, llvm::StringRef name, std::vector<type::Type*> types)
+Function* ExpCodeGenerator::getFunction(GlobalIdentifierRef identifier, std::vector<type::Type*> types)
 {
     // TODO: add local functions
-    return generator->getFunction(moduleName, name, std::move(types));
+    return generator->getFunction(identifier, std::move(types));
 }
 
-const ast::FunctionDeclaration* ExpCodeGenerator::getFunctionAST(llvm::StringRef moduleIdent, llvm::StringRef functionName)
+const ast::FunctionDeclaration* ExpCodeGenerator::getFunctionAST(GlobalIdentifierRef identifier)
 {
     llfp::ImportedModule *module = nullptr;
     const ast::FunctionDeclaration *ast = nullptr;
-    generator->sourceModule->lookupFunction(moduleIdent, functionName, module, ast);
+    generator->sourceModule->lookupFunction(identifier, module, ast);
     return ast;
 }
 

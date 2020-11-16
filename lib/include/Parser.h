@@ -54,6 +54,8 @@ private:
     std::unique_ptr<ast::Exp> parseUnaryExp();
     std::unique_ptr<ast::Exp> parseBinaryExp(int exprPrec, std::unique_ptr<ast::Exp> LHS);
     std::unique_ptr<ast::Exp> parseExp();
+
+    GlobalIdentifier          parseGlobalIdentifier();
 };
 
 } // namespace parse

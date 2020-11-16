@@ -12,10 +12,10 @@ Node::Node(SourceLocation location_) :
 {}
 
 
-Field::Field(SourceLocation location_, std::string typeName_, std::string identifier_) :
+Field::Field(SourceLocation location_, GlobalIdentifier type_, std::string name_) :
     Node(location_),
-    typeName{ std::move(typeName_) },
-    identifier{ std::move(identifier_) }
+    type{ std::move(type_) },
+    name{ std::move(name_) }
 {
 }
 
@@ -37,9 +37,9 @@ Exp::Exp(SourceLocation location_) : Node(location_) {}
 Exp::~Exp() {}
 
 
-Parameter::Parameter(SourceLocation location_, std::string typeName_, std::string identifier_) :
+Parameter::Parameter(SourceLocation location_, GlobalIdentifier type_, std::string identifier_) :
     Node(location_),
-    typeName{ std::move(typeName_) },
+    type{ std::move(type_) },
     identifier{ std::move(identifier_) }
 {}
 
@@ -49,14 +49,14 @@ Parameter::~Parameter() {}
 FunctionDeclaration::FunctionDeclaration(
     SourceLocation location_,
     std::string name_,
-    std::string typeName_,
+    GlobalIdentifier type_,
     std::vector<std::unique_ptr<Parameter>> parameters_,
     std::unique_ptr<Exp> functionBody_,
     bool exported_) :
 
     Node(location_),
     name{ std::move(name_) },
-    typeName{ std::move(typeName_) },
+    type{ std::move(type_) },
     parameters{ std::move(parameters_) },
     functionBody{ std::move(functionBody_) },
     exported{ exported_ }
@@ -156,10 +156,9 @@ LiteralExp::~LiteralExp() {}
 void LiteralExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
 
 
-VariableExp::VariableExp(SourceLocation location_, std::string moduleName_, std::string name_) :
+VariableExp::VariableExp(SourceLocation location_, GlobalIdentifier identifier_) :
     Exp(location_),
-    moduleName{ std::move(moduleName_) },
-    name{ std::move(name_) }
+    identifier{ std::move(identifier_) }
 {}
 
 VariableExp::~VariableExp() {}
@@ -169,13 +168,11 @@ void VariableExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
 
 CallExp::CallExp(
     SourceLocation location_,
-    std::string moduleName_,
-    std::string name_,
+    GlobalIdentifier identifier_,
     std::vector<std::unique_ptr<Exp>> args) :
 
     Exp(location_),
-    moduleName{ std::move(moduleName_) },
-    name{ std::move(name_) },
+    identifier{ std::move(identifier_) },
     arguments{ std::move(args) }
 {}
 

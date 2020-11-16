@@ -210,14 +210,13 @@ bool operator==(const LiteralExp &e1, const LiteralExp &e2)
 
 bool operator==(const CallExp &e1, const CallExp &e2)
 {
-    return e1.moduleName == e2.moduleName &&
-           e1.name == e2.name &&
+    return e1.identifier == e2.identifier &&
            EqPtrV(e1.arguments, e2.arguments);
 }
 
 bool operator==(const VariableExp &e1, const VariableExp &e2)
 {
-    return e1.moduleName == e2.moduleName && e1.name == e2.name;
+    return e1.identifier == e2.identifier;
 }
 
 bool operator==(const FieldExp &e1, const FieldExp &e2)
@@ -227,7 +226,7 @@ bool operator==(const FieldExp &e1, const FieldExp &e2)
 
 bool operator==(const Parameter &p1, const Parameter &p2)
 {
-    return p1.typeName == p2.typeName &&
+    return p1.type == p2.type &&
            p1.identifier == p2.identifier;
 }
 
@@ -243,7 +242,7 @@ bool operator==(const PublicDeclaration &p1, const PublicDeclaration &p2)
 
 bool operator==(const Field &f1, const Field &f2)
 {
-    return f1.typeName == f2.typeName && f1.identifier == f2.identifier;
+    return f1.type == f2.type && f1.name == f2.name;
 }
 
 bool operator==(const DataDeclaration &d1, const DataDeclaration &d2)
@@ -254,7 +253,7 @@ bool operator==(const DataDeclaration &d1, const DataDeclaration &d2)
 bool operator==(const FunctionDeclaration &f1, const FunctionDeclaration &f2)
 {
     return f1.name == f2.name &&
-           f1.typeName == f2.typeName &&
+           f1.type == f2.type &&
            EqPtrV(f1.parameters, f2.parameters) &&
            ExpEq::check(f1.functionBody, f2.functionBody) &&
            f1.exported == f2.exported;

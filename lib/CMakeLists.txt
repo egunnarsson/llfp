@@ -11,12 +11,12 @@ add_library(llfp_lib
 	Type.cpp
 	include/Ast.h
 	include/Codegen.h
+	include/Common.h
 	include/HeaderWriter.h
 	include/Lexer.h
 	include/Log.h
 	include/Module.h
 	include/Parser.h
-	include/SourceLocation.h
 	include/Type.h
 )
 

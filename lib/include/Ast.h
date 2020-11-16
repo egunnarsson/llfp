@@ -4,8 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "Common.h"
 #include "Lexer.h"
-#include "SourceLocation.h"
 
 
 namespace llfp
@@ -57,10 +57,10 @@ class Field : public Node
 {
 public:
 
-    std::string typeName;
-    std::string identifier;
+    GlobalIdentifier type;
+    std::string      name;
 
-    Field(SourceLocation location_, std::string typeName_, std::string identifier_);
+    Field(SourceLocation location_, GlobalIdentifier type_, std::string name_);
     virtual ~Field();
 };
 
@@ -99,10 +99,10 @@ class Parameter : public Node
 {
 public:
 
-    std::string typeName;
-    std::string identifier;
+    GlobalIdentifier type;
+    std::string      identifier; // or name?
 
-    Parameter(SourceLocation location_, std::string typeName_, std::string identifier_);
+    Parameter(SourceLocation location_, GlobalIdentifier type_, std::string identifier_);
     virtual ~Parameter();
 };
 
@@ -111,7 +111,7 @@ class FunctionDeclaration : public Node
 public:
 
     std::string          name;
-    std::string          typeName;
+    GlobalIdentifier     type;
     std::vector<std::unique_ptr<Parameter>> parameters;
     std::unique_ptr<Exp> functionBody;
     bool                 exported;
@@ -119,7 +119,7 @@ public:
     FunctionDeclaration(
         SourceLocation location_,
         std::string name_,
-        std::string typeName_,
+        GlobalIdentifier type_,
         std::vector<std::unique_ptr<Parameter>> parameters_,
         std::unique_ptr<Exp> functionBody_,
         bool exported);
@@ -242,10 +242,9 @@ class VariableExp : public Exp
 {
 public:
 
-    std::string moduleName;
-    std::string name; // identifier
+    GlobalIdentifier identifier;
 
-    VariableExp(SourceLocation location_, std::string moduleName, std::string name_);
+    VariableExp(SourceLocation location_, GlobalIdentifier identifier_);
     virtual ~VariableExp();
 
     void accept(ExpVisitor *visitor) override;
@@ -255,11 +254,10 @@ class CallExp : public Exp
 {
 public:
 
-    std::string moduleName;
-    std::string name;
+    GlobalIdentifier identifier;
     std::vector<std::unique_ptr<Exp>> arguments;
 
-    CallExp(SourceLocation location_, std::string moduleName_, std::string name_, std::vector<std::unique_ptr<Exp>> args);
+    CallExp(SourceLocation location_, GlobalIdentifier identifier_, std::vector<std::unique_ptr<Exp>> args);
     virtual ~CallExp();
 
     void accept(ExpVisitor *visitor) override;
