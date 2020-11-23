@@ -11,3 +11,4 @@ add_test(parser_test parser_test)
 
 add_executable(codegen_test codegen_test.cpp)
 target_link_libraries(codegen_test llfp_lib gtest gtest_main)
+add_test(codegen_test codegen_test)
