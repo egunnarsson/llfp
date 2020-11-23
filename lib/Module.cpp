@@ -124,7 +124,6 @@ std::string SourceModule::getMangledName(const ast::FunctionDeclaration *functio
     result += name();
     result += '.';
     result += function->name;
-    result += '$';
     for (auto type : types)
     {
         if (type->isLiteral())
@@ -132,12 +131,11 @@ std::string SourceModule::getMangledName(const ast::FunctionDeclaration *functio
             Log({}, "trying to mangle with literal type");
             return "";
         }
+        result += '$';
         result += type->identifier().moduleName;
-        result += ':';
-        result += type->identifier().name;
         result += '.';
+        result += type->identifier().name;
     }
-    result.pop_back();
     return result;
 }
 

@@ -137,12 +137,13 @@ std::unique_ptr<ast::Module> Parser::parse()
 
     while (lexer->getToken() == lex::tok_import)
     {
+        auto importLocation = lexer->getLocation();
         lexer->nextToken();
         if (lexer->getToken() != lex::tok_identifier)
         {
             return Error<ast::Module>("expected an identifier");
         }
-        module->imports.push_back(ast::ImportDeclaration(lexer->getLocation(), lexer->getString()));
+        module->imports.push_back(ast::ImportDeclaration(importLocation, lexer->getString()));
         lexer->nextToken();
         if (!expect(lex::tok_semicolon)) { return nullptr; }
     }
@@ -269,6 +270,7 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
         do
         {
             lexer->nextToken(); // eat '(' and ','
+            auto paramLocation = lexer->getLocation();
             GlobalIdentifier argTypeName = parseGlobalIdentifier();
             if (argTypeName.name.empty()) { return Error<ast::FunctionDeclaration>("expected an identifier"); }
 
@@ -292,7 +294,7 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunction(bool exported)
                 lexer->nextToken();
             }
 
-            parameters.push_back(std::make_unique<ast::Parameter>(lexer->getLocation(), std::move(argTypeName), std::move(argIdentifier)));
+            parameters.push_back(std::make_unique<ast::Parameter>(paramLocation, std::move(argTypeName), std::move(argIdentifier)));
 
         } while (lexer->getToken() == lex::tok_comma);
 

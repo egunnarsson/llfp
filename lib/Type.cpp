@@ -202,7 +202,7 @@ bool StructType::setFields(const std::vector<ast::Field> &astFields, std::vector
         auto inserted = fields.insert(std::make_pair(astFields[i].name, f)).second;
         if (!inserted)
         {
-            Log(astFields[i].location, "duplicate field: ", astFields[i].name);
+            Log(astFields[i].location, "duplicate field \"", astFields[i].name, '"');
             return false;
         }
         llvmTypes.push_back(fieldTypes[i]->llvmType());

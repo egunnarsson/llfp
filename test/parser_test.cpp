@@ -183,6 +183,7 @@ TEST(ParserTest, Imports)
     // negative
     EXPECT_EQ(ParseError("module m\nf = 1;"), "string(2,1): expected 'semicolon'\n");
     EXPECT_EQ(ParseError("f = 1; module m;"), "string(1,1): expected 'module'\n");
+    EXPECT_EQ(ParseError("module m; import;"), "string(1,17): expected an identifier\n");
 }
 
 TEST(ParserTest, PublicDeclarations)

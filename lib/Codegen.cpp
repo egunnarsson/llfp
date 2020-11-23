@@ -53,13 +53,13 @@ bool CodeGenerator::generateFunction(const ast::FunctionDeclaration *ast)
     {
         if (param->type.name.empty())
         {
-            Log(ast->location, "generating exported function containing unbound paramter types");
+            Log(ast->location, "generating exported function containing unbound parameter types");
             return false;
         }
         auto type = typeContext.getType(param->type);
         if (type == nullptr)
         {
-            Log(ast->location, "unknown type: ", param->type.str());
+            Log(param->location, "unknown type \"", param->type.str(), '"');
             return false;
         }
         types.push_back(type);
@@ -150,23 +150,24 @@ bool CodeGenerator::generateFunctionBody(Function *function)
     std::map<std::string, Value> namedValues;
     for (size_t i = 0; i < ast->parameters.size(); ++i)
     {
-        auto& llvmArg = *(llvmFunction->arg_begin() + i);
-        if (namedValues.find(llvmArg.getName()) != namedValues.end())
+        auto &param = ast->parameters[i];
+        if (namedValues.find(param->identifier) != namedValues.end())
         {
-            Log(ast->location, "duplicate parameter: ", llvmArg.getName());
+            Log(param->location, "duplicate parameter \"", param->identifier, '"');
             return false;
         }
 
-        if (!ast->parameters[i]->type.name.empty())
+        if (!param->type.name.empty())
         {
-            if (*types[i + 1] != ast->parameters[i]->type)
+            if (*types[i + 1] != param->type)
             {
-                Log(ast->location, "type mismatch, expected '", ast->parameters[i]->type.str(), "' actual '", types[i + 1]->identifier().str(), '\'');
+                Log(ast->location, "type mismatch, expected '", param->type.str(), "' actual '", types[i + 1]->identifier().str(), '\'');
                 return false;
             }
         }
 
-        namedValues[llvmArg.getName()] = { types[i + 1], &llvmArg };
+        auto& llvmArg = *(llvmFunction->arg_begin() + i);
+        namedValues[param->identifier] = { types[i + 1], &llvmArg };
     }
 
     // type check return
