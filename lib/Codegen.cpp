@@ -159,7 +159,7 @@ bool CodeGenerator::generateFunctionBody(Function *function)
 
         if (!param->type.name.empty())
         {
-            if (*types[i + 1] != param->type)
+            if (!typeContext.equals(types[i + 1], param->type))
             {
                 Log(ast->location, "type mismatch, expected '", param->type.str(), "' actual '", types[i + 1]->identifier().str(), '\'');
                 return false;
@@ -173,7 +173,7 @@ bool CodeGenerator::generateFunctionBody(Function *function)
     // type check return
     if (!ast->type.name.empty())
     {
-        if (*types[0] != ast->type)
+        if (!typeContext.equals(types[0], ast->type))
         {
             Log(ast->location, "type mismatch, expected '", ast->type.str(), "' actual '", types[0]->identifier().str(), '\'');
             return false;
@@ -379,7 +379,7 @@ bool checkInteger(ast::Exp &exp, type::Type *type)
 
 bool checkBool(ast::Exp &exp, type::Type *type)
 {
-    if (*type != type::name::Bool)
+    if (!type->isBool())
     {
         typeError(exp, type, "Bool"); // TODO: TypeClass name
         return false;
@@ -516,7 +516,7 @@ constexpr llvm::CmpInst::Predicate convertToSPredicate(llvm::CmpInst::Predicate 
 
 void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::BinaryExp &exp)
 {
-    if (*expectedType != type::name::Bool)
+    if (!expectedType->isBool())
     {
         typeError(exp, expectedType, type::name::Bool.name);
     }
@@ -585,7 +585,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     }
     else if (exp.op == "!")
     {
-        if (*expectedType != type::name::Bool)
+        if (!expectedType->isBool())
         {
             typeError(exp, expectedType, type::name::Bool.name);
         }
@@ -657,7 +657,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
     case lex::tok_char:
 
-        if (*expectedType != type::name::Char)
+        if (!getTypeContext()->equals(expectedType, type::name::Char))
         {
             typeError(exp, expectedType, type::name::Char.name);
         }
@@ -675,7 +675,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
     case lex::tok_bool:
 
-        if (*expectedType != type::name::Bool)
+        if (!expectedType->isBool())
         {
             typeError(exp, expectedType, type::name::Bool.name);
         }
@@ -770,7 +770,7 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
         if (function.ast->parameters.empty())
         {
             // generate call
-            if (*expectedType != function.ast->type)
+            if (!getTypeContext()->equals(expectedType, function.ast->type))
             {
                 typeError(exp, expectedType, function.ast->type.str());
                 return;

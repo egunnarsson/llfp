@@ -97,10 +97,12 @@ TEST(CodegenTest, Functions)
 TEST(CodegenTest, DataDeclaration)
 {
     // test valid data with field and types
-    auto llfpModule = compile(M"data d { i32 x; float y; }\nexport i32 f(m:d x) = 1;");
+    auto llfpModule = compile(M"data d { i32 x; float y; }\nexport i32 f(d x) = 1;");
     auto llvm = llfpModule->getLLVM();
-    auto type = llfpModule->getLLVM()->getTypeByName("d"); // TODO: name should be mangled
+    auto type = llvm->getTypeByName("m_d");
 
+    EXPECT_NE(llvm->getFunction("m_f"), nullptr);
+    EXPECT_NE(llvm->getFunction("m_f")->getInstructionCount(), 0);
     ASSERT_NE(type, nullptr);
     EXPECT_EQ(type->getNumElements(), 2);
     EXPECT_TRUE(type->elements()[0]->isIntegerTy(32));
@@ -116,7 +118,7 @@ TEST(CodegenTest, Modules)
     // call function
     auto modules = compile<2>({
         "module m(foo); i32 foo = 1;",
-        "module n; import m; export i32 bar = m:foo();" });
+        "module n; import m; export i32 bar = foo();" });
 
     EXPECT_EQ(modules[0]->getLLVM()->getName(), "m");
     EXPECT_EQ(modules[1]->getLLVM()->getName(), "n");

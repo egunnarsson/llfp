@@ -139,6 +139,11 @@ std::string SourceModule::getMangledName(const ast::FunctionDeclaration *functio
     return result;
 }
 
+std::string SourceModule::getMangledName(const ast::DataDeclaration *data) const
+{
+    return name() + '_' + data->name;
+}
+
 std::string SourceModule::getExportedName(const ast::FunctionDeclaration *function) const
 {
     return name() + '_' + function->name;

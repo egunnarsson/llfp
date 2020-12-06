@@ -20,7 +20,7 @@ namespace llfp
 namespace
 {
 
-llvm::StringRef convertType(llfp::SourceModule &module, GlobalIdentifierRef type)
+std::string convertType(llfp::SourceModule &module, GlobalIdentifierRef type)
 {
     static std::unordered_map<std::string, llvm::StringRef> map {
         {type::name::Bool.name, "bool"},
@@ -58,12 +58,12 @@ llvm::StringRef convertType(llfp::SourceModule &module, GlobalIdentifierRef type
     const ast::DataDeclaration *typeDeclaration;
     if (module.lookupType(type, importedModule, typeDeclaration))
     {
-        return importedModule->name() + '_' + typeDeclaration->name;
+        return importedModule->getMangledName(typeDeclaration);
     }
 
     // TODO: If we end up here we should delete the output file
     llvm::errs() << "unsupported C type (" << type.str() << ") in exported function\n";
-    return llvm::StringRef();
+    return std::string();
 }
 
 void writeParameter(llvm::raw_ostream &os, llfp::SourceModule &module, std::unique_ptr<ast::Parameter> &param)
@@ -102,7 +102,7 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
         {
             continue;
         }
-        os << "struct " << d->name << "\n{\n";
+        os << "struct " << module.getMangledName(d.get()) << "\n{\n";
         for (auto &f : d->fields)
         {
             os << '\t' << convertType(module, f.type) << ' ' << f.name << ";\n";

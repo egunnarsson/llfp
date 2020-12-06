@@ -43,6 +43,11 @@ llvm::Type *Type::llvmType() const
     return llvmType_;
 }
 
+bool Type::isBool() const
+{
+    return identifier_ == name::Bool;
+}
+
 bool Type::isNum() const
 {
     return isInteger() || isFloating();
@@ -83,12 +88,12 @@ bool Type::isStructType() const
     return false;
 }
 
-Type* Type::getFieldType(const std::string &fieldIdentifier) const
+Type* Type::getFieldType(const std::string&) const
 {
     return nullptr;
 }
 
-unsigned int Type::getFieldIndex(const std::string &fieldIdentifier) const
+unsigned int Type::getFieldIndex(const std::string&) const
 {
     return (unsigned int)-1;
 }
@@ -154,9 +159,6 @@ Type* Type::unify(Type* other, TypeContext* env)
     Log({}, "failed to unify types: ", identifier_.str(), " with ", other->identifier_.str());
     return nullptr;
 }
-
-bool Type::operator ==(GlobalIdentifierRef id) const { return identifier_ == id; }
-bool Type::operator !=(GlobalIdentifierRef id) const { return identifier_ != id; }
 
 
 StructType::StructType(GlobalIdentifier identifier, llvm::StructType* llvmType) :
@@ -286,9 +288,9 @@ Type* TypeContext::getType(GlobalIdentifierRef identifier, const ImportedModule*
             return it->second.get();
         }
 
-        GlobalIdentifier identifier{ astModule->name(), ast->name };
-        auto llvmType = llvm::StructType::create(llvmContext, ast->name); // name is wrong? should be mangled...
-        auto typePtr = std::make_unique<llfp::type::StructType>(std::move(identifier), llvmType);
+        GlobalIdentifier newIdentifier{ astModule->name(), ast->name };
+        auto llvmType = llvm::StructType::create(llvmContext, astModule->getMangledName(ast));
+        auto typePtr = std::make_unique<llfp::type::StructType>(std::move(newIdentifier), llvmType);
         auto type = typePtr.get();
 
         auto it2 = types.insert({ typePtr->identifier(), std::move(typePtr) });
@@ -324,6 +326,15 @@ Type* TypeContext::getType(GlobalIdentifierRef identifier, const ImportedModule*
     return nullptr;
 }
 
+bool TypeContext::equals(Type *type, GlobalIdentifierRef id)
+{
+    if (type == nullptr)
+    {
+        return false;
+    }
+    return type == getType(id);
+}
+
 EmptyTypeScope::EmptyTypeScope(TypeScope *parent_) :
     parent{ parent_ }
 {
@@ -334,7 +345,7 @@ TypeContext* EmptyTypeScope::getTypeContext()
     return parent->getTypeContext();
 }
 
-Type* EmptyTypeScope::getVariableType(llvm::StringRef variable)
+Type* EmptyTypeScope::getVariableType(llvm::StringRef)
 {
     return nullptr;
 }
@@ -489,7 +500,7 @@ void TypeInferer::visit(ast::UnaryExp &exp)
 {
     assert(exp.op == "-");
     result = TypeInferer::infer(*exp.operand, this);
-    if (result != nullptr && *result == name::IntegerLiteral)
+    if (getTypeContext()->equals(result, name::IntegerLiteral))
     {
         result = getTypeByName(name::SignedIntegerLiteral);
     }

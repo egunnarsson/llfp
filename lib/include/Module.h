@@ -41,9 +41,10 @@ public:
     virtual const ast::FunctionDeclaration* getFunction(const std::string &name) const = 0;
     virtual const ast::DataDeclaration*     getType(const std::string &name) const = 0;
     virtual std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const = 0;
+    virtual std::string                     getMangledName(const ast::DataDeclaration *data) const = 0;
     virtual std::string                     getExportedName(const ast::FunctionDeclaration *function) const = 0;
 
-    virtual bool lookupType(GlobalIdentifierRef identifier, const ImportedModule*& module, const ast::DataDeclaration*& ast) const
+    virtual bool lookupType(GlobalIdentifierRef, const ImportedModule*&, const ast::DataDeclaration*&) const
     {
         return false;
     }
@@ -80,6 +81,7 @@ public:
     const ast::FunctionDeclaration* getFunction(const std::string &name) const override; // lookup public function
     const ast::DataDeclaration*     getType(const std::string &name) const override;
     std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const override;
+    std::string                     getMangledName(const ast::DataDeclaration *data) const override;
     std::string                     getExportedName(const ast::FunctionDeclaration *function) const override;
 
     ast::Module*                    getAST();

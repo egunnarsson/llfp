@@ -98,6 +98,7 @@ public:
 
     llvm::Type*             llvmType() const;
 
+    bool                    isBool() const;
     bool                    isNum() const;
     bool                    isInteger() const;
     bool                    isFloating() const;
@@ -109,9 +110,6 @@ public:
     virtual unsigned int    getFieldIndex(const std::string &fieldIdentifier) const;
 
     Type*                   unify(Type* other, TypeContext* context);
-
-    bool operator ==(GlobalIdentifierRef id) const;
-    bool operator !=(GlobalIdentifierRef id) const;
 };
 
 class StructType : public Type
@@ -150,6 +148,7 @@ public:
 
     StructType* addType(std::unique_ptr<StructType> type);
     Type*       getType(GlobalIdentifierRef identifier);
+    bool        equals(Type *type, GlobalIdentifierRef id);
 
 private:
 
