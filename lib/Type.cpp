@@ -636,6 +636,11 @@ void TypeInferer::visit(ast::FieldExp &exp)
     }
 }
 
+void TypeInferer::visit(ast::ConstructorExp &exp)
+{
+    result = getTypeContext()->getType(exp.identifier);
+}
+
 TypeContext* TypeInferer::getTypeContext()
 {
     return env->getTypeContext();

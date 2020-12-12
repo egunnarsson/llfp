@@ -33,14 +33,12 @@ public:
 private:
 
     template<class T>
-    std::unique_ptr<T> Error(const char *msg)
-    {
-        Log(lexer->getLocation(), msg);
-        return nullptr;
-    }
-    bool expect(lex::Token token);
+    std::unique_ptr<T>        error(const char *msg);
+    bool                      expect(lex::Token token);
 
-    bool parseDeclaration(const std::unique_ptr<ast::Module> &module);
+    template<llfp::lex::Token StartToken = llfp::lex::tok_open_parenthesis, llfp::lex::Token EndToken = llfp::lex::tok_close_parenthesis, class F>
+    bool                      parseList(F parseElement);
+    bool                      parseDeclaration(const std::unique_ptr<ast::Module> &module);
 
     std::unique_ptr<ast::DataDeclaration>     parseData(bool exported);
     std::unique_ptr<ast::FunctionDeclaration> parseFunction(bool exported);
@@ -48,12 +46,15 @@ private:
     std::unique_ptr<ast::Exp> parseLiteralExp();
     std::unique_ptr<ast::Exp> parseParenthesizedExp();
     std::unique_ptr<ast::Exp> parseIdentifierExp();
+    std::unique_ptr<ast::Exp> parseCallExp(SourceLocation location, GlobalIdentifier identifier);
     std::unique_ptr<ast::Exp> parseIfExp();
     std::unique_ptr<ast::Exp> parseLetExp();
     std::unique_ptr<ast::Exp> parsePrimaryExp(); // What is this? more like Term
     std::unique_ptr<ast::Exp> parseUnaryExp();
     std::unique_ptr<ast::Exp> parseBinaryExp(int exprPrec, std::unique_ptr<ast::Exp> LHS);
     std::unique_ptr<ast::Exp> parseExp();
+
+    std::unique_ptr<ast::NamedArgument> parseNamedArgument();
 
     GlobalIdentifier          parseGlobalIdentifier();
 };

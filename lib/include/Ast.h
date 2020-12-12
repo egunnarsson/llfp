@@ -22,6 +22,7 @@ class LiteralExp;
 class CallExp;
 class VariableExp;
 class FieldExp;
+class ConstructorExp;
 
 class ExpVisitor
 {
@@ -36,6 +37,7 @@ public:
     virtual void visit(CallExp &exp) = 0;
     virtual void visit(VariableExp &exp) = 0;
     virtual void visit(FieldExp &exp) = 0;
+    virtual void visit(ConstructorExp &exp) = 0;
 
 protected: // ?
 
@@ -272,6 +274,30 @@ public:
 
     FieldExp(SourceLocation location_, std::unique_ptr<Exp> lhs_, std::string fieldIdentifier_);
     virtual ~FieldExp();
+
+    void accept(ExpVisitor *visitor) override;
+};
+
+class NamedArgument : public Node
+{
+public:
+
+    std::string          name;
+    std::unique_ptr<Exp> exp;
+
+    NamedArgument(SourceLocation location_, std::string name_, std::unique_ptr<Exp> exp_);
+    virtual ~NamedArgument();
+};
+
+class ConstructorExp : public Exp
+{
+public:
+
+    GlobalIdentifier identifier;
+    std::vector<std::unique_ptr<NamedArgument>> arguments; // do not need to be ptrs?
+
+    ConstructorExp(SourceLocation location_, GlobalIdentifier identifier_, std::vector<std::unique_ptr<NamedArgument>> arguments_);
+    virtual ~ConstructorExp();
 
     void accept(ExpVisitor *visitor) override;
 };

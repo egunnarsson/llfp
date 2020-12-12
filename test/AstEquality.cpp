@@ -61,7 +61,7 @@ bool EqV(const std::vector<T> &v1, const std::vector<T> &v2)
 template<class T, class U, bool Same>
 struct CompareExp
 {
-    static bool compare(const T &exp1, const U &exp2)
+    static bool compare(const T&, const U&)
     {
         return false;
     }
@@ -105,6 +105,7 @@ public:
     VISIT(CallExp)
     VISIT(VariableExp)
     VISIT(FieldExp)
+    VISIT(ConstructorExp)
 };
 
 class ExpEq : public ExpVisitor
@@ -157,6 +158,7 @@ public:
     VISIT(CallExp)
     VISIT(VariableExp)
     VISIT(FieldExp)
+    VISIT(ConstructorExp)
 };
 
 #undef VISIT
@@ -184,7 +186,7 @@ bool operator==(const IfExp &e1, const IfExp &e2)
            ExpEq::check(e1.thenExp, e2.thenExp);
 }
 
-bool operator==(const CaseExp &e1, const CaseExp &e2)
+bool operator==(const CaseExp &, const CaseExp &)
 {
     return false;
 }
@@ -219,6 +221,11 @@ bool operator==(const VariableExp &e1, const VariableExp &e2)
     return e1.identifier == e2.identifier;
 }
 
+bool operator==(const ConstructorExp &e1, const ConstructorExp &e2)
+{
+    return e1.identifier == e2.identifier && EqPtrV(e1.arguments, e2.arguments);
+}
+
 bool operator==(const FieldExp &e1, const FieldExp &e2)
 {
     return e1.fieldIdentifier == e2.fieldIdentifier && ExpEq::check(e1.lhs, e2.lhs);
@@ -238,6 +245,11 @@ bool operator==(const ImportDeclaration &i1, const ImportDeclaration &i2)
 bool operator==(const PublicDeclaration &p1, const PublicDeclaration &p2)
 {
     return p1.name == p2.name;
+}
+
+bool operator==(const NamedArgument &n1, const NamedArgument &n2)
+{
+    return n1.name == n2.name && ExpEq::check(n1.exp, n2.exp);
 }
 
 bool operator==(const Field &f1, const Field &f2)

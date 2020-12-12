@@ -192,6 +192,25 @@ FieldExp::~FieldExp() {}
 void FieldExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
 
 
+NamedArgument::NamedArgument(SourceLocation location_, std::string name_, std::unique_ptr<Exp> exp_) :
+    Node(location_),
+    name(std::move(name_)),
+    exp(std::move(exp_))
+{}
+
+NamedArgument::~NamedArgument() {}
+
+
+ConstructorExp::ConstructorExp(SourceLocation location_, GlobalIdentifier identifier_, std::vector<std::unique_ptr<NamedArgument>> arguments_) :
+    Exp(location_),
+    identifier(std::move(identifier_)),
+    arguments(std::move(arguments_))
+{}
+
+ConstructorExp::~ConstructorExp() {}
+void ConstructorExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
+
+
 } // namespace ast
 } // namespace llfp
 

@@ -162,6 +162,24 @@ std::unique_ptr<Exp> MakeField(llfp::SourceLocation location, std::unique_ptr<Ex
     return std::make_unique<FieldExp>(location, std::move(lhs), std::move(fieldName));
 }
 
+std::unique_ptr<Exp> MakeConstructor(llfp::SourceLocation location, llfp::GlobalIdentifier name, std::initializer_list<movable_il<std::unique_ptr<NamedArgument>>> args)
+{
+    return std::make_unique<ConstructorExp>(location, std::move(name), vector_from_il(args));
+}
+
+std::unique_ptr<NamedArgument> MakeNamedArg(llfp::SourceLocation location, std::string name, std::unique_ptr<Exp> exp)
+{
+    return std::make_unique<NamedArgument>(location, std::move(name), std::move(exp));
+}
+
+/**
+Make a module m with a function f with exp.
+*/
+ModulePtr MakeMF(std::unique_ptr<Exp> exp)
+{
+    return MakeModule({ 0,0 }, "m", {}, {}, { MakeFunctionDecl({0,0}, "f","", {}, std::move(exp), false) }, {});
+}
+
 TEST(ParserTest, Imports)
 {
     // no imports
@@ -209,7 +227,10 @@ TEST(ParserTest, DataDeclarations)
     EXPECT_EQ(Parse(M"data a{}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({0,0}, "a", {}, false) }));
     EXPECT_EQ(Parse(M"data a{t x;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a", { Field({ 0,0 }, {"", "t"}, "x") }, false) }));
     EXPECT_EQ(Parse(M"data a{m2:t x;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a",{ Field({ 0,0 },{ "m2", "t" }, "x") }, false) }));
-    EXPECT_EQ(Parse(M"data a{t1 x; t2 y;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a", { Field({ 0,0 }, {"", "t1"}, "x"), Field({ 0,0 }, { "", "t2"}, "y") }, false) }));
+    EXPECT_EQ(Parse(M"data a{t1 x; t2 y;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, {
+        MakeDataDecl({ 0,0 }, "a", {
+            Field({ 0,0 }, {"", "t1"}, "x"),
+            Field({ 0,0 }, { "", "t2"}, "y") }, false) }));
     EXPECT_EQ(Parse(M"export data a{}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a",{}, true) }));
 
     // negative
@@ -219,6 +240,34 @@ TEST(ParserTest, DataDeclarations)
     EXPECT_EQ(ParseError(M"data a{t x; y;}"), "string(2,14): expected an identifier\n");
     EXPECT_EQ(ParseError(M"data a{t x y;}"),  "string(2,12): expected 'semicolon'\n");
     EXPECT_EQ(ParseError(M"data{t x;}"),      "string(2,5): expected an identifier\n");
+}
+
+TEST(ParserTest, DataConstructor)
+{
+    EXPECT_EQ(Parse(M"f = a{};"),MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, {} )));
+    EXPECT_EQ(Parse(M"f = a{1};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({0,0}, "", MakeLiteral({0,0}, llfp::lex::tok_integer, "1")) } )));
+    EXPECT_EQ(Parse(M"f = a{x};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({0,0}, "", MakeVariable({0,0}, "", "x")) })));
+    EXPECT_EQ(Parse(M"f = a{x:y};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({ 0,0 }, "", MakeVariable({ 0,0 }, "x", "y")) })));
+    EXPECT_EQ(Parse(M"f = a{x = y};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({ 0,0 }, "x", MakeVariable({ 0,0 }, "", "y")) })));
+    EXPECT_EQ(Parse(M"f = a{x()};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({ 0,0 }, "", MakeCall({0,0},"", "x", {})) })));
+    EXPECT_EQ(Parse(M"f = a{x + 1};"), MakeMF(
+        MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({ 0,0 }, "",
+            MakeBinary({ 0,0 },"+",
+                MakeVariable({ 0,0 }, "", "x"),
+                MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"))) })));
+    EXPECT_EQ(Parse(M"f = a{1, x};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, {
+        MakeNamedArg({ 0,0 }, "", MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1")),
+        MakeNamedArg({ 0,0 }, "", MakeVariable({ 0,0 }, "", "x")) } )));
+    EXPECT_EQ(Parse(M"f = a:b{1};"), MakeMF(MakeConstructor({ 0,0 }, { "a", "b" }, { MakeNamedArg({ 0,0 }, "",  MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1")) } )));
+    EXPECT_EQ(Parse(M"f = a{b{1}};"), MakeMF(
+        MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({ 0,0 }, "",
+            MakeConstructor({ 0,0 }, { "", "b" }, { MakeNamedArg({ 0,0 }, "",
+                MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1")) })) } )));
+
+    // negative
+    EXPECT_EQ(ParseError(M"f = a{x:}"),     "string(2,9): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"f = a{x: = 1}"), "string(2,10): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"f = a{x=}"),     "string(2,9): expected an expression\n");
 }
 
 TEST(ParserTest, Functions)
@@ -309,6 +358,7 @@ TEST(ParserTest, Literals)
         MakeModule({0,0}, "m", {}, {}, {MakeFunctionDecl({0,0}, "f", "", {}, MakeLiteral({0,0}, llfp::lex::tok_bool, "false"), false)}, {}));
 
     // negative
+    // invalid string escape
 }
 
 TEST(ParserTest, LetExp)
@@ -459,6 +509,9 @@ TEST(ParserTest, CallExp)
                                                      MakeCall({0,0}, "", "f3",
                                                         {MakeVariable({0,0}, "", "z")})}), false)}, {}));
 
+    // higher order function
+    "f = f2()()";
+
     // negative
     EXPECT_EQ(ParseError(M"f = f2(x y);"), "string(2,10): expected 'comma'\n");
 }
@@ -483,6 +536,8 @@ TEST(ParserTest, FieldExp)
         MakeModule({ 0,0 }, "m", {}, {}, { MakeFunctionDecl({0,0}, "f", "", {}, MakeField({0,0}, MakeField({0,0}, MakeVariable({0,0}, "", "x"), "y"), "z"), false) }, {}));
     EXPECT_EQ(Parse(M"f = x:y.z;"),
         MakeModule({ 0,0 }, "m", {}, {}, { MakeFunctionDecl({0,0}, "f", "", {}, MakeField({0,0}, MakeVariable({0,0}, "x", "y"), "z"), false) }, {}));
+    EXPECT_EQ(Parse(M"f = x().y;"),
+        MakeModule({ 0,0 }, "m", {}, {}, { MakeFunctionDecl({ 0,0 }, "f", "", {}, MakeField({ 0,0 }, MakeCall({0,0}, "", "x", {}), "y"), false) }, {}));
 
     // negative
     EXPECT_EQ(ParseError(M"f = x.);"), "string(2,7): expected a field identifier\n");

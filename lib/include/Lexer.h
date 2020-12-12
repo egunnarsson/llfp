@@ -147,7 +147,7 @@ public:
 
     Lexer(Input *input);
 
-    // should be string_view
+    // should be llvm::StringLiteral, except testing uses testing::Message << operator
     static constexpr const char* tokenName(Token token)
     {
         switch (token)
