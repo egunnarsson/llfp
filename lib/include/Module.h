@@ -100,7 +100,13 @@ public:
 private:
 
     template<class AstNode, class LocalFun, class GlobalFun>
-    bool lookup(GlobalIdentifierRef identifier, ImportedModule*& astModule, const AstNode*& ast, LocalFun localLookup, GlobalFun globalLookup) const;
+    bool lookup(
+        GlobalIdentifierRef identifier,
+        ImportedModule*& astModule,
+        const AstNode*& ast,
+        LocalFun localLookup,
+        GlobalFun globalLookup,
+        llvm::StringLiteral errorMsg) const;
 };
 
 class StandardModule : public ImportedModule

@@ -64,6 +64,7 @@ bool SourceModule::setAST(std::unique_ptr<ast::Module> astModule_)
 
 bool SourceModule::addImportedModules(const std::vector<ImportedModule*> &moduleList)
 {
+    assert(astModule != nullptr);
     bool result = true;
 
     for (auto &importDecl : astModule->imports)
@@ -160,7 +161,13 @@ llvm::Module* SourceModule::getLLVM()
 }
 
 template<class AstNode, class LocalFun, class GlobalFun>
-bool SourceModule::lookup(GlobalIdentifierRef identifier, ImportedModule*& astModule, const AstNode*& ast, LocalFun localLookup, GlobalFun globalLookup) const
+bool SourceModule::lookup(
+    GlobalIdentifierRef identifier,
+    ImportedModule*& astModule,
+    const AstNode*& ast,
+    LocalFun localLookup,
+    GlobalFun globalLookup,
+    llvm::StringLiteral errorMsg) const
 {
     llvm::StringRef moduleName;
 
@@ -201,7 +208,7 @@ bool SourceModule::lookup(GlobalIdentifierRef identifier, ImportedModule*& astMo
         }
         else
         {
-            Log({}, "undefined function ", identifier.str()); // or type...
+            Log({}, errorMsg, identifier.str());
             return false;
         }
     }
@@ -240,7 +247,7 @@ bool SourceModule::lookup(GlobalIdentifierRef identifier, ImportedModule*& astMo
         }
     }
 
-    Log({}, "undefined function ", identifier.str());
+    Log({}, errorMsg, identifier.str());
     return false;
 }
 
@@ -248,7 +255,8 @@ bool SourceModule::lookupFunction(GlobalIdentifierRef identifier, ImportedModule
 {
     return lookup(identifier, funModule, ast,
         [this](llvm::StringRef id) { return llfp::find(functions, id); },
-        [](ImportedModule* module, llvm::StringRef id) { return module->getFunction(id); });
+        [](ImportedModule* module, llvm::StringRef id) { return module->getFunction(id); },
+        "undefined function ");
 }
 
 bool SourceModule::lookupType(GlobalIdentifierRef identifier, const ImportedModule*& dataModule, const ast::DataDeclaration*& ast) const
@@ -256,7 +264,8 @@ bool SourceModule::lookupType(GlobalIdentifierRef identifier, const ImportedModu
     ImportedModule* tmpModule;
     auto result = lookup(identifier, tmpModule, ast,
         [this](llvm::StringRef id) { return llfp::find(dataDeclarations, id); },
-        [](ImportedModule* module, llvm::StringRef id) { return module->getType(id); });
+        [](ImportedModule* module, llvm::StringRef id) { return module->getType(id); },
+        "undefined type ");
     dataModule = tmpModule;
     return result;
 }

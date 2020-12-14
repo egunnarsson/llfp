@@ -92,7 +92,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
     }
     if (types.size() - 1 != ast->parameters.size())
     {
-        Log(ast->location, "wrong number of parameters"); // location should be called..., maybe we check at call site also?
+        Log(ast->location, "incorrect number of arguments"); // location should be called..., maybe we check at call site also?
         return nullptr;
     }
 
@@ -802,22 +802,73 @@ void ExpCodeGenerator::visit(ast::FieldExp &exp)
         return;
     }
 
-    auto fieldType = lhsType->getFieldType(exp.fieldIdentifier);
-    if (fieldType == nullptr)
+    auto index = lhsType->getFieldIndex(exp.fieldIdentifier);
+    if (index == type::Type::InvalidFieldIndex)
     {
         Log(exp.location, "unknown field: ", exp.fieldIdentifier);
         return;
     }
 
     // type check
+    auto fieldType = lhsType->getFieldType(index);
     if (expectedType->unify(fieldType, getTypeContext()) == nullptr)
     {
         Log(exp.location, "failed to unify types: ", expectedType->identifier().str(), " and ", fieldType->identifier().str());
         return;
     }
 
-    unsigned int index = lhsType->getFieldIndex(exp.fieldIdentifier);
     result = llvmBuilder().CreateExtractValue(structValue, { index });
+}
+
+void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
+{
+    auto type = typeContext().getType(exp.identifier);
+
+    if (type != nullptr)
+    {
+        const auto size = type->getFieldCount();
+
+        if (size != exp.arguments.size())
+        {
+            Log(exp.location, "incorrect number of arguments");
+            return;
+        }
+
+        bool fail = false;
+        llvm::Value *value = llvm::UndefValue::get(type->llvmType());
+        for (unsigned int i = 0; i < size; ++i)
+        {
+            auto &arg = exp.arguments[i];
+
+            // at the moment name is only used to check correctness
+            if (!arg->name.empty())
+            {
+                auto index = type->getFieldIndex(arg->name);
+                if (index != i)
+                {
+                    Log(arg->location, index == type::Type::InvalidFieldIndex
+                        ? "unknown field name"
+                        : "incorrect field position");
+                    break;
+                }
+            }
+
+            auto argValue = ExpCodeGenerator::generate(*arg->exp, type->getFieldType(i), this);
+            if (argValue != nullptr)
+            {
+                value = llvmBuilder().CreateInsertValue(value, argValue, { i });
+            }
+            else
+            {
+                fail = true;
+            }
+        }
+
+        if (!fail)
+        {
+            result = value;
+        }
+    }
 }
 
 const Value& ExpCodeGenerator::getNamedValue(const std::string &name)

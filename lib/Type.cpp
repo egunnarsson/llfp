@@ -1,4 +1,6 @@
 
+#include <utility>
+
 #pragma warning(push, 0)
 
 #include "llvm/Support/FormatVariadic.h"
@@ -82,20 +84,25 @@ bool Type::isLiteral() const
     return !identifier_.name.empty() && identifier_.name.front() == '@';
 }
 
-
 bool Type::isStructType() const
 {
     return false;
 }
 
-Type* Type::getFieldType(const std::string&) const
-{
-    return nullptr;
-}
-
 unsigned int Type::getFieldIndex(const std::string&) const
 {
-    return (unsigned int)-1;
+    return InvalidFieldIndex;
+}
+
+unsigned int Type::getFieldCount() const
+{
+    return 0;
+}
+
+Type* Type::getFieldType(unsigned int) const
+{
+    assert(false);
+    return nullptr;
 }
 
 Type* Type::unify(Type* other, TypeContext* env)
@@ -172,41 +179,42 @@ bool StructType::isStructType() const
     return true;
 }
 
-Type* StructType::getFieldType(const std::string &fieldIdentifier) const
-{
-    auto it = fields.find(fieldIdentifier);
-    if (it != fields.end())
-    {
-        return it->second.type;
-    }
-    return nullptr;
-}
-
 unsigned int StructType::getFieldIndex(const std::string &fieldIdentifier) const
 {
-    auto it = fields.find(fieldIdentifier);
-    if (it != fields.end())
+    const unsigned int size = static_cast<unsigned int>(fields.size());
+    for (unsigned int i = 0; i < size; ++i)
     {
-        return it->second.index;
+        if (fields[i].name == fieldIdentifier) { return i; }
     }
-    return (unsigned int)-1;
+    return InvalidFieldIndex;
+}
+
+Type* StructType::getFieldType(unsigned int index) const
+{
+    assert(index < fields.size());
+    return fields[index].type;
+}
+
+unsigned int StructType::getFieldCount() const
+{
+    return static_cast<unsigned int>(fields.size());
 }
 
 bool StructType::setFields(const std::vector<ast::Field> &astFields, std::vector<type::Type*> &fieldTypes)
 {
     assert(fields.size() == 0);
-    assert(astFields.size() == fieldTypes.size()); // or if?
+    assert(astFields.size() == fieldTypes.size());
 
     std::vector<llvm::Type*> llvmTypes;
     for (unsigned int i = 0; i < astFields.size(); ++i)
     {
-        Field f{ i, fieldTypes[i] };
-        auto inserted = fields.insert(std::make_pair(astFields[i].name, f)).second;
-        if (!inserted)
+        if (getFieldIndex(astFields[i].name) != InvalidFieldIndex)
         {
             Log(astFields[i].location, "duplicate field \"", astFields[i].name, '"');
             return false;
         }
+
+        fields.push_back({astFields[i].name , fieldTypes[i] });
         llvmTypes.push_back(fieldTypes[i]->llvmType());
     }
 
@@ -628,10 +636,14 @@ void TypeInferer::visit(ast::FieldExp &exp)
     }
     else
     {
-        result = structType->getFieldType(exp.fieldIdentifier);
-        if (result == nullptr)
+        auto index = structType->getFieldIndex(exp.fieldIdentifier);
+        if (index == Type::InvalidFieldIndex)
         {
             Log(exp.location, "unknown field: ", exp.fieldIdentifier);
+        }
+        else
+        {
+            result = structType->getFieldType(index);
         }
     }
 }

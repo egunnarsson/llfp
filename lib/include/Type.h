@@ -2,6 +2,7 @@
 
 #include <map>
 #include <memory>
+#include <string>
 #include <unordered_map>
 
 #pragma warning(push, 0)
@@ -105,9 +106,12 @@ public:
     bool                    isSigned() const;
     bool                    isLiteral() const;
 
+    static constexpr auto   InvalidFieldIndex = (unsigned int)-1;
+
     virtual bool            isStructType() const;
-    virtual Type*           getFieldType(const std::string &fieldIdentifier) const;
     virtual unsigned int    getFieldIndex(const std::string &fieldIdentifier) const;
+    virtual unsigned int    getFieldCount() const;
+    virtual Type*           getFieldType(unsigned int index) const;
 
     Type*                   unify(Type* other, TypeContext* context);
 };
@@ -116,23 +120,24 @@ class StructType : public Type
 {
     struct Field
     {
-        unsigned int index;
-        Type*        type;
+        std::string name;
+        Type*       type;
     };
 
     llvm::StructType* const  llvmType_; // without this Types could be shared between contexts...
 
-    std::unordered_map<std::string, Field> fields;
+    std::vector<Field> fields;
 
 public:
 
     StructType(GlobalIdentifier identifier, llvm::StructType* llvmType);
 
     bool         isStructType() const override;
-    Type*        getFieldType(const std::string &fieldIdentifier) const override;
     unsigned int getFieldIndex(const std::string &fieldIdentifier) const override;
+    unsigned int getFieldCount() const override;
+    Type*        getFieldType(unsigned int index) const override;
 
-    bool setFields(const std::vector<ast::Field> &astFields, std::vector<type::Type*> &fieldTypes);
+    bool         setFields(const std::vector<ast::Field> &astFields, std::vector<type::Type*> &fieldTypes);
 };
 
 class TypeContext
@@ -160,8 +165,8 @@ class TypeScope
 public:
 
     virtual TypeContext* getTypeContext() = 0;
-    virtual Type* getVariableType(llvm::StringRef variable) = 0;
-    virtual Type* getTypeByName(GlobalIdentifierRef identifier) { return getTypeContext()->getType(identifier); }
+    virtual Type*        getVariableType(llvm::StringRef variable) = 0;
+    virtual Type*        getTypeByName(GlobalIdentifierRef identifier) { return getTypeContext()->getType(identifier); }
     // a bit out of place but...
     virtual const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) = 0;
 
