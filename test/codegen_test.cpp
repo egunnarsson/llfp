@@ -114,9 +114,9 @@ TEST(CodegenTest, DataDeclaration)
     // "export m:d foo()"
 
     ASSERT_NE(func, nullptr);
-    EXPECT_NE(func->getInstructionCount(), 0);
+    EXPECT_NE(func->getInstructionCount(), 0u);
     ASSERT_NE(type, nullptr);
-    EXPECT_EQ(type->getNumElements(), 2);
+    EXPECT_EQ(type->getNumElements(), 2u);
     EXPECT_TRUE(type->elements()[0]->isIntegerTy(32));
     EXPECT_TRUE(type->elements()[1]->isFloatTy());
 
@@ -135,7 +135,7 @@ TEST(CodegenTest, DataConstructor)
     auto type = llvm->getTypeByName("m_d");
 
     ASSERT_NE(func, nullptr);
-    EXPECT_NE(func->getInstructionCount(), 0);
+    EXPECT_NE(func->getInstructionCount(), 0u);
     ASSERT_NE(type, nullptr);
 
     // what happens if we fail compile first arg, but 2nd is valid?
