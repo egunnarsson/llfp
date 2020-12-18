@@ -7,14 +7,16 @@
 
 #include "Parser.h"
 
-std::ostream& operator<<(std::ostream &os, const llfp::ast::Module &m);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::Field& f);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::DataDeclaration& d);
 //TODO: need a const visitor for this to be const
-std::ostream& operator<<(std::ostream &os, llfp::ast::Exp &e);
-std::ostream& operator<<(std::ostream &os, const llfp::ast::FunctionDeclaration &f);
-
-std::ostream& operator<<(std::ostream &os, const llfp::ast::Parameter &p);
-std::ostream& operator<<(std::ostream &os, const llfp::ast::PublicDeclaration &p);
-std::ostream& operator<<(std::ostream &os, const llfp::ast::ImportDeclaration &i);
+std::ostream& operator<<(std::ostream& os, llfp::ast::Exp& e);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::Parameter& p);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::FunctionDeclaration& f);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::PublicDeclaration& p);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::ImportDeclaration& i);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::Module &m);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::NamedArgument& i);
 
 // maybe rename this to avoid operators for std types in global namespace?
 template<class T>
