@@ -67,8 +67,6 @@ std::ostream& operator<<(std::ostream& os, const llfp::ast::ImportDeclaration& i
 
 std::ostream& operator<<(std::ostream &os, const llfp::ast::Module &m)
 {
-#if (_MSC_FULL_VER)
-#endif
     return os << '{' << m.name << ", " << m.publicDeclarations << ", " << m.imports << ", " << m.functionDeclarations << ", " << m.dataDeclarations << '}';
 }
 
