@@ -111,7 +111,7 @@ int writeHeaderFile(llfp::SourceModule* module, llvm::SmallString<128> &output)
     });
 }
 
-int createDataLayout(llvm::StringRef targetTriple, llvm::DataLayout &dataLayout)
+int createDataLayout(const std::string& targetTriple, llvm::DataLayout &dataLayout)
 {
 #if 1
     llvm::InitializeNativeTarget();

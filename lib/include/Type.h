@@ -165,7 +165,7 @@ class TypeScope
 public:
 
     virtual TypeContext* getTypeContext() = 0;
-    virtual Type*        getVariableType(llvm::StringRef variable) = 0;
+    virtual Type*        getVariableType(const std::string& variable) = 0;
     virtual Type*        getTypeByName(GlobalIdentifierRef identifier) { return getTypeContext()->getType(identifier); }
     // a bit out of place but...
     virtual const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) = 0;
@@ -185,7 +185,7 @@ public:
     virtual ~EmptyTypeScope() {}
 
     TypeContext*                    getTypeContext() override;
-    Type*                           getVariableType(llvm::StringRef variable) override;
+    Type*                           getVariableType(const std::string& variable) override;
     const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) override;
 };
 
@@ -214,7 +214,7 @@ public:
     void visit(ast::ConstructorExp &exp) override;
 
     TypeContext* getTypeContext() override;
-    Type*        getVariableType(llvm::StringRef variable) override;
+    Type*        getVariableType(const std::string& variable) override;
     const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) override;
 };
 

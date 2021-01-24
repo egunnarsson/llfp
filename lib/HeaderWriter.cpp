@@ -20,29 +20,29 @@ namespace llfp
 namespace
 {
 
-std::string convertType(llfp::SourceModule &module, GlobalIdentifierRef type)
+std::string convertType(llfp::SourceModule &module, GlobalIdentifier& type)
 {
     static std::unordered_map<std::string, llvm::StringRef> map {
-        {type::name::Bool.name, "bool"},
+        {type::name::Bool.name.str(), "bool"},
 
-        {type::name::I8.name, "int8_t"},
-        {type::name::I16.name, "int16_t"},
-        {type::name::I32.name, "int32_t"},
-        {type::name::I64.name, "int64_t"},
+        {type::name::I8.name.str(), "int8_t"},
+        {type::name::I16.name.str(), "int16_t"},
+        {type::name::I32.name.str(), "int32_t"},
+        {type::name::I64.name.str(), "int64_t"},
         // {type::name::I128, "i128"}, // unsupported
 
-        {type::name::U8.name, "uint8_t"},
-        {type::name::U16.name, "uint16_t"},
-        {type::name::U32.name, "uint32_t"},
-        {type::name::U64.name, "uint64_t"},
+        {type::name::U8.name.str(), "uint8_t"},
+        {type::name::U16.name.str(), "uint16_t"},
+        {type::name::U32.name.str(), "uint32_t"},
+        {type::name::U64.name.str(), "uint64_t"},
         // {type::name::U128, "u128"}, // unsupported
 
         // {type::name::Half, "half"}, // unsupported
-        {type::name::Float.name, "float"},
-        {type::name::Double.name, "double"},
+        {type::name::Float.name.str(), "float"},
+        {type::name::Double.name.str(), "double"},
         // long double usually 80 bit?
 
-        {type::name::Char.name, "unsigned char"},
+        {type::name::Char.name.str(), "unsigned char"},
     };
 
     if (type.moduleName.empty())
@@ -50,7 +50,7 @@ std::string convertType(llfp::SourceModule &module, GlobalIdentifierRef type)
         auto it = map.find(type.name);
         if (it != map.end())
         {
-            return it->second;
+            return it->second.str();
         }
     }
 

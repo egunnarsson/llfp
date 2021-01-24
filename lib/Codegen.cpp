@@ -888,7 +888,7 @@ const Value& ExpCodeGenerator::getNamedValue(const std::string &name)
     return it->second;
 }
 
-type::Type* ExpCodeGenerator::getVariableType(llvm::StringRef variable)
+type::Type* ExpCodeGenerator::getVariableType(const std::string& variable)
 {
     return getNamedValue(variable).type;
 }

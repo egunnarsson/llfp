@@ -223,8 +223,8 @@ bool StructType::setFields(const std::vector<ast::Field> &astFields, std::vector
 }
 
 
-#define ADD_TYPE(id, get, sign) types.insert({ id, std::make_unique<Type>(GlobalIdentifier{id.moduleName, id.name}, llvm::Type::get(llvmContext), sign) })
-#define ADD_TYPE_L(id, floating, sign) types.insert({ id, std::make_unique<Type>(GlobalIdentifier{id.moduleName, id.name}, floating, sign) })
+#define ADD_TYPE(id, get, sign) types.insert({ id, std::make_unique<Type>(GlobalIdentifier{id.moduleName.str(), id.name.str()}, llvm::Type::get(llvmContext), sign) })
+#define ADD_TYPE_L(id, floating, sign) types.insert({ id, std::make_unique<Type>(GlobalIdentifier{id.moduleName.str(), id.name.str()}, floating, sign) })
 
 TypeContext::TypeContext(llvm::LLVMContext &llvmContext_, SourceModule *sourceModule_):
     llvmContext{ llvmContext_ },
@@ -353,7 +353,7 @@ TypeContext* EmptyTypeScope::getTypeContext()
     return parent->getTypeContext();
 }
 
-Type* EmptyTypeScope::getVariableType(llvm::StringRef)
+Type* EmptyTypeScope::getVariableType(const std::string&)
 {
     return nullptr;
 }
@@ -658,7 +658,7 @@ TypeContext* TypeInferer::getTypeContext()
     return env->getTypeContext();
 }
 
-Type* TypeInferer::getVariableType(llvm::StringRef name)
+Type* TypeInferer::getVariableType(const std::string& name)
 {
     auto it = variables.find(name);
     if (it != variables.end())

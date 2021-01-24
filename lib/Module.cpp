@@ -169,13 +169,14 @@ bool SourceModule::lookup(
     GlobalFun globalLookup,
     llvm::StringLiteral errorMsg) const
 {
-    llvm::StringRef moduleName;
+    // make copy for lookup functions
+    std::string identifierName = identifier.name.str();
 
     if (identifier.moduleName.empty())
     {
         std::vector<ImportedModule*> modules;
 
-        AstNode* localAst = localLookup(identifier.name);
+        AstNode* localAst = localLookup(identifierName);
         if (localAst != nullptr)
         {
             astModule = const_cast<SourceModule*>(this);
@@ -186,7 +187,7 @@ bool SourceModule::lookup(
         for (auto &itm : importedModules)
         {
             auto importedModule = itm.second;
-            const AstNode* globalAst = globalLookup(importedModule, identifier.name);
+            const AstNode* globalAst = globalLookup(importedModule, identifierName);
             if (globalAst != nullptr)
             {
                 astModule = importedModule;
@@ -216,7 +217,7 @@ bool SourceModule::lookup(
     {
         if (identifier.moduleName == name())
         {
-            AstNode* localAst = localLookup(identifier.name);
+            AstNode* localAst = localLookup(identifierName);
             if (localAst != nullptr)
             {
                 astModule = const_cast<SourceModule*>(this);
@@ -226,11 +227,11 @@ bool SourceModule::lookup(
         }
         else
         {
-            auto itm = importedModules.find(identifier.moduleName);
+            auto itm = importedModules.find(identifier.moduleName.str());
             if (itm != importedModules.end())
             {
                 auto importedModule = itm->second;
-                const AstNode* globalAst = globalLookup(importedModule, identifier.name);
+                const AstNode* globalAst = globalLookup(importedModule, identifierName);
 
                 if (globalAst != nullptr)
                 {
@@ -254,8 +255,8 @@ bool SourceModule::lookup(
 bool SourceModule::lookupFunction(GlobalIdentifierRef identifier, ImportedModule*& funModule, const ast::FunctionDeclaration*& ast)
 {
     return lookup(identifier, funModule, ast,
-        [this](llvm::StringRef id) { return llfp::find(functions, id); },
-        [](ImportedModule* module, llvm::StringRef id) { return module->getFunction(id); },
+        [this](const std::string& id) { return llfp::find(functions, id); },
+        [](ImportedModule* module, const std::string& id) { return module->getFunction(id); },
         "undefined function ");
 }
 
@@ -263,8 +264,8 @@ bool SourceModule::lookupType(GlobalIdentifierRef identifier, const ImportedModu
 {
     ImportedModule* tmpModule;
     auto result = lookup(identifier, tmpModule, ast,
-        [this](llvm::StringRef id) { return llfp::find(dataDeclarations, id); },
-        [](ImportedModule* module, llvm::StringRef id) { return module->getType(id); },
+        [this](const std::string& id) { return llfp::find(dataDeclarations, id); },
+        [](ImportedModule* module, const std::string& id) { return module->getType(id); },
         "undefined type ");
     dataModule = tmpModule;
     return result;
@@ -294,7 +295,7 @@ bool SourceModule::generateNextFunction()
     if (!pendingGeneration.empty())
     {
         auto &function = pendingGeneration.back();
-        auto it = functions.find(function.name);
+        auto it = functions.find(function.name.str());
         if (it == functions.end())
         {
             Log({}, "undefined function: ", name(), ':', function.name);

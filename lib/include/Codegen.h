@@ -97,7 +97,7 @@ public:
     Function*           getFunction(GlobalIdentifierRef identifier, std::vector<type::Type*> types);
 
     type::TypeContext*  getTypeContext() override { return generator->getTypeContext(); }
-    type::Type*         getVariableType(llvm::StringRef variable) override;
+    type::Type*         getVariableType(const std::string& variable) override;
     const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) override;
     llvm::Value*        getResult();
 
