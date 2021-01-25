@@ -56,7 +56,7 @@ std::ostream& operator<<(std::ostream& os, llfp::ast::Exp& e) { return ExpPrint:
 
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Parameter& p) { return os << p.type.str() << ' ' << p.identifier; }
 
-std::ostream& operator<<(std::ostream& os, const llfp::ast::FunctionDeclaration& f)
+std::ostream& operator<<(std::ostream& os, const llfp::ast::Function& f)
 {
     return os << '{' << (f.exported ? '+' : '-') << ' ' << f.type.str() << ' ' << f.name << ' ' << f.parameters << f.functionBody << '}';
 }

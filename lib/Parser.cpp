@@ -197,9 +197,9 @@ bool Parser::parseDeclaration(const std::unique_ptr<ast::Module> &module)
         {
             Log(lexer->getLocation(), "export class");
         }
-        else if (auto c = parseClass())
+        else if (auto typeClass = parseClass())
         {
-            //module->class .push_back(c);
+            module->classDeclarations.push_back(std::move(typeClass));
             return true;
         }
         break;
@@ -211,7 +211,7 @@ bool Parser::parseDeclaration(const std::unique_ptr<ast::Module> &module)
         }
         else if (auto instance = parseInstance())
         {
-            //module->class .push_back(c);
+            module->instanceDeclarations.push_back(std::move(instance));
             return true;
         }
         break;

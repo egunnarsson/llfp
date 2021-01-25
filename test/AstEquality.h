@@ -21,7 +21,7 @@ bool operator==(const ImportDeclaration &i1, const ImportDeclaration &i2);
 bool operator==(const PublicDeclaration &p1, const PublicDeclaration &p2);
 bool operator==(const NamedArgument &n1, const NamedArgument &n2);
 
-bool operator==(const FunctionDeclaration &f1, const FunctionDeclaration &f2);
+bool operator==(const Function &f1, const Function&f2);
 bool operator==(const Module &m1, const Module &m2);
 
 } // llfp::ast

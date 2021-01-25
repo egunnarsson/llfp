@@ -262,7 +262,7 @@ bool operator==(const DataDeclaration &d1, const DataDeclaration &d2)
     return d1.name == d2.name && EqV(d1.fields, d2.fields) && d1.exported == d2.exported;
 }
 
-bool operator==(const FunctionDeclaration &f1, const FunctionDeclaration &f2)
+bool operator==(const Function &f1, const Function &f2)
 {
     return f1.name == f2.name &&
            f1.type == f2.type &&

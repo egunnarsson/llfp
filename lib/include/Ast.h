@@ -194,11 +194,13 @@ class Module : public Node
 {
 public:
 
-    std::string                    name;
-    std::vector<PublicDeclaration> publicDeclarations;
-    std::vector<ImportDeclaration> imports;
-    std::vector<std::unique_ptr<DataDeclaration>>     dataDeclarations;
-    std::vector<std::unique_ptr<Function>> functionDeclarations;
+    std::string                                    name;
+    std::vector<PublicDeclaration>                 publicDeclarations;
+    std::vector<ImportDeclaration>                 imports;
+    std::vector<std::unique_ptr<DataDeclaration>>  dataDeclarations;
+    std::vector<std::unique_ptr<Function>>         functionDeclarations;
+    std::vector<std::unique_ptr<ClassDeclaration>> classDeclarations;
+    std::vector<std::unique_ptr<ClassInstance>>    instanceDeclarations;
 
     Module(SourceLocation location_, std::string name_);
     virtual ~Module();
