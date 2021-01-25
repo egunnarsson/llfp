@@ -32,7 +32,7 @@ CodeGenerator::CodeGenerator(SourceModule *sourceModule_) :
     llvmModule = std::make_unique<llvm::Module>(sourceModule->name(), llvmContext);
 }
 
-bool CodeGenerator::generateFunction(const ast::FunctionDeclaration *ast)
+bool CodeGenerator::generateFunction(const ast::Function*ast)
 {
     std::vector<type::Type*> types;
 
@@ -73,7 +73,7 @@ bool CodeGenerator::generateFunction(const ast::FunctionDeclaration *ast)
     return true;
 }
 
-bool CodeGenerator::generateFunction(const ast::FunctionDeclaration *ast, std::vector<type::Type*> types)
+bool CodeGenerator::generateFunction(const ast::Function*ast, std::vector<type::Type*> types)
 {
     auto f = generatePrototype(sourceModule, ast, std::move(types));
     if (f != nullptr && f->llvm->empty())
@@ -83,7 +83,7 @@ bool CodeGenerator::generateFunction(const ast::FunctionDeclaration *ast, std::v
     return f != nullptr;
 }
 
-Function* CodeGenerator::generatePrototype(const ImportedModule* module, const ast::FunctionDeclaration *ast, std::vector<type::Type*> types)
+Function* CodeGenerator::generatePrototype(const ImportedModule* module, const ast::Function*ast, std::vector<type::Type*> types)
 {
     if (types.empty())
     {
@@ -207,7 +207,7 @@ void CodeGenerator::AddDllMain()
 Function* CodeGenerator::getFunction(GlobalIdentifierRef identifier, std::vector<type::Type*> types)
 {
     ImportedModule *importedModule = nullptr;
-    const ast::FunctionDeclaration *function = nullptr;
+    const ast::Function *function = nullptr;
     if (sourceModule->lookupFunction(identifier, importedModule, function))
     {
         auto proto = generatePrototype(importedModule, function, std::move(types));
@@ -899,10 +899,10 @@ Function* ExpCodeGenerator::getFunction(GlobalIdentifierRef identifier, std::vec
     return generator->getFunction(identifier, std::move(types));
 }
 
-const ast::FunctionDeclaration* ExpCodeGenerator::getFunctionAST(GlobalIdentifierRef identifier)
+const ast::Function* ExpCodeGenerator::getFunctionAST(GlobalIdentifierRef identifier)
 {
     llfp::ImportedModule *module = nullptr;
-    const ast::FunctionDeclaration *ast = nullptr;
+    const ast::Function *ast = nullptr;
     generator->sourceModule->lookupFunction(identifier, module, ast);
     return ast;
 }

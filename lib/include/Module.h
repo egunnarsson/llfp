@@ -37,12 +37,12 @@ public:
 
     virtual ~ImportedModule();
 
-    virtual const std::string&              name() const = 0;
-    virtual const ast::FunctionDeclaration* getFunction(const std::string &name) const = 0;
-    virtual const ast::DataDeclaration*     getType(const std::string &name) const = 0;
-    virtual std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const = 0;
-    virtual std::string                     getMangledName(const ast::DataDeclaration *data) const = 0;
-    virtual std::string                     getExportedName(const ast::FunctionDeclaration *function) const = 0;
+    virtual const std::string&          name() const = 0;
+    virtual const ast::Function*        getFunction(const std::string &name) const = 0;
+    virtual const ast::DataDeclaration* getType(const std::string &name) const = 0;
+    virtual std::string                 getMangledName(const ast::Function *function, const std::vector<type::Type*> &types) const = 0;
+    virtual std::string                 getMangledName(const ast::DataDeclaration *data) const = 0;
+    virtual std::string                 getExportedName(const ast::Function *function) const = 0;
 
     virtual bool lookupType(GlobalIdentifierRef, const ImportedModule*&, const ast::DataDeclaration*&) const
     {
@@ -60,10 +60,10 @@ class SourceModule : public ImportedModule
     std::unique_ptr<ast::Module>            astModule;
     std::unique_ptr<codegen::CodeGenerator> codeGenerator; // should be its own thing?
 
-    std::unordered_map<std::string, ast::FunctionDeclaration*> functions;
-    std::unordered_map<std::string, ast::FunctionDeclaration*> publicFunctions;
-    std::unordered_map<std::string, ast::DataDeclaration*>     dataDeclarations;
-    std::unordered_map<std::string, ImportedModule*>           importedModules;
+    std::unordered_map<std::string, ast::Function*>        functions;
+    std::unordered_map<std::string, ast::Function*>        publicFunctions;
+    std::unordered_map<std::string, ast::DataDeclaration*> dataDeclarations;
+    std::unordered_map<std::string, ImportedModule*>       importedModules;
 
     std::vector<FunctionIdentifier>         pendingGeneration; // Driver
 
@@ -76,19 +76,19 @@ public:
     bool addImportedModules(const std::vector<ImportedModule*> &moduleList);
     void createCodeGenerator();
 
-    const std::string&              filePath() const;
-    const std::string&              name() const override;
-    const ast::FunctionDeclaration* getFunction(const std::string &name) const override; // lookup public function
-    const ast::DataDeclaration*     getType(const std::string &name) const override;
-    std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const override;
-    std::string                     getMangledName(const ast::DataDeclaration *data) const override;
-    std::string                     getExportedName(const ast::FunctionDeclaration *function) const override;
+    const std::string&          filePath() const;
+    const std::string&          name() const override;
+    const ast::Function*        getFunction(const std::string &name) const override; // lookup public function
+    const ast::DataDeclaration* getType(const std::string &name) const override;
+    std::string                 getMangledName(const ast::Function *function, const std::vector<type::Type*> &types) const override;
+    std::string                 getMangledName(const ast::DataDeclaration *data) const override;
+    std::string                 getExportedName(const ast::Function *function) const override;
 
-    ast::Module*                    getAST();
-    llvm::Module*                   getLLVM();
+    ast::Module*                getAST();
+    llvm::Module*               getLLVM();
 
     // lookup local function or global from imported modules
-    bool lookupFunction(GlobalIdentifierRef identifier, ImportedModule*& module, const ast::FunctionDeclaration*& ast);
+    bool lookupFunction(GlobalIdentifierRef identifier, ImportedModule*& module, const ast::Function*& ast);
     bool lookupType(GlobalIdentifierRef identifier, const ImportedModule*& module, const ast::DataDeclaration*& ast) const override;
 
     void requireFunctionInstance(FunctionIdentifier function) override;
@@ -115,10 +115,10 @@ class StandardModule : public ImportedModule
 
 public:
 
-    const std::string&              name() const override;
-    const ast::FunctionDeclaration* getFunction(const std::string &name) const override;
-    std::string                     getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const override;
-    std::string                     getExportedName(const ast::FunctionDeclaration *function) const override;
+    const std::string&   name() const override;
+    const ast::Function* getFunction(const std::string &name) const override;
+    std::string          getMangledName(const ast::Function*function, const std::vector<type::Type*> &types) const override;
+    std::string          getExportedName(const ast::Function*function) const override;
 
     // only type check
     void requireFunctionInstance(FunctionIdentifier function) override;

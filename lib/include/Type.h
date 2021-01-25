@@ -168,7 +168,7 @@ public:
     virtual Type*        getVariableType(const std::string& variable) = 0;
     virtual Type*        getTypeByName(GlobalIdentifierRef identifier) { return getTypeContext()->getType(identifier); }
     // a bit out of place but...
-    virtual const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) = 0;
+    virtual const ast::Function* getFunctionAST(GlobalIdentifierRef identifier) = 0;
 
 protected:
 
@@ -184,9 +184,9 @@ public:
     EmptyTypeScope(TypeScope *parent_);
     virtual ~EmptyTypeScope() {}
 
-    TypeContext*                    getTypeContext() override;
-    Type*                           getVariableType(const std::string& variable) override;
-    const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) override;
+    TypeContext*         getTypeContext() override;
+    Type*                getVariableType(const std::string& variable) override;
+    const ast::Function* getFunctionAST(GlobalIdentifierRef identifier) override;
 };
 
 class TypeInferer : public ast::ExpVisitor, public TypeScope
@@ -213,9 +213,9 @@ public:
     void visit(ast::FieldExp &exp) override;
     void visit(ast::ConstructorExp &exp) override;
 
-    TypeContext* getTypeContext() override;
-    Type*        getVariableType(const std::string& variable) override;
-    const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) override;
+    TypeContext*         getTypeContext() override;
+    Type*                getVariableType(const std::string& variable) override;
+    const ast::Function* getFunctionAST(GlobalIdentifierRef identifier) override;
 };
 
 } // namespace type

@@ -28,9 +28,9 @@ class ExpCodeGenerator;
 
 struct Function
 {
-    const ast::FunctionDeclaration* ast;
-    llvm::Function*                 llvm;
-    std::vector<type::Type*>        types;
+    const ast::Function*     ast;
+    llvm::Function*          llvm;
+    std::vector<type::Type*> types;
 };
 
 struct Value
@@ -55,15 +55,15 @@ public:
 
     CodeGenerator(SourceModule *sourceModule_);
 
-    bool               generateFunction(const ast::FunctionDeclaration *ast);
-    bool               generateFunction(const ast::FunctionDeclaration *ast, std::vector<type::Type*> types);
+    bool               generateFunction(const ast::Function*ast);
+    bool               generateFunction(const ast::Function*ast, std::vector<type::Type*> types);
 
     llvm::Module*      getLLVM() { return llvmModule.get(); }
     type::TypeContext* getTypeContext() { return &typeContext; }
 
 private:
 
-    Function*          generatePrototype(const ImportedModule* module, const ast::FunctionDeclaration *ast, std::vector<type::Type*> types);
+    Function*          generatePrototype(const ImportedModule* module, const ast::Function*ast, std::vector<type::Type*> types);
     bool               generateFunctionBody(Function *function);
 
     void               AddDllMain(); // should be done on dll not on one module
@@ -91,15 +91,15 @@ public:
     ExpCodeGenerator(type::Type *type_, ExpCodeGenerator *parent_);
     virtual ~ExpCodeGenerator() {}
 
-    static llvm::Value* generate(ast::Exp &exp, type::Type *type, ExpCodeGenerator *parent);
+    static llvm::Value*  generate(ast::Exp &exp, type::Type *type, ExpCodeGenerator *parent);
 
     // lookup, local functions, global functions,
-    Function*           getFunction(GlobalIdentifierRef identifier, std::vector<type::Type*> types);
+    Function*            getFunction(GlobalIdentifierRef identifier, std::vector<type::Type*> types);
 
-    type::TypeContext*  getTypeContext() override { return generator->getTypeContext(); }
-    type::Type*         getVariableType(const std::string& variable) override;
-    const ast::FunctionDeclaration* getFunctionAST(GlobalIdentifierRef identifier) override;
-    llvm::Value*        getResult();
+    type::TypeContext*   getTypeContext() override { return generator->getTypeContext(); }
+    type::Type*          getVariableType(const std::string& variable) override;
+    const ast::Function* getFunctionAST(GlobalIdentifierRef identifier) override;
+    llvm::Value*         getResult();
 
     void visit(ast::LetExp &exp) override;
     void visit(ast::IfExp &exp) override;

@@ -358,7 +358,7 @@ Type* EmptyTypeScope::getVariableType(const std::string&)
     return nullptr;
 }
 
-const ast::FunctionDeclaration* EmptyTypeScope::getFunctionAST(GlobalIdentifierRef identifier)
+const ast::Function* EmptyTypeScope::getFunctionAST(GlobalIdentifierRef identifier)
 {
     return parent->getFunctionAST(identifier);
 }
@@ -668,7 +668,7 @@ Type* TypeInferer::getVariableType(const std::string& name)
     return env->getVariableType(name);
 }
 
-const ast::FunctionDeclaration* TypeInferer::getFunctionAST(GlobalIdentifierRef identifier)
+const ast::Function* TypeInferer::getFunctionAST(GlobalIdentifierRef identifier)
 {
     return env->getFunctionAST(identifier);
 }

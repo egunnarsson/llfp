@@ -78,11 +78,16 @@ public:
     virtual ~DataDeclaration();
 };
 
-class InstanceDeclaration
-{};
+class Parameter : public Node
+{
+public:
 
-class ClassDeclaration
-{};
+    GlobalIdentifier type;
+    std::string      identifier; // or name?
+
+    Parameter(SourceLocation location_, GlobalIdentifier type_, std::string identifier_);
+    virtual ~Parameter();
+};
 
 class Exp : public Node
 {
@@ -97,18 +102,7 @@ public:
     virtual ~Exp();
 };
 
-class Parameter : public Node
-{
-public:
-
-    GlobalIdentifier type;
-    std::string      identifier; // or name?
-
-    Parameter(SourceLocation location_, GlobalIdentifier type_, std::string identifier_);
-    virtual ~Parameter();
-};
-
-class FunctionDeclaration : public Node
+class Function : public Node
 {
 public:
 
@@ -118,14 +112,62 @@ public:
     std::unique_ptr<Exp> functionBody;
     bool                 exported;
 
-    FunctionDeclaration(
+    Function(
         SourceLocation location_,
         std::string name_,
         GlobalIdentifier type_,
         std::vector<std::unique_ptr<Parameter>> parameters_,
         std::unique_ptr<Exp> functionBody_,
         bool exported);
-    virtual ~FunctionDeclaration();
+    virtual ~Function();
+};
+
+class FunctionDecl : public Node
+{
+public:
+
+    std::string      name;
+    GlobalIdentifier type;
+    std::vector<std::unique_ptr<Parameter>> parameters;
+
+    FunctionDecl(
+        SourceLocation location_,
+        std::string name_,
+        GlobalIdentifier type_,
+        std::vector<std::unique_ptr<Parameter>> parameters_);
+    virtual ~FunctionDecl();
+};
+
+class ClassDeclaration : public Node
+{
+public:
+
+    std::string              name;
+    std::vector<std::string> typeVariables;
+    std::vector<std::unique_ptr<FunctionDecl>> functions;
+
+    ClassDeclaration(
+        SourceLocation location_,
+        std::string name_,
+        std::vector<std::string> typeVariables_,
+        std::vector<std::unique_ptr<FunctionDecl>> functions_);
+    virtual ~ClassDeclaration();
+};
+
+class ClassInstance : public Node
+{
+public:
+
+    GlobalIdentifier              classIdentifier;
+    std::vector<GlobalIdentifier> types;
+    std::vector<std::unique_ptr<Function>> functions;
+
+    ClassInstance(
+        SourceLocation location_,
+        GlobalIdentifier classIdentifier_,
+        std::vector<GlobalIdentifier> types_,
+        std::vector<std::unique_ptr<Function>> functions_);
+    virtual ~ClassInstance();
 };
 
 class PublicDeclaration : public Node
@@ -156,7 +198,7 @@ public:
     std::vector<PublicDeclaration> publicDeclarations;
     std::vector<ImportDeclaration> imports;
     std::vector<std::unique_ptr<DataDeclaration>>     dataDeclarations;
-    std::vector<std::unique_ptr<FunctionDeclaration>> functionDeclarations;
+    std::vector<std::unique_ptr<Function>> functionDeclarations;
 
     Module(SourceLocation location_, std::string name_);
     virtual ~Module();
@@ -166,10 +208,10 @@ class LetExp : public Exp
 {
 public:
 
-    std::vector<std::unique_ptr<FunctionDeclaration>> letStatments;
+    std::vector<std::unique_ptr<Function>> letStatments;
     std::unique_ptr<Exp> exp;
 
-    LetExp(SourceLocation location_, std::vector<std::unique_ptr<FunctionDeclaration>> letStatments_, std::unique_ptr<Exp> exp_);
+    LetExp(SourceLocation location_, std::vector<std::unique_ptr<Function>> letStatments_, std::unique_ptr<Exp> exp_);
     virtual ~LetExp();
 
     void accept(ExpVisitor *visitor) override;

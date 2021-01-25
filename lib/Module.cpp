@@ -35,7 +35,7 @@ bool SourceModule::setAST(std::unique_ptr<ast::Module> astModule_)
 
     for (auto &publicDecl : astModule->publicDeclarations)
     {
-        auto predicate = [&publicDecl](std::unique_ptr<ast::FunctionDeclaration> &function) { return publicDecl.name == function->name; };
+        auto predicate = [&publicDecl](std::unique_ptr<ast::Function> &function) { return publicDecl.name == function->name; };
         auto it = std::find_if(astModule->functionDeclarations.begin(), astModule->functionDeclarations.end(), predicate);
         if (it != astModule->functionDeclarations.end())
         {
@@ -102,7 +102,7 @@ const std::string& SourceModule::name() const
     return astModule->name;
 }
 
-const ast::FunctionDeclaration* SourceModule::getFunction(const std::string &name) const
+const ast::Function* SourceModule::getFunction(const std::string &name) const
 {
     return find(publicFunctions, name);
 }
@@ -113,7 +113,7 @@ const ast::DataDeclaration* SourceModule::getType(const std::string &name) const
 }
 
 // [%@][-a-zA-Z$._][-a-zA-Z$._0-9]*
-std::string SourceModule::getMangledName(const ast::FunctionDeclaration *function, const std::vector<type::Type*> &types) const
+std::string SourceModule::getMangledName(const ast::Function*function, const std::vector<type::Type*> &types) const
 {
     assert(!types.empty());
     if (function->exported)
@@ -145,7 +145,7 @@ std::string SourceModule::getMangledName(const ast::DataDeclaration *data) const
     return name() + '_' + data->name;
 }
 
-std::string SourceModule::getExportedName(const ast::FunctionDeclaration *function) const
+std::string SourceModule::getExportedName(const ast::Function*function) const
 {
     return name() + '_' + function->name;
 }
@@ -252,7 +252,7 @@ bool SourceModule::lookup(
     return false;
 }
 
-bool SourceModule::lookupFunction(GlobalIdentifierRef identifier, ImportedModule*& funModule, const ast::FunctionDeclaration*& ast)
+bool SourceModule::lookupFunction(GlobalIdentifierRef identifier, ImportedModule*& funModule, const ast::Function*& ast)
 {
     return lookup(identifier, funModule, ast,
         [this](const std::string& id) { return llfp::find(functions, id); },

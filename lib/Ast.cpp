@@ -16,8 +16,7 @@ Field::Field(SourceLocation location_, GlobalIdentifier type_, std::string name_
     Node(location_),
     type{ std::move(type_) },
     name{ std::move(name_) }
-{
-}
+{}
 
 Field::~Field() {}
 
@@ -27,14 +26,9 @@ DataDeclaration::DataDeclaration(SourceLocation location_, std::string name_, st
     name{ std::move(name_) },
     fields{ std::move(fields_) },
     exported{ exported_ }
-{
-}
+{}
 
 DataDeclaration::~DataDeclaration() {}
-
-
-Exp::Exp(SourceLocation location_) : Node(location_) {}
-Exp::~Exp() {}
 
 
 Parameter::Parameter(SourceLocation location_, GlobalIdentifier type_, std::string identifier_) :
@@ -46,7 +40,11 @@ Parameter::Parameter(SourceLocation location_, GlobalIdentifier type_, std::stri
 Parameter::~Parameter() {}
 
 
-FunctionDeclaration::FunctionDeclaration(
+Exp::Exp(SourceLocation location_) : Node(location_) {}
+Exp::~Exp() {}
+
+
+Function::Function(
     SourceLocation location_,
     std::string name_,
     GlobalIdentifier type_,
@@ -62,7 +60,52 @@ FunctionDeclaration::FunctionDeclaration(
     exported{ exported_ }
 {}
 
-FunctionDeclaration::~FunctionDeclaration() {}
+Function::~Function() {}
+
+
+FunctionDecl::FunctionDecl(
+    SourceLocation location_,
+    std::string name_,
+    GlobalIdentifier type_,
+    std::vector<std::unique_ptr<Parameter>> parameters_) :
+
+    Node(location_),
+    name(std::move(name_)),
+    type(std::move(type_)),
+    parameters(std::move(parameters_))
+{}
+
+FunctionDecl::~FunctionDecl() {}
+
+
+ClassDeclaration::ClassDeclaration(
+    SourceLocation location_,
+    std::string name_,
+    std::vector<std::string> typeVariables_,
+    std::vector<std::unique_ptr<FunctionDecl>> functions_) :
+
+    Node(location_),
+    name(std::move(name_)),
+    typeVariables(std::move(typeVariables_)),
+    functions(std::move(functions_))
+{}
+
+ClassDeclaration::~ClassDeclaration() {}
+
+
+ClassInstance::ClassInstance(
+    SourceLocation location_,
+    GlobalIdentifier classIdentifier_,
+    std::vector<GlobalIdentifier> types_,
+    std::vector<std::unique_ptr<Function>> functions_) :
+
+    Node(location_),
+    classIdentifier(std::move(classIdentifier_)),
+    types(std::move(types_)),
+    functions(std::move(functions_))
+{}
+
+ClassInstance::~ClassInstance() {}
 
 
 PublicDeclaration::PublicDeclaration(SourceLocation location_, std::string name_) :
@@ -89,7 +132,7 @@ Module::Module(SourceLocation location_, std::string name_) :
 Module::~Module() {}
 
 
-LetExp::LetExp(SourceLocation location_, std::vector<std::unique_ptr<FunctionDeclaration>> letStatments_, std::unique_ptr<Exp> exp_) :
+LetExp::LetExp(SourceLocation location_, std::vector<std::unique_ptr<Function>> letStatments_, std::unique_ptr<Exp> exp_) :
     Exp(location_),
     letStatments{ std::move(letStatments_) },
     exp{ std::move(exp_) }

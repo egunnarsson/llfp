@@ -36,12 +36,17 @@ private:
     std::unique_ptr<T>        error(const char *msg);
     bool                      expect(lex::Token token);
 
-    template<llfp::lex::Token StartToken = llfp::lex::tok_open_parenthesis, llfp::lex::Token EndToken = llfp::lex::tok_close_parenthesis, class F>
+    template<llfp::lex::Token StartToken = llfp::lex::tok_open_parenthesis,
+             llfp::lex::Token EndToken = llfp::lex::tok_close_parenthesis,
+             class F>
     bool                      parseList(F parseElement);
     bool                      parseDeclaration(const std::unique_ptr<ast::Module> &module);
 
-    std::unique_ptr<ast::DataDeclaration>     parseData(bool exported);
-    std::unique_ptr<ast::FunctionDeclaration> parseFunction(bool exported);
+    std::unique_ptr<ast::DataDeclaration>  parseData(bool exported);
+    std::unique_ptr<ast::Function>         parseFunction(bool exported);
+    std::unique_ptr<ast::ClassDeclaration> parseClass();
+    std::unique_ptr<ast::ClassInstance>    parseInstance();
+    std::unique_ptr<ast::FunctionDecl>     parseFunctionDefinition();
 
     std::unique_ptr<ast::Exp> parseLiteralExp();
     std::unique_ptr<ast::Exp> parseParenthesizedExp();
