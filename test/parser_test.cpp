@@ -66,7 +66,7 @@ ModulePtr MakeModule(llfp::SourceLocation sourceLocation,
                           std::string name,
                           std::vector<PublicDeclaration> publicDeclarations,
                           std::vector<ImportDeclaration> imports,
-                          std::initializer_list<movable_il<std::unique_ptr<FunctionDeclaration>>> functionDeclarations,
+                          std::initializer_list<movable_il<std::unique_ptr<Function>>> functionDeclarations,
                           std::initializer_list<movable_il<std::unique_ptr<DataDeclaration>>> dataDeclarations)
 {
     auto module = std::make_unique<Module>(sourceLocation, std::move(name));
@@ -89,7 +89,7 @@ auto MakeFunctionDecl(llfp::SourceLocation location,
                       std::unique_ptr<Exp> functionBody,
                       bool exported)
 {
-    return std::make_unique<FunctionDeclaration>(location, std::move(name), llfp::GlobalIdentifier{ "",  std::move(typeName) }, vector_from_il(parameters), std::move(functionBody), exported);
+    return std::make_unique<Function>(location, std::move(name), llfp::GlobalIdentifier{ "",  std::move(typeName) }, vector_from_il(parameters), std::move(functionBody), exported);
 }
 
 auto MakeFunctionDecl(llfp::SourceLocation location,
@@ -99,7 +99,7 @@ auto MakeFunctionDecl(llfp::SourceLocation location,
                       std::unique_ptr<Exp> functionBody,
                       bool exported)
 {
-    return std::make_unique<FunctionDeclaration>(location, std::move(name), std::move(typeName), vector_from_il(parameters), std::move(functionBody), exported);
+    return std::make_unique<Function>(location, std::move(name), std::move(typeName), vector_from_il(parameters), std::move(functionBody), exported);
 }
 
 auto MakeParameter(llfp::SourceLocation location, std::string typeName, std::string name)
@@ -118,7 +118,7 @@ std::unique_ptr<Exp> MakeLiteral(llfp::SourceLocation location, llfp::lex::Token
 }
 
 std::unique_ptr<Exp> MakeLet(llfp::SourceLocation location,
-                             std::initializer_list<movable_il<std::unique_ptr<FunctionDeclaration>>> letStatments,
+                             std::initializer_list<movable_il<std::unique_ptr<Function>>> letStatments,
                              std::unique_ptr<Exp> exp)
 {
     return std::make_unique<LetExp>(location, vector_from_il(letStatments), std::move(exp));

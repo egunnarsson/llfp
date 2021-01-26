@@ -17,11 +17,14 @@ bool operator==(const VariableExp &e1, const VariableExp &e2);
 bool operator==(const ConstructorExp &e1, const ConstructorExp &e2);
 
 bool operator==(const Parameter &p1, const Parameter &p2);
+bool operator==(const Function& f1, const Function& f2);
+bool operator==(const FunctionDecl& f1, const FunctionDecl& f2);
+bool operator==(const ClassDeclaration& c1, const ClassDeclaration& c2);
+bool operator==(const ClassInstance& c1, const ClassInstance& c2);
 bool operator==(const ImportDeclaration &i1, const ImportDeclaration &i2);
 bool operator==(const PublicDeclaration &p1, const PublicDeclaration &p2);
 bool operator==(const NamedArgument &n1, const NamedArgument &n2);
 
-bool operator==(const Function &f1, const Function&f2);
 bool operator==(const Module &m1, const Module &m2);
 
 } // llfp::ast

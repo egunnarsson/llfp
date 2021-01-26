@@ -233,8 +233,26 @@ bool operator==(const FieldExp &e1, const FieldExp &e2)
 
 bool operator==(const Parameter &p1, const Parameter &p2)
 {
-    return p1.type == p2.type &&
-           p1.identifier == p2.identifier;
+    return p1.type == p2.type && p1.identifier == p2.identifier;
+}
+
+bool operator==(const FunctionDecl& f1, const FunctionDecl& f2)
+{
+    return f1.name == f2.name && f1.type == f2.type && EqPtrV(f1.parameters, f2.parameters);
+}
+
+bool operator==(const ClassDeclaration& c1, const ClassDeclaration& c2)
+{
+    return c1.name == c2.name &&
+        EqV(c1.typeVariables, c2.typeVariables) &&
+        EqPtrV(c1.functions, c2.functions);
+}
+
+bool operator==(const ClassInstance& c1, const ClassInstance& c2)
+{
+    return c1.classIdentifier == c2.classIdentifier &&
+        EqV(c1.types, c2.types) &&
+        EqPtrV(c1.functions, c2.functions);
 }
 
 bool operator==(const ImportDeclaration &i1, const ImportDeclaration &i2)
@@ -276,7 +294,9 @@ bool operator==(const Module &m1, const Module &m2)
     return m1.name == m2.name &&
            EqV(m1.publicDeclarations, m2.publicDeclarations) &&
            EqV(m1.imports, m2.imports) &&
-           EqPtrV(m1.functionDeclarations, m2.functionDeclarations);
+           EqPtrV(m1.functionDeclarations, m2.functionDeclarations) &&
+           EqPtrV(m1.classDeclarations, m2.classDeclarations) &&
+           EqPtrV(m1.instanceDeclarations, m2.instanceDeclarations);
 }
 
 } // llfp::ast
