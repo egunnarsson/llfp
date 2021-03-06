@@ -62,6 +62,11 @@ std::string ParseError(const char *string)
     return testing::internal::GetCapturedStderr();
 }
 
+auto MakeTypeId(std::string moduleName, std::string name, std::vector< llfp::ast::TypeIdentifier> parameters)
+{
+    return llfp::ast::TypeIdentifier{ llfp::GlobalIdentifier {std::move(moduleName), std::move(name) }, std::move(parameters) };
+}
+
 ModulePtr MakeModule(llfp::SourceLocation sourceLocation,
                           std::string name,
                           std::vector<PublicDeclaration> publicDeclarations,
@@ -79,7 +84,7 @@ ModulePtr MakeModule(llfp::SourceLocation sourceLocation,
 
 auto MakeDataDecl(llfp::SourceLocation location, std::string name, std::vector<Field> fields, bool exported)
 {
-    return std::make_unique<DataDeclaration>(location, std::move(name), std::move(fields), exported);
+    return std::make_unique<DataDeclaration>(location, std::move(name), std::vector<std::string>{}, std::move(fields), exported);
 }
 
 auto MakeFunctionDecl(llfp::SourceLocation location,
@@ -89,12 +94,12 @@ auto MakeFunctionDecl(llfp::SourceLocation location,
                       std::unique_ptr<Exp> functionBody,
                       bool exported)
 {
-    return std::make_unique<Function>(location, std::move(name), llfp::GlobalIdentifier{ "",  std::move(typeName) }, vector_from_il(parameters), std::move(functionBody), exported);
+    return std::make_unique<Function>(location, std::move(name), llfp::ast::TypeIdentifier{ llfp::GlobalIdentifier{ "",  std::move(typeName) }, {} }, vector_from_il(parameters), std::move(functionBody), exported);
 }
 
 auto MakeFunctionDecl(llfp::SourceLocation location,
                       std::string name,
-                      llfp::GlobalIdentifier typeName,
+                      llfp::ast::TypeIdentifier typeName,
                       std::initializer_list<movable_il<std::unique_ptr<Parameter>>> parameters,
                       std::unique_ptr<Exp> functionBody,
                       bool exported)
@@ -104,10 +109,10 @@ auto MakeFunctionDecl(llfp::SourceLocation location,
 
 auto MakeParameter(llfp::SourceLocation location, std::string typeName, std::string name)
 {
-    return std::make_unique<Parameter>(location, llfp::GlobalIdentifier{ "",std::move(typeName) }, std::move(name));
+    return std::make_unique<Parameter>(location, MakeTypeId("", std::move(typeName), {}), std::move(name));
 }
 
-auto MakeParameter(llfp::SourceLocation location, llfp::GlobalIdentifier typeName, std::string name)
+auto MakeParameter(llfp::SourceLocation location, llfp::ast::TypeIdentifier typeName, std::string name)
 {
     return std::make_unique<Parameter>(location, std::move(typeName), std::move(name));
 }
@@ -224,6 +229,9 @@ TEST(ParserTest, PublicDeclarations)
 
 TEST(ParserTest, DataDeclarations)
 {
+    // change to data a = {};
+    // to allow data a = a1{} | a2{}; in the future
+
     EXPECT_EQ(Parse(M"data a{}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({0,0}, "a", {}, false) }));
     EXPECT_EQ(Parse(M"data a{t x;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a", { Field({ 0,0 }, {"", "t"}, "x") }, false) }));
     EXPECT_EQ(Parse(M"data a{m2:t x;}"), MakeModule({ 0,0 }, "m", {}, {}, {}, { MakeDataDecl({ 0,0 }, "a",{ Field({ 0,0 },{ "m2", "t" }, "x") }, false) }));
@@ -283,7 +291,7 @@ TEST(ParserTest, Functions)
             MakeFunctionDecl({0,0}, "f", "t", {}, MakeLiteral({0,0}, llfp::lex::tok_integer, "1"), false)}, {}));
     EXPECT_EQ(Parse(M"m2:t f = 1;"),
         MakeModule({ 0,0 }, "m", {}, {}, {
-            MakeFunctionDecl({ 0,0 }, "f", llfp::GlobalIdentifier{"m2", "t"}, {}, MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"), false) }, {}));
+            MakeFunctionDecl({ 0,0 }, "f", MakeTypeId("m2", "t", {}), {}, MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"), false) }, {}));
 
     // one params
     EXPECT_EQ(Parse(M"t f(x) = 1;"),
@@ -313,12 +321,34 @@ TEST(ParserTest, Functions)
     EXPECT_EQ(Parse(M"t f(m:t x) = 1;"),
         MakeModule({ 0,0 }, "m", {}, {}, {
             MakeFunctionDecl({ 0,0 }, "f", "t",
-                { MakeParameter({ 0,0 }, llfp::GlobalIdentifier{"m", "t"}, "x") },
+                { MakeParameter({ 0,0 }, MakeTypeId("m", "t", {}), "x") },
                 MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"), false) }, {}));
+
+    // parameterized types
+    EXPECT_EQ(Parse(M"t[x] f() = 1;"),
+        MakeModule({ 0,0 }, "m", {}, {}, {
+            MakeFunctionDecl({ 0,0 }, "f", MakeTypeId("", "t", { MakeTypeId("", "x", {}) }), {},
+            MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"), false) }, {}));
+    EXPECT_EQ(Parse(M"f(x[y] z) = 1;"),
+        MakeModule({ 0,0 }, "m", {}, {}, {
+            MakeFunctionDecl({ 0,0 }, "f", "", { MakeParameter({0,0}, MakeTypeId("", "x", { MakeTypeId("", "y", {}) }), "z") },
+            MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"), false) }, {}));
+    EXPECT_EQ(Parse(M"x[y[z]] f() = 1;"),
+        MakeModule({ 0,0 }, "m", {}, {}, {
+            MakeFunctionDecl({ 0,0 }, "f", MakeTypeId("", "x", { MakeTypeId("", "y", { MakeTypeId("", "z", {}) }) }), {},
+            MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"), false) }, {}));
+    EXPECT_EQ(Parse(M"x[y,z] f() = 1;"),
+        MakeModule({ 0,0 }, "m", {}, {}, {
+            MakeFunctionDecl({ 0,0 }, "f", MakeTypeId("", "x", { MakeTypeId("", "y", {}), MakeTypeId("", "z", {}) }), {},
+            MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"), false) }, {}));
 
     // negative
     EXPECT_EQ(ParseError(M"f = ;"), "string(2,5): expected an expression\n");
     EXPECT_EQ(ParseError(M"m2: f = 1;"), "string(2,7): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"f(x[]) = 1;"), "string(2,4): empty type list\n");
+    EXPECT_EQ(ParseError(M"f(x[b]) = 1;"), "string(2,7): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"a[b]() = 1;"), "string(2,5): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"a[] b() = 1;"), "string(2,2): empty type list\n");
 }
 
 TEST(ParserTest, Declarations)
@@ -330,7 +360,7 @@ TEST(ParserTest, Declarations)
          "g = 2;"),
         MakeModule({ 0,0 }, "m", {}, {},
             { MakeFunctionDecl({0,0},"f", "", {}, MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "1"), false),
-            MakeFunctionDecl({ 0,0 },"g", "",{}, MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "2"), false) },
+            MakeFunctionDecl({ 0,0 },"g", "", {}, MakeLiteral({ 0,0 }, llfp::lex::tok_integer, "2"), false) },
             { MakeDataDecl({ 0,0 }, "a",{}, false),
             MakeDataDecl({ 0,0 }, "b",{}, false) }));
 

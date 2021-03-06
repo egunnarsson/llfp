@@ -229,6 +229,7 @@ bool Parser::parseDeclaration(const std::unique_ptr<ast::Module> &module)
     return false;
 }
 
+// "data" <id> [ "[" { <id> "," } <id> "]" ] "{" { <tid> <id> ";" } "}"
 std::unique_ptr<ast::DataDeclaration> Parser::parseData(bool exported)
 {
     auto location = lexer->getLocation();
@@ -242,6 +243,20 @@ std::unique_ptr<ast::DataDeclaration> Parser::parseData(bool exported)
     std::string name = lexer->getString();
     lexer->nextToken();
 
+    std::vector<std::string> typeVariables;
+    if (lexer->getToken() == lex::tok_open_bracket)
+    {
+        auto parseVariable = [this, &typeVariables]()
+        {
+            if (lexer->getToken() != lex::tok_identifier) { return false; }
+            typeVariables.push_back(lexer->getString());
+            lexer->nextToken();
+            return true;
+        };
+
+        if (!parseList<lex::tok_open_bracket, lex::tok_close_bracket>(parseVariable)) { return nullptr; }
+    }
+
     if (!expect(lex::tok_open_brace)) { return nullptr; }
 
     std::vector<ast::Field> fields;
@@ -249,8 +264,9 @@ std::unique_ptr<ast::DataDeclaration> Parser::parseData(bool exported)
     {
         auto fieldLocation = lexer->getLocation();
 
-        GlobalIdentifier fieldType = parseGlobalIdentifier();
-        if (fieldType.name.empty())
+        ast::TypeIdentifier fieldType;
+        if (!parseType(fieldType)) { return nullptr; }
+        if (fieldType.identifier.name.empty())
         {
             return error<ast::DataDeclaration>("expected an identifier");
         }
@@ -268,30 +284,33 @@ std::unique_ptr<ast::DataDeclaration> Parser::parseData(bool exported)
     }
     lexer->nextToken(); // eat }
 
-    return std::make_unique<ast::DataDeclaration>(location, std::move(name), std::move(fields), exported);
+    return std::make_unique<ast::DataDeclaration>(location, std::move(name), std::move(typeVariables), std::move(fields), exported);
 }
 
+// [ <tid> ] <id> [ "(" [ { <arg> "," } <arg> ] ")" ] "=" <exp> ";"
 std::unique_ptr<ast::Function> Parser::parseFunction(bool exported)
 {
     auto location = lexer->getLocation();
 
-    GlobalIdentifier type = parseGlobalIdentifier();
-    if (type.name.empty())
+    ast::TypeIdentifier type;
+    if (!parseType(type)) { return nullptr; }
+    if (type.identifier.name.empty())
     {
-        return error<ast::Function>("expected an identifier");
+        return error<ast::Function>("expected an identifier"); // bad error when "t[] f() = 1;"
     }
     std::string identifier;
 
     if (lexer->getToken() != lex::tok_identifier)
     {
-        if (type.moduleName.empty())
+        if (type.identifier.moduleName.empty() &&
+            type.parameters.empty())
         {
-            identifier = std::move(type.name);
-            type.name = "";
+            identifier = std::move(type.identifier.name);
+            type.identifier.name.clear();
         }
         else
         {
-            // there must be an identifier since only type can have ':'
+            // there must be an identifier since only type can have ':' or [ <tid> ]
             return error<ast::Function>("expected an identifier");
         }
     }
@@ -307,24 +326,27 @@ std::unique_ptr<ast::Function> Parser::parseFunction(bool exported)
         auto parseElement = [this, &parameters]()
         {
             auto paramLocation = lexer->getLocation();
-            GlobalIdentifier argTypeName = parseGlobalIdentifier();
-            if (argTypeName.name.empty())
+
+            ast::TypeIdentifier argTypeName;
+            if (!parseType(argTypeName)) { return false; }
+            if (argTypeName.identifier.name.empty())
             {
                 Log(lexer->getLocation(), "expected an identifier");
                 return false;
             }
-
             std::string argIdentifier;
+
             if (lexer->getToken() != lex::tok_identifier)
             {
-                if (argTypeName.moduleName.empty())
+                if (argTypeName.identifier.moduleName.empty() &&
+                    argTypeName.parameters.empty())
                 {
-                    argIdentifier = std::move(argTypeName.name);
-                    argTypeName.name = "";
+                    argIdentifier = std::move(argTypeName.identifier.name);
+                    argTypeName.identifier.name.clear();
                 }
                 else
                 {
-                    // there must be an identifier since only type can have ':'
+                    // there must be an identifier since only type can have ':' or [ <tid> ]
                     Log(lexer->getLocation(), "expected an identifier");
                     return false;
                 }
@@ -361,6 +383,7 @@ std::unique_ptr<ast::Function> Parser::parseFunction(bool exported)
         exported);
 }
 
+// "class" <id> <id> "{" [ <funDecl> ] "}" ";"
 std::unique_ptr<ast::ClassDeclaration> Parser::parseClass()
 {
     auto location = lexer->getLocation();
@@ -374,18 +397,12 @@ std::unique_ptr<ast::ClassDeclaration> Parser::parseClass()
     std::string identifier = lexer->getString();
     lexer->nextToken();
 
-    std::vector<std::string> typeArgs;
-    auto parseParameter = [this, &typeArgs]()
+    if (lexer->getToken() != lex::tok_identifier)
     {
-        if (lexer->getToken() == lex::tok_identifier)
-        {
-            typeArgs.push_back(lexer->getString());
-            lexer->nextToken();
-            return true;
-        }
-        return false;
-    };
-    if (!parseList(parseParameter)) { return nullptr; }
+        return error<ast::ClassDeclaration>("expected an identifier");
+    }
+    std::string typeVar = lexer->getString();
+    lexer->nextToken();
 
     if (!expect(lex::tok_open_brace)) { return nullptr; }
 
@@ -405,33 +422,29 @@ std::unique_ptr<ast::ClassDeclaration> Parser::parseClass()
 
     if (!expect(lex::tok_semicolon)) { return nullptr; }
 
-    return std::make_unique<ast::ClassDeclaration>(location, std::move(identifier), std::move(typeArgs), std::move(functions));
+    return std::make_unique<ast::ClassDeclaration>(location, std::move(identifier), std::move(typeVar), std::move(functions));
 }
 
+//"instance" <gid> <tid> "{" { <fun> } "}" ";"
 std::unique_ptr<ast::ClassInstance> Parser::parseInstance()
 {
     auto location = lexer->getLocation();
 
     if (!expect(lex::tok_instance)) { return nullptr; }
 
-    GlobalIdentifier identifier = parseGlobalIdentifier();
+    GlobalIdentifier identifier;
+    if (!parseGlobalIdentifier(identifier)) { return nullptr; }
     if (identifier.name.empty())
     {
         return error<ast::ClassInstance>("expected an identifier");
     }
 
-    std::vector<GlobalIdentifier> typeArgs;
-    auto parseParameter = [this, &typeArgs]()
+    ast::TypeIdentifier typeArg;
+    if (!parseType(typeArg)) { return nullptr; }
+    if (typeArg.identifier.name.empty())
     {
-        auto param = parseGlobalIdentifier();
-        if (param.name.empty())
-        {
-            return false;
-        }
-        typeArgs.push_back(std::move(param));
-        return true;
-    };
-    if (!parseList(parseParameter)) { return nullptr; }
+        return error<ast::ClassInstance>("expected an identifier");
+    }
 
     if (!expect(lex::tok_open_brace)) { return nullptr; }
 
@@ -451,15 +464,16 @@ std::unique_ptr<ast::ClassInstance> Parser::parseInstance()
 
     if (!expect(lex::tok_semicolon)) { return nullptr; }
 
-    return std::make_unique<ast::ClassInstance>(location, std::move(identifier), std::move(typeArgs), std::move(functions));
+    return std::make_unique<ast::ClassInstance>(location, std::move(identifier), std::move(typeArg), std::move(functions));
 }
 
 std::unique_ptr<ast::FunctionDecl> Parser::parseFunctionDefinition()
 {
     auto location = lexer->getLocation();
 
-    auto returnType = parseGlobalIdentifier();
-    if (returnType.name.empty())
+    ast::TypeIdentifier returnType;
+    if (!parseType(returnType)) { return nullptr; }
+    if (returnType.identifier.name.empty())
     {
         return error<ast::FunctionDecl>("expected return type");
     }
@@ -475,8 +489,9 @@ std::unique_ptr<ast::FunctionDecl> Parser::parseFunctionDefinition()
     auto parseArg = [this, &args]()
     {
         auto paramLocation = lexer->getLocation();
-        GlobalIdentifier argTypeName = parseGlobalIdentifier();
-        if (argTypeName.name.empty())
+        ast::TypeIdentifier argTypeName;
+        if (!parseType(argTypeName)) { return false; }
+        if (argTypeName.identifier.name.empty())
         {
             Log(lexer->getLocation(), "expected an identifier");
             return false;
@@ -531,10 +546,16 @@ std::unique_ptr<ast::Exp> Parser::parseIdentifierExp()
 {
     auto location = lexer->getLocation();
 
-    GlobalIdentifier identifier = parseGlobalIdentifier();
+    GlobalIdentifier identifier;
+    if (!parseGlobalIdentifier(identifier)) { return nullptr; }
     if (identifier.name.empty())
     {
         return error<ast::Exp>("expected an identifier");
+    }
+
+    if (lexer->getToken() == lex::tok_identifier)
+    {
+        // Foo int32 int32
     }
 
     if (lexer->getToken() == lex::tok_open_parenthesis || lexer->getToken() == lex::tok_open_brace)
@@ -766,13 +787,10 @@ std::unique_ptr<ast::NamedArgument> Parser::parseNamedArgument()
     std::unique_ptr<ast::Exp> exp;
     if (lexer->getToken() == lex::tok_identifier)
     {
-        auto ident = parseGlobalIdentifier();
+        GlobalIdentifier ident;
+        if (!parseGlobalIdentifier(ident)) { return nullptr; }
 
-        if (ident.name.empty()) // "x:,"
-        {
-            Log(lexer->getLocation(), "expected an identifier");
-            return nullptr;
-        }
+        assert(!ident.name.empty());
 
         if (ident.moduleName.empty() && lexer->getToken() == lex::tok_equal)
         {
@@ -804,22 +822,72 @@ std::unique_ptr<ast::NamedArgument> Parser::parseNamedArgument()
     return std::make_unique<ast::NamedArgument>(location, std::move(name), std::move(exp));
 }
 
-GlobalIdentifier Parser::parseGlobalIdentifier()
+// <id> [ ":" <id> ]
+bool Parser::parseGlobalIdentifier(GlobalIdentifier &identifier)
 {
-    GlobalIdentifier identifier;
-
-    if (lexer->getToken() != lex::tok_identifier) { return {}; }
-    identifier.name = lexer->getString();
-
-    if (lexer->nextToken() == lex::tok_colon)
+    if (lexer->getToken() == lex::tok_identifier)
     {
-        if (lexer->nextToken() != lex::tok_identifier) { return {}; }
-        identifier.moduleName = std::move(identifier.name);
         identifier.name = lexer->getString();
-        lexer->nextToken();
+
+        if (lexer->nextToken() == lex::tok_colon)
+        {
+            if (lexer->nextToken() != lex::tok_identifier)
+            {
+                Log(lexer->getLocation(), "expected an identifier");
+                return false;
+            }
+            identifier.moduleName = std::move(identifier.name);
+            identifier.name = lexer->getString();
+            lexer->nextToken();
+        }
     }
 
-    return identifier;
+    return true;
+}
+
+// <gid> [ "[" { <tid> ","} <tid> "]" ]
+bool Parser::parseType(ast::TypeIdentifier &type)
+{
+    if (lexer->getToken() == lex::tok_identifier)
+    {
+        if (!parseGlobalIdentifier(type.identifier)) { return false; }
+
+        if (type.identifier.name.empty())
+        {
+            Log(lexer->getLocation(), "expected an identifier");
+            return false;
+        }
+
+        if (lexer->getToken() == lex::tok_open_bracket) // for now we use []
+        {
+            auto location = lexer->getLocation();
+
+            auto parseTypeParameter = [this, &type]()
+            {
+                ast::TypeIdentifier param;
+                if (!parseType(param)) { return false; }
+                if (param.identifier.name.empty())
+                {
+                    Log(lexer->getLocation(), "expected an identifier");
+                    return false;
+                }
+                type.parameters.push_back(std::move(param));
+                return true;
+            };
+
+            if (!parseList<lex::tok_open_bracket, lex::tok_close_bracket>(parseTypeParameter))
+            {
+                return false;
+            }
+            if (type.parameters.empty())
+            {
+                Log(location, "empty type list");
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 } // namespace parse

@@ -36,30 +36,30 @@ bool CodeGenerator::generateFunction(const ast::Function*ast)
 {
     std::vector<type::Type*> types;
 
-    if (ast->type.name.empty())
+    if (ast->type.identifier.name.empty())
     {
         Log(ast->location, "generating exported function with unbound return type");
         return false;
     }
-    auto retType = typeContext.getType(ast->type);
+    auto retType = typeContext.getType(ast->type.identifier);
     if (retType == nullptr)
     {
-        Log(ast->location, "unknown type: ", ast->type.str());
+        Log(ast->location, "unknown type: ", ast->type.identifier.str());
         return false;
     }
     types.push_back(retType);
 
     for (auto &param : ast->parameters)
     {
-        if (param->type.name.empty())
+        if (param->type.identifier.name.empty())
         {
             Log(ast->location, "generating exported function containing unbound parameter types");
             return false;
         }
-        auto type = typeContext.getType(param->type);
+        auto type = typeContext.getType(param->type.identifier);
         if (type == nullptr)
         {
-            Log(param->location, "unknown type \"", param->type.str(), '"');
+            Log(param->location, "unknown type \"", param->type.identifier.str(), '"');
             return false;
         }
         types.push_back(type);
@@ -98,10 +98,10 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
 
     // unify types / type check / remove literals (requires the value...)
 
-    types[0] = types[0]->unify(typeContext.getType(ast->type), &typeContext);
+    types[0] = types[0]->unify(typeContext.getType(ast->type.identifier), &typeContext);
     for (size_t i = 1; i < types.size(); ++i)
     {
-        types[i] = types[i]->unify(typeContext.getType(ast->parameters[i - 1]->type), &typeContext);
+        types[i] = types[i]->unify(typeContext.getType(ast->parameters[i - 1]->type.identifier), &typeContext);
     }
 
     if (std::any_of(types.begin(), types.end(), [](auto x) { return x == nullptr; }))
@@ -157,11 +157,11 @@ bool CodeGenerator::generateFunctionBody(Function *function)
             return false;
         }
 
-        if (!param->type.name.empty())
+        if (!param->type.identifier.name.empty())
         {
-            if (!typeContext.equals(types[i + 1], param->type))
+            if (!typeContext.equals(types[i + 1], param->type.identifier))
             {
-                Log(ast->location, "type mismatch, expected '", param->type.str(), "' actual '", types[i + 1]->identifier().str(), '\'');
+                Log(ast->location, "type mismatch, expected '", param->type.identifier.str(), "' actual '", types[i + 1]->identifier().str(), '\'');
                 return false;
             }
         }
@@ -171,11 +171,11 @@ bool CodeGenerator::generateFunctionBody(Function *function)
     }
 
     // type check return
-    if (!ast->type.name.empty())
+    if (!ast->type.identifier.name.empty())
     {
-        if (!typeContext.equals(types[0], ast->type))
+        if (!typeContext.equals(types[0], ast->type.identifier))
         {
-            Log(ast->location, "type mismatch, expected '", ast->type.str(), "' actual '", types[0]->identifier().str(), '\'');
+            Log(ast->location, "type mismatch, expected '", ast->type.identifier.str(), "' actual '", types[0]->identifier().str(), '\'');
             return false;
         }
     }
@@ -262,13 +262,13 @@ void ExpCodeGenerator::visit(ast::LetExp &exp)
         }
 
         type::Type* varType;
-        if (var->type.name.empty())
+        if (var->type.identifier.name.empty())
         {
             varType = type::TypeInferer::infer(*var->functionBody, this);
         }
         else
         {
-            varType = typeContext().getType(var->type);
+            varType = typeContext().getType(var->type.identifier);
         }
         if (varType == nullptr)
         {
@@ -770,9 +770,9 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
         if (function.ast->parameters.empty())
         {
             // generate call
-            if (!getTypeContext()->equals(expectedType, function.ast->type))
+            if (!getTypeContext()->equals(expectedType, function.ast->type.identifier))
             {
-                typeError(exp, expectedType, function.ast->type.str());
+                typeError(exp, expectedType, function.ast->type.identifier.str());
                 return;
             }
             result = llvmBuilder().CreateCall(function.llvm, std::vector<llvm::Value*>{}, "call");

@@ -13,6 +13,12 @@ namespace llfp
 namespace ast
 {
 
+struct TypeIdentifier
+{
+    GlobalIdentifier            identifier;
+    std::vector<TypeIdentifier> parameters;
+};
+
 class LetExp;
 class IfExp;
 class CaseExp;
@@ -59,10 +65,10 @@ class Field : public Node
 {
 public:
 
-    GlobalIdentifier type;
-    std::string      name;
+    TypeIdentifier type;
+    std::string    name;
 
-    Field(SourceLocation location_, GlobalIdentifier type_, std::string name_);
+    Field(SourceLocation location_, TypeIdentifier type_, std::string name_);
     virtual ~Field();
 };
 
@@ -70,11 +76,17 @@ class DataDeclaration : public Node
 {
 public:
 
-    std::string        name;
-    std::vector<Field> fields;
-    bool               exported;
+    std::string              name;
+    std::vector<std::string> typeVariables;
+    std::vector<Field>       fields;
+    bool                     exported;
 
-    DataDeclaration(SourceLocation location_, std::string name_, std::vector<Field> fields_, bool exported_);
+    DataDeclaration(
+        SourceLocation location_,
+        std::string name_,
+        std::vector<std::string> typeVariables_,
+        std::vector<Field> fields_,
+        bool exported_);
     virtual ~DataDeclaration();
 };
 
@@ -82,10 +94,10 @@ class Parameter : public Node
 {
 public:
 
-    GlobalIdentifier type;
-    std::string      identifier; // or name?
+    TypeIdentifier type;
+    std::string    identifier; // or name?
 
-    Parameter(SourceLocation location_, GlobalIdentifier type_, std::string identifier_);
+    Parameter(SourceLocation location_, TypeIdentifier type_, std::string identifier_);
     virtual ~Parameter();
 };
 
@@ -107,7 +119,7 @@ class Function : public Node
 public:
 
     std::string          name;
-    GlobalIdentifier     type;
+    TypeIdentifier       type;
     std::vector<std::unique_ptr<Parameter>> parameters;
     std::unique_ptr<Exp> functionBody;
     bool                 exported;
@@ -115,7 +127,7 @@ public:
     Function(
         SourceLocation location_,
         std::string name_,
-        GlobalIdentifier type_,
+        TypeIdentifier type_,
         std::vector<std::unique_ptr<Parameter>> parameters_,
         std::unique_ptr<Exp> functionBody_,
         bool exported);
@@ -126,14 +138,14 @@ class FunctionDecl : public Node
 {
 public:
 
-    std::string      name;
-    GlobalIdentifier type;
+    std::string    name;
+    TypeIdentifier type;
     std::vector<std::unique_ptr<Parameter>> parameters;
 
     FunctionDecl(
         SourceLocation location_,
         std::string name_,
-        GlobalIdentifier type_,
+        TypeIdentifier type_,
         std::vector<std::unique_ptr<Parameter>> parameters_);
     virtual ~FunctionDecl();
 };
@@ -142,14 +154,14 @@ class ClassDeclaration : public Node
 {
 public:
 
-    std::string              name;
-    std::vector<std::string> typeVariables;
+    std::string name;
+    std::string typeVariable;
     std::vector<std::unique_ptr<FunctionDecl>> functions;
 
     ClassDeclaration(
         SourceLocation location_,
         std::string name_,
-        std::vector<std::string> typeVariables_,
+        std::string typeVariable_,
         std::vector<std::unique_ptr<FunctionDecl>> functions_);
     virtual ~ClassDeclaration();
 };
@@ -158,14 +170,14 @@ class ClassInstance : public Node
 {
 public:
 
-    GlobalIdentifier              classIdentifier;
-    std::vector<GlobalIdentifier> types;
+    GlobalIdentifier classIdentifier;
+    TypeIdentifier   typeArgument;
     std::vector<std::unique_ptr<Function>> functions;
 
     ClassInstance(
         SourceLocation location_,
         GlobalIdentifier classIdentifier_,
-        std::vector<GlobalIdentifier> types_,
+        TypeIdentifier typeArgument_,
         std::vector<std::unique_ptr<Function>> functions_);
     virtual ~ClassInstance();
 };

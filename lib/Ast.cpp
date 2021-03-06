@@ -12,7 +12,7 @@ Node::Node(SourceLocation location_) :
 {}
 
 
-Field::Field(SourceLocation location_, GlobalIdentifier type_, std::string name_) :
+Field::Field(SourceLocation location_, TypeIdentifier type_, std::string name_) :
     Node(location_),
     type{ std::move(type_) },
     name{ std::move(name_) }
@@ -21,9 +21,16 @@ Field::Field(SourceLocation location_, GlobalIdentifier type_, std::string name_
 Field::~Field() {}
 
 
-DataDeclaration::DataDeclaration(SourceLocation location_, std::string name_, std::vector<Field> fields_, bool exported_) :
+DataDeclaration::DataDeclaration(
+    SourceLocation location_,
+    std::string name_,
+    std::vector<std::string> typeVariables_,
+    std::vector<Field> fields_,
+    bool exported_) :
+
     Node(location_),
     name{ std::move(name_) },
+    typeVariables{ std::move(typeVariables_) },
     fields{ std::move(fields_) },
     exported{ exported_ }
 {}
@@ -31,7 +38,7 @@ DataDeclaration::DataDeclaration(SourceLocation location_, std::string name_, st
 DataDeclaration::~DataDeclaration() {}
 
 
-Parameter::Parameter(SourceLocation location_, GlobalIdentifier type_, std::string identifier_) :
+Parameter::Parameter(SourceLocation location_, TypeIdentifier type_, std::string identifier_) :
     Node(location_),
     type{ std::move(type_) },
     identifier{ std::move(identifier_) }
@@ -47,7 +54,7 @@ Exp::~Exp() {}
 Function::Function(
     SourceLocation location_,
     std::string name_,
-    GlobalIdentifier type_,
+    TypeIdentifier type_,
     std::vector<std::unique_ptr<Parameter>> parameters_,
     std::unique_ptr<Exp> functionBody_,
     bool exported_) :
@@ -66,7 +73,7 @@ Function::~Function() {}
 FunctionDecl::FunctionDecl(
     SourceLocation location_,
     std::string name_,
-    GlobalIdentifier type_,
+    TypeIdentifier type_,
     std::vector<std::unique_ptr<Parameter>> parameters_) :
 
     Node(location_),
@@ -81,12 +88,12 @@ FunctionDecl::~FunctionDecl() {}
 ClassDeclaration::ClassDeclaration(
     SourceLocation location_,
     std::string name_,
-    std::vector<std::string> typeVariables_,
+    std::string typeVariable_,
     std::vector<std::unique_ptr<FunctionDecl>> functions_) :
 
     Node(location_),
     name(std::move(name_)),
-    typeVariables(std::move(typeVariables_)),
+    typeVariable(std::move(typeVariable_)),
     functions(std::move(functions_))
 {}
 
@@ -96,12 +103,12 @@ ClassDeclaration::~ClassDeclaration() {}
 ClassInstance::ClassInstance(
     SourceLocation location_,
     GlobalIdentifier classIdentifier_,
-    std::vector<GlobalIdentifier> types_,
+    TypeIdentifier typeArgument_,
     std::vector<std::unique_ptr<Function>> functions_) :
 
     Node(location_),
     classIdentifier(std::move(classIdentifier_)),
-    types(std::move(types_)),
+    typeArgument(std::move(typeArgument_)),
     functions(std::move(functions_))
 {}
 

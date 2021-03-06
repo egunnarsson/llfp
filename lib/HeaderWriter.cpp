@@ -68,7 +68,7 @@ std::string convertType(llfp::SourceModule &module, GlobalIdentifier& type)
 
 void writeParameter(llvm::raw_ostream &os, llfp::SourceModule &module, std::unique_ptr<ast::Parameter> &param)
 {
-    os << convertType(module, param->type) << ' ' << param->identifier;
+    os << convertType(module, param->type.identifier) << ' ' << param->identifier;
 }
 
 } // namespace
@@ -105,7 +105,7 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
         os << "struct " << module.getMangledName(d.get()) << "\n{\n";
         for (auto &f : d->fields)
         {
-            os << '\t' << convertType(module, f.type) << ' ' << f.name << ";\n";
+            os << '\t' << convertType(module, f.type.identifier) << ' ' << f.name << ";\n";
         }
         os << "};\n\n";
     }
@@ -114,7 +114,7 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
     {
         if (!f->exported) { continue; }
 
-        os << convertType(module, f->type) << ' ' << module.getExportedName(f.get()) << '(';
+        os << convertType(module, f->type.identifier) << ' ' << module.getExportedName(f.get()) << '(';
         if (f->parameters.size() >= 1)
         {
             writeParameter(os, module, f->parameters.front());

@@ -61,7 +61,8 @@ private:
 
     std::unique_ptr<ast::NamedArgument> parseNamedArgument();
 
-    GlobalIdentifier          parseGlobalIdentifier();
+    bool                      parseGlobalIdentifier(GlobalIdentifier&);
+    bool                      parseType(ast::TypeIdentifier&);
 };
 
 } // namespace parse

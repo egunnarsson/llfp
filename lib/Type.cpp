@@ -315,10 +315,10 @@ Type* TypeContext::getType(GlobalIdentifierRef identifier, const ImportedModule*
         std::vector<type::Type*> fieldTypes;
         for (auto &field : ast->fields)
         {
-            fieldTypes.push_back(getType(field.type, astModule));
+            fieldTypes.push_back(getType(field.type.identifier, astModule));
             if (fieldTypes.back() == nullptr)
             {
-                Log(field.location, "unknown type: ", field.type.moduleName, ':', field.type.name);
+                Log(field.location, "unknown type: ", field.type.identifier.str());
                 return nullptr;
             }
         }
@@ -388,13 +388,13 @@ void TypeInferer::visit(ast::LetExp &exp)
         }
 
         type::Type* varType;
-        if (var->type.name.empty())
+        if (var->type.identifier.name.empty())
         {
             varType = TypeInferer::infer(*var->functionBody, this);
         }
         else
         {
-            varType = env->getTypeByName(var->type);
+            varType = env->getTypeByName(var->type.identifier);
         }
         if (varType == nullptr)
         {
@@ -564,7 +564,7 @@ void TypeInferer::visit(ast::CallExp &exp)
     auto ast = env->getFunctionAST(exp.identifier);
     if (ast != nullptr)
     {
-        if (ast->type.name.empty())
+        if (ast->type.identifier.name.empty())
         {
             if (exp.arguments.size() != ast->parameters.size())
             {
@@ -585,7 +585,7 @@ void TypeInferer::visit(ast::CallExp &exp)
         }
         else
         {
-            result = env->getTypeByName(ast->type);
+            result = env->getTypeByName(ast->type.identifier);
         }
     }
 }
@@ -605,7 +605,7 @@ void TypeInferer::visit(ast::VariableExp &exp)
     auto ast = env->getFunctionAST(exp.identifier);
     if (ast != nullptr)
     {
-        if (ast->type.name.empty())
+        if (ast->type.identifier.name.empty())
         {
             if (0 != ast->parameters.size())
             {
@@ -622,7 +622,7 @@ void TypeInferer::visit(ast::VariableExp &exp)
         }
         else
         {
-            result = env->getTypeByName(ast->type);
+            result = env->getTypeByName(ast->type.identifier);
         }
     }
 }

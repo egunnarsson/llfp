@@ -168,6 +168,11 @@ public:
 namespace llfp::ast
 {
 
+bool operator==(const TypeIdentifier& t1, const TypeIdentifier& t2)
+{
+    return t1.identifier == t2.identifier && EqV(t1.parameters, t2.parameters);
+}
+
 bool operator==(Exp &e1, Exp &e2)
 {
     return ExpEq::check(&e1, &e2);
@@ -244,14 +249,14 @@ bool operator==(const FunctionDecl& f1, const FunctionDecl& f2)
 bool operator==(const ClassDeclaration& c1, const ClassDeclaration& c2)
 {
     return c1.name == c2.name &&
-        EqV(c1.typeVariables, c2.typeVariables) &&
+        c1.typeVariable == c2.typeVariable &&
         EqPtrV(c1.functions, c2.functions);
 }
 
 bool operator==(const ClassInstance& c1, const ClassInstance& c2)
 {
     return c1.classIdentifier == c2.classIdentifier &&
-        EqV(c1.types, c2.types) &&
+        c1.typeArgument == c2.typeArgument &&
         EqPtrV(c1.functions, c2.functions);
 }
 

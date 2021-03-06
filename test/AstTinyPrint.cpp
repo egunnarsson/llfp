@@ -47,6 +47,11 @@ public:
 
 std::ostream& operator<<(std::ostream& os, const llfp::GlobalIdentifier& i) { return os << i.str(); }
 
+std::ostream& operator<<(std::ostream& os, const llfp::ast::TypeIdentifier& t)
+{
+    return os << t.identifier << t.parameters;
+}
+
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Field& f) { return os << f.type << ' ' << f.name; }
 
 std::ostream& operator<<(std::ostream& os, const llfp::ast::DataDeclaration& d)
@@ -65,11 +70,11 @@ std::ostream& operator<<(std::ostream& os, const llfp::ast::Function& f)
 
 std::ostream& operator<<(std::ostream& os, const llfp::ast::FunctionDecl& f) { return os << '{' << f.name << f.type << f.parameters << '}'; }
 
-std::ostream& operator<<(std::ostream& os, const llfp::ast::ClassDeclaration& f) { return os << '{' << f.name << f.typeVariables << f.functions << '}'; }
+std::ostream& operator<<(std::ostream& os, const llfp::ast::ClassDeclaration& f) { return os << '{' << f.name << f.typeVariable << f.functions << '}'; }
 
 std::ostream& operator<<(std::ostream& os, const llfp::ast::ClassInstance& f)
 {
-    return os << '{' << f.classIdentifier << f.types << f.functions << '}';
+    return os << '{' << f.classIdentifier << f.typeArgument << f.functions << '}';
 }
 
 std::ostream& operator<<(std::ostream& os, const llfp::ast::PublicDeclaration& p) { return os << p.name; }

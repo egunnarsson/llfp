@@ -5,6 +5,8 @@
 namespace llfp::ast
 {
 
+bool operator==(const TypeIdentifier& t1, const TypeIdentifier& t2);
+
 bool operator==(Exp &e1, Exp &e2);
 bool operator==(const LetExp &e1, const LetExp &e2);
 bool operator==(const IfExp &e1, const IfExp &e2);
