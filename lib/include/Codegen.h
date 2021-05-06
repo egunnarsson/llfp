@@ -30,13 +30,13 @@ struct Function
 {
     const ast::Function*     ast;
     llvm::Function*          llvm;
-    std::vector<type::Type*> types;
+    std::vector<type::TypePtr> types;
 };
 
 struct Value
 {
-    type::Type*  type;
-    llvm::Value* value;
+    type::TypePtr type;
+    llvm::Value*  value;
 };
 
 class CodeGenerator
@@ -56,20 +56,20 @@ public:
     CodeGenerator(SourceModule *sourceModule_);
 
     bool               generateFunction(const ast::Function*ast);
-    bool               generateFunction(const ast::Function*ast, std::vector<type::Type*> types);
+    bool               generateFunction(const ast::Function*ast, std::vector<type::TypePtr> types);
 
     llvm::Module*      getLLVM() { return llvmModule.get(); }
     type::TypeContext* getTypeContext() { return &typeContext; }
 
 private:
 
-    Function*          generatePrototype(const ImportedModule* module, const ast::Function*ast, std::vector<type::Type*> types);
+    Function*          generatePrototype(const ImportedModule* module, const ast::Function*ast, std::vector<type::TypePtr> types);
     bool               generateFunctionBody(Function *function);
 
     void               AddDllMain(); // should be done on dll not on one module
 
     // lookup, global functions, generate llvmFunction if first external reference
-    Function*          getFunction(GlobalIdentifierRef identifier, std::vector<type::Type*> types);
+    Function*          getFunction(const GlobalIdentifier& identifier, std::vector<type::TypePtr> types);
 
     friend ExpCodeGenerator;
 };
@@ -80,25 +80,27 @@ class ExpCodeGenerator : public ast::ExpVisitor, public type::TypeScope
 
     ExpCodeGenerator* const      parent;
     CodeGenerator* const         generator;
-    type::Type* const            expectedType;
+    const type::TypePtr          expectedType;
     std::map<std::string, Value> values;
     //std::map<string, .> letExpFunctions; localFunction
     llvm::Value*                 result;
 
 public:
 
-    ExpCodeGenerator(type::Type *type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_);
-    ExpCodeGenerator(type::Type *type_, ExpCodeGenerator *parent_);
+    ExpCodeGenerator(const type::TypePtr &type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_);
+    ExpCodeGenerator(const type::TypePtr &type_, ExpCodeGenerator *parent_);
     virtual ~ExpCodeGenerator() {}
 
-    static llvm::Value*  generate(ast::Exp &exp, type::Type *type, ExpCodeGenerator *parent);
+    static llvm::Value*  generate(ast::Exp &exp, const type::TypePtr &type, ExpCodeGenerator *parent);
 
     // lookup, local functions, global functions,
-    Function*            getFunction(GlobalIdentifierRef identifier, std::vector<type::Type*> types);
+    Function*            getFunction(const GlobalIdentifier& identifier, std::vector<type::TypePtr> types);
 
     type::TypeContext*   getTypeContext() override { return generator->getTypeContext(); }
-    type::Type*          getVariableType(const std::string& variable) override;
-    const ast::Function* getFunctionAST(GlobalIdentifierRef identifier) override;
+    type::TypePtr        getVariableType(const std::string& variable) override;
+    type::FunAst         getFunctionAST(const GlobalIdentifier& identifier) override;
+    type::DataAst        getDataAST(const GlobalIdentifier& identifier) override;
+
     llvm::Value*         getResult();
 
     void visit(ast::LetExp &exp) override;
@@ -118,16 +120,15 @@ private:
 
     auto& llvmContext() { return generator->llvmContext; }
     auto& llvmBuilder() { return generator->llvmBuilder; }
-    auto& typeContext() { return generator->typeContext; }
 
-    auto generateBinary(type::Type* type, ast::BinaryExp &exp)
+    auto generateBinary(const type::TypePtr &type, ast::BinaryExp &exp)
     {
         return std::make_tuple(
             ExpCodeGenerator::generate(*exp.lhs, type, this),
             ExpCodeGenerator::generate(*exp.rhs, type, this));
     }
 
-    typedef bool(*TypeCheckFunction)(ast::Exp &exp, type::Type*);
+    typedef bool(*TypeCheckFunction)(ast::Exp &exp, const type::TypePtr&);
 
     template<class T>
     void generateBinary(ast::BinaryExp &exp, TypeCheckFunction tcf, T create)

@@ -7,6 +7,25 @@ namespace llfp
 namespace ast
 {
 
+std::string TypeIdentifier::str() const
+{
+    std::string result = identifier.str();
+
+    if (!parameters.empty())
+    {
+        result += '[';
+        for (auto& arg : parameters)
+        {
+            result += arg.str();
+            result += ',';
+        }
+        result.back() = ']';
+    }
+
+    return result;
+}
+
+
 Node::Node(SourceLocation location_) :
     location{ location_ }
 {}

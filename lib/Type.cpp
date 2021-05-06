@@ -1,4 +1,6 @@
 
+#include <algorithm>
+#include <iterator>
 #include <utility>
 
 #pragma warning(push, 0)
@@ -18,14 +20,42 @@ namespace llfp
 namespace type
 {
 
-Type::Type(GlobalIdentifier identifier, llvm::Type* llvmType, bool isSigned) :
+namespace
+{
+
+bool checkBasicType(const Identifier& id, llvm::StringRef name)
+{
+    return id.parameters.empty() && id.name.moduleName.empty() && id.name.name == name;
+}
+
+} // namespace
+
+std::string Identifier::str() const
+{
+    std::string result = name.str();
+
+    if (!parameters.empty())
+    {
+        result += '[';
+        for (auto& arg : parameters)
+        {
+            result += arg.str();
+            result += ',';
+        }
+        result.back() = ']';
+    }
+
+    return result;
+}
+
+Type::Type(Identifier identifier, llvm::Type* llvmType, bool isSigned) :
     identifier_{ std::move(identifier) },
     llvmType_{ llvmType },
     isSigned_{ isSigned }
 {
 }
 
-Type::Type(GlobalIdentifier identifier, bool isFloating, bool isSigned) :
+Type::Type(Identifier identifier, bool isFloating, bool isSigned) :
     identifier_{ std::move(identifier) },
     llvmType_{ nullptr },
     isSigned_{ isSigned }
@@ -33,21 +63,33 @@ Type::Type(GlobalIdentifier identifier, bool isFloating, bool isSigned) :
 {
 }
 
+Type::Type(std::unordered_set<TypeClass*> typeClasses_):
+    llvmType_{nullptr},
+    isSigned_{false},
+    typeClasses{std::move(typeClasses_)}
+{
+}
+
 Type::~Type() {}
 
-const GlobalIdentifier& Type::identifier() const
+const Identifier& Type::identifier() const
 {
     return identifier_;
 }
 
-llvm::Type *Type::llvmType() const
+const GlobalIdentifier& Type::baseName() const
+{
+    return identifier_.name;
+}
+
+llvm::Type* Type::llvmType() const
 {
     return llvmType_;
 }
 
 bool Type::isBool() const
 {
-    return identifier_ == name::Bool;
+    return checkBasicType(identifier_, name::Bool);
 }
 
 bool Type::isNum() const
@@ -59,9 +101,9 @@ bool Type::isInteger() const
 {
     if (llvmType_ != nullptr)
     {
-        return llvmType_->isIntegerTy() && identifier_ != name::Bool;
+        return llvmType_->isIntegerTy() && !isBool();
     }
-    return identifier_ == name::IntegerLiteral || identifier_ == name::SignedIntegerLiteral;
+    return checkBasicType(identifier_, name::IntegerLiteral) || checkBasicType(identifier_, name::SignedIntegerLiteral);
 }
 
 bool Type::isFloating() const
@@ -70,7 +112,7 @@ bool Type::isFloating() const
     {
         return llvmType_->isFloatingPointTy();
     }
-    return identifier_ == name::FloatingLiteral;
+    return checkBasicType(identifier_, name::FloatingLiteral);
 }
 
 bool Type::isSigned() const
@@ -81,7 +123,29 @@ bool Type::isSigned() const
 
 bool Type::isLiteral() const
 {
-    return !identifier_.name.empty() && identifier_.name.front() == '@';
+    return !identifier_.name.name.empty() && identifier_.name.name.front() == '@';
+}
+
+bool Type::isConcreteType() const
+{
+    // we could use llvmType_ != nullptr but we might want to move llvmType_ somewhere else
+    return !(isLiteral() || checkBasicType(identifier_, name::Any));
+}
+
+bool Type::isBound() const
+{
+    return !identifier_.name.name.empty();
+}
+
+unsigned int Type::getTypeParameterCount() const
+{
+    return InvalidIndex;
+}
+
+TypePtr Type::getTypeParameter(unsigned int index) const
+{
+    assert(false);
+    return nullptr;
 }
 
 bool Type::isStructType() const
@@ -91,7 +155,7 @@ bool Type::isStructType() const
 
 unsigned int Type::getFieldIndex(const std::string&) const
 {
-    return InvalidFieldIndex;
+    return InvalidIndex;
 }
 
 unsigned int Type::getFieldCount() const
@@ -99,79 +163,263 @@ unsigned int Type::getFieldCount() const
     return 0;
 }
 
-Type* Type::getFieldType(unsigned int) const
+TypePtr Type::getFieldType(unsigned int) const
 {
     assert(false);
     return nullptr;
 }
 
-Type* Type::unify(Type* other, TypeContext* env)
+const std::unordered_set<TypeClass*>& Type::getTypeClasses() const
 {
-    if (this == other)
+    return typeClasses;
+}
+
+
+TypePtr TypeContext::unifyLiterals(const TypePtr& a, const TypePtr& b)
+{
+    assert(a->isLiteral() || b->isLiteral());
+    assert(a != b);
+
+    if (a->isConcreteType())
     {
-        return this;
+        return unifyConcreteAndLiteral(a, b);
     }
-    assert(this->identifier_ != other->identifier_);
-    if (other->identifier_ == name::Any)
+    else if (b->isConcreteType())
     {
-        return this;
-    }
-    if (this->identifier_ == name::Any)
-    {
-        return other;
+        return unifyConcreteAndLiteral(b, a);
     }
 
-    if (isLiteral() && other->isLiteral())
+    // TODO: unify to smallest bitsize
+    if (a->isFloating() || b->isFloating())
     {
-        // TODO: unify to smallest bitsize
-        if (isFloating() && other->isFloating())
+        return getFloatingLiteralType();
+    }
+    if (a->isSigned() || b->isSigned())
+    {
+        return getSignedIntegerLiteralType();
+    }
+    else
+    {
+        return getIntegerLiteralType();
+    }
+}
+
+TypePtr TypeContext::unifyConcreteAndLiteral(const TypePtr& concreteType, const TypePtr& literalType)
+{
+    assert(concreteType->isConcreteType());
+    assert(literalType->isLiteral());
+    assert(concreteType != literalType);
+
+    if (concreteType->isStructType() ||
+        concreteType->isBool())
+    {
+        return nullptr;
+    }
+
+    // all literal types of ok to combine with floats
+    if (concreteType->isFloating())
+    {
+        return concreteType;
+    }
+    // if the concrete type is not float the literal cant be float
+    if (literalType->isFloating())
+    {
+        return nullptr;
+    }
+    if (literalType->isSigned() && !concreteType->isSigned())
+    {
+        return nullptr;
+    }
+
+    return concreteType;
+}
+
+TypePtr TypeContext::unifyCheckTypeClass(const TypePtr& a, const TypePtr& b)
+{
+    if (!a->isBound() && !b->isBound())
+    {
+        auto typeClassUnion = a->getTypeClasses();
+        auto& bTypeClasses = b->getTypeClasses();
+        typeClassUnion.insert(bTypeClasses.begin(), bTypeClasses.end());
+        return std::make_shared<Type>(std::move(typeClassUnion));
+    }
+
+    auto check = [](const TypePtr& bound, const TypePtr& typeClass) -> TypePtr
+    {
+        auto& boundTypeClasses = bound->getTypeClasses();
+        auto& checkTypeClasses = typeClass->getTypeClasses();
+        if (std::all_of(checkTypeClasses.begin(), checkTypeClasses.end(),
+            [&boundTypeClasses](TypeClass* x) {return boundTypeClasses.find(x) != boundTypeClasses.end(); }))
         {
-            return env->getType(name::Double);
+            return bound;
         }
-        if (isSigned() || other->isSigned())
+        return nullptr;
+    };
+
+    return b->isBound() ? check(b, a) : check(a, b);
+}
+
+TypePtr TypeContext::unifyStructTypes(const TypePtr& a, const TypePtr& b)
+{
+    assert(a->isStructType());
+    assert(b->isStructType());
+
+    if (a->baseName() != b->baseName())
+    {
+        return nullptr;
+    }
+
+    assert(a->getFieldCount() == b->getFieldCount());
+    assert(a->getTypeParameterCount() == b->getTypeParameterCount());
+
+    std::vector<TypePtr> typeParams;
+    for (unsigned int i = 0; i < a->getTypeParameterCount(); i++)
+    {
+        typeParams.push_back(unify(a->getTypeParameter(i), b->getTypeParameter(i)));
+        if (typeParams.back() == nullptr)
         {
-            return env->getType(name::I64);
+            return nullptr;
+        }
+    }
+
+    // TODO: optimization? check if a or b is concrete and return that one directly?
+
+    std::vector<Identifier> parameters;
+    for (auto& param : typeParams)
+    {
+        parameters.push_back(param->identifier());
+    }
+    Identifier typeId{ a->baseName(), std::move(parameters) };
+
+    for (auto& param : typeParams)
+    {
+        if (!param->isConcreteType())
+        {
+            // TODO: we dont need to unify the fields, we just have to replace fields with the unified type parameters
+            std::vector<TypePtr> fields;
+            for (unsigned int i = 0; i < a->getFieldCount(); i++)
+            {
+                fields.push_back(unify(a->getFieldType(i), b->getFieldType(i)));
+            }
+            return std::make_shared<StructType>(std::move(typeId), a->getAst(), fields);
+        }
+    }
+
+    // concrete after unifying parameters, we can do lookup on identifier
+    return getType(typeId);
+}
+
+TypePtr TypeContext::unify(const TypePtr& a, const TypePtr& b)
+{
+    auto error = [&a, &b]()
+    {
+        Log({}, "failed to unify types: ", a->identifier().str(), " with ", b->identifier().str());
+        return nullptr;
+    };
+
+    auto checkError = [&error](TypePtr a) { return a ? a : error(); };
+
+    if (a == nullptr || b == nullptr)
+    {
+        return nullptr;
+    }
+    if (a == b)
+    {
+        return a;
+    }
+
+    // a != b
+    if (!a->isBound() || !b->isBound())
+    {
+        return unifyCheckTypeClass(a, b);
+    }
+    else if (a->isConcreteType() && b->isConcreteType())
+    {
+        // both are bound and both are concrete but they are not equal
+        return error();
+    }
+    else if (a->isLiteral() || b->isLiteral())
+    {
+        // both bound, one or two literal
+        return unifyLiterals(a, b);
+    }
+    else // both bound and not literal, one is abstract
+    {
+        if (a->baseName() == b->baseName())
+        {
+            // since a != b they can't be primitive types
+            return unifyStructTypes(a, b);
         }
         else
         {
-            return env->getType(name::U64);
+            return error();
         }
     }
-    else if (isLiteral() || other->isLiteral())
+}
+
+TypePtr TypeContext::fix(const TypePtr& t)
+{
+    if (t->isConcreteType())
     {
-        Type *nonLiteralType = this;
-        Type *literalType = other;
-        if (isLiteral())
-        {
-            std::swap(nonLiteralType, literalType);
-        }
-
-        if (isFloating() && other->isFloating())
-        {
-            return nonLiteralType;
-        }
-
-        if (literalType->isSigned())
-        {
-            if (!nonLiteralType->isSigned())
-            {
-                Log({}, "failed to unify types: ", identifier_.str(), " with ", other->identifier_.str());
-                return nullptr;
-            }
-        }
-        return nonLiteralType;
+        return t;
     }
-
-    // neither is literal and they are not the same
-    Log({}, "failed to unify types: ", identifier_.str(), " with ", other->identifier_.str());
+    if (t->isLiteral())
+    {
+        if (t->isFloating())
+        {
+            return getDouble();
+        }
+        else if (t->isSigned())
+        {
+            return getI64();
+        }
+        else
+        {
+            return getU64();
+        }
+    }
+    if (t->isBound())
+    {
+        // TODO: fix fields that are possibly literals
+        Log({}, "fix bound type not supported");
+    }
+    Log({}, "failed to fix type, not concrete or literal");
+    // TODO: can unbound be fixed to void? can it be proven it will never be used?
     return nullptr;
 }
 
 
-StructType::StructType(GlobalIdentifier identifier, llvm::StructType* llvmType) :
+StructType::StructType(Identifier identifier, const ast::DataDeclaration* ast_, llvm::StructType* llvmType) :
     Type(std::move(identifier), llvmType),
-    llvmType_{ llvmType }
+    llvmType_{ llvmType },
+    ast{ ast_ }
 {
+}
+
+StructType::StructType(Identifier identifier, const ast::DataDeclaration* ast_, std::vector<TypePtr> fieldTypes) :
+    Type(std::move(identifier), false),
+    llvmType_{ nullptr },
+    ast{ ast_ }
+    //fields{std::move(fieldTypes)}
+{
+    setFields(std::move(fieldTypes));
+}
+
+bool StructType::isConcreteType() const
+{
+    // TODO, check params instead
+    return std::all_of(fields.begin(), fields.end(), [](const TypePtr& field) { return field->isConcreteType(); });
+}
+
+unsigned int StructType::getTypeParameterCount() const
+{
+    return static_cast<unsigned int>(ast->typeVariables.size());
+}
+
+TypePtr StructType::getTypeParameter(unsigned int index) const
+{
+    assert(index < parameters.size());
+    return parameters[index];
 }
 
 bool StructType::isStructType() const
@@ -179,20 +427,21 @@ bool StructType::isStructType() const
     return true;
 }
 
-unsigned int StructType::getFieldIndex(const std::string &fieldIdentifier) const
+unsigned int StructType::getFieldIndex(const std::string& fieldIdentifier) const
 {
-    const unsigned int size = static_cast<unsigned int>(fields.size());
+    assert(ast->fields.size() == fields.size());
+    const unsigned int size = static_cast<unsigned int>(ast->fields.size());
     for (unsigned int i = 0; i < size; ++i)
     {
-        if (fields[i].name == fieldIdentifier) { return i; }
+        if (ast->fields[i].name == fieldIdentifier) { return i; }
     }
-    return InvalidFieldIndex;
+    return InvalidIndex;
 }
 
-Type* StructType::getFieldType(unsigned int index) const
+TypePtr StructType::getFieldType(unsigned int index) const
 {
     assert(index < fields.size());
-    return fields[index].type;
+    return fields[index];
 }
 
 unsigned int StructType::getFieldCount() const
@@ -200,108 +449,173 @@ unsigned int StructType::getFieldCount() const
     return static_cast<unsigned int>(fields.size());
 }
 
-bool StructType::setFields(const std::vector<ast::Field> &astFields, std::vector<type::Type*> &fieldTypes)
+void StructType::setFields(std::vector<TypePtr> fieldTypes)
 {
     assert(fields.size() == 0);
-    assert(astFields.size() == fieldTypes.size());
+    assert(parameters.size() == 0);
+    assert(ast->fields.size() == fieldTypes.size());
 
-    std::vector<llvm::Type*> llvmTypes;
-    for (unsigned int i = 0; i < astFields.size(); ++i)
+    for (auto& typeVar : ast->typeVariables)
     {
-        if (getFieldIndex(astFields[i].name) != InvalidFieldIndex)
+        const auto findType = [&typeVar](const ast::TypeIdentifier& typeId, const TypePtr &type) -> TypePtr
         {
-            Log(astFields[i].location, "duplicate field \"", astFields[i].name, '"');
-            return false;
-        }
+            auto findType_impl = [&typeVar](const ast::TypeIdentifier& typeId, const TypePtr& type, auto& find_ref) -> TypePtr
+            {
+                if (typeId.identifier.moduleName.empty() && typeId.identifier.name == typeVar)
+                {
+                    assert(typeId.parameters.empty());
+                    return type;
+                }
 
-        fields.push_back({astFields[i].name , fieldTypes[i] });
-        llvmTypes.push_back(fieldTypes[i]->llvmType());
+                assert(typeId.parameters.size() == type->getTypeParameterCount());
+                for (unsigned int i = 0; i < typeId.parameters.size(); ++i)
+                {
+                    auto result = find_ref(typeId.parameters[i], type->getTypeParameter(i), find_ref);
+                    if (result != nullptr) { return result; }
+                }
+
+                return nullptr;
+            };
+            return findType_impl(typeId, type, findType_impl);
+        };
+
+        TypePtr result = nullptr;
+        for (unsigned int i = 0 ; i < fieldTypes.size(); ++i)
+        {
+            result = findType(ast->fields[i].type, fieldTypes[i]);
+            if (result != nullptr) { break; }
+        }
+        assert(result != nullptr);
+        parameters.push_back(result);
     }
 
+    std::vector<llvm::Type*> llvmTypes;
+    std::transform(fieldTypes.begin(), fieldTypes.end(), std::back_inserter(llvmTypes),
+        [](const TypePtr& type) {return type->llvmType(); });
+
     llvmType_->setBody(llvmTypes);
-    return true;
+    fields = std::move(fieldTypes);
 }
 
+const ast::DataDeclaration* StructType::getAst() const
+{
+    return ast;
+}
 
-#define ADD_TYPE(id, get, sign) types.insert({ id, std::make_unique<Type>(GlobalIdentifier{id.moduleName.str(), id.name.str()}, llvm::Type::get(llvmContext), sign) })
-#define ADD_TYPE_L(id, floating, sign) types.insert({ id, std::make_unique<Type>(GlobalIdentifier{id.moduleName.str(), id.name.str()}, floating, sign) })
+#define ADD_TYPE(id, getF, sign) (*types.insert({ Identifier{{"",id},{}}, std::make_shared<Type>(Identifier{{"",id},{}}, llvm::Type::getF(llvmContext), sign) }).first).second
+#define ADD_TYPE_L(id, floating, sign) (*types.insert({ Identifier{{"",id},{}}, std::make_shared<Type>(Identifier{{"",id},{}}, floating, sign) }).first).second
 
-TypeContext::TypeContext(llvm::LLVMContext &llvmContext_, SourceModule *sourceModule_):
+TypeContext::TypeContext(llvm::LLVMContext& llvmContext_, SourceModule* sourceModule_) :
     llvmContext{ llvmContext_ },
     sourceModule{ sourceModule_ }
 {
-    ADD_TYPE(name::Bool, getInt1Ty, false);
+    boolType = ADD_TYPE("bool", getInt1Ty, false);
 
-    ADD_TYPE(name::I8, getInt8Ty, true);
-    ADD_TYPE(name::I16, getInt16Ty, true);
-    ADD_TYPE(name::I32, getInt32Ty, true);
-    ADD_TYPE(name::I64, getInt64Ty, true);
-    ADD_TYPE(name::I128, getInt128Ty, true);
+    i8Type   = ADD_TYPE("i8",   getInt8Ty,   true);
+    i16Type  = ADD_TYPE("i16",  getInt16Ty,  true);
+    i32Type  = ADD_TYPE("i32",  getInt32Ty,  true);
+    i64Type  = ADD_TYPE("i64",  getInt64Ty,  true);
+    i128Type = ADD_TYPE("i128", getInt128Ty, true);
 
-    ADD_TYPE(name::U8, getInt8Ty, false);
-    ADD_TYPE(name::U16, getInt16Ty, false);
-    ADD_TYPE(name::U32, getInt32Ty, false);
-    ADD_TYPE(name::U64, getInt64Ty, false);
-    ADD_TYPE(name::U128, getInt128Ty, false);
+    u8Type   = ADD_TYPE("u8",   getInt8Ty,   false);
+    u16Type  = ADD_TYPE("u16",  getInt16Ty,  false);
+    u32Type  = ADD_TYPE("u32",  getInt32Ty,  false);
+    u64Type  = ADD_TYPE("u64",  getInt64Ty,  false);
+    u128Type = ADD_TYPE("u128", getInt128Ty, false);
 
-    ADD_TYPE(name::Half, getHalfTy, true);
-    ADD_TYPE(name::Float, getFloatTy, true);
-    ADD_TYPE(name::Double, getDoubleTy, true);
+    halfType   = ADD_TYPE("half",   getHalfTy,   true);
+    floatType  = ADD_TYPE("float",  getFloatTy,  true);
+    doubleType = ADD_TYPE("double", getDoubleTy, true);
 
-    ADD_TYPE(name::Char, getInt8Ty, false);
+    charType = ADD_TYPE("char", getInt8Ty, false);
 
-    ADD_TYPE_L(name::Any, false, false);
-    ADD_TYPE_L(name::IntegerLiteral, false, false);
-    ADD_TYPE_L(name::SignedIntegerLiteral, false, true);
-    ADD_TYPE_L(name::FloatingLiteral, true, true);
+    anyType                  = ADD_TYPE_L("",                      false, false);
+    integerLiteralType       = ADD_TYPE_L("@IntegerLiteral",       false, false);
+    signedIntegerLiteralType = ADD_TYPE_L("@SignedIntegerLiteral", false, true);
+    floatingLiteralType      = ADD_TYPE_L("@FloatingLiteral",      true,  true);
 }
 
-StructType* TypeContext::addType(std::unique_ptr<StructType> type)
+/**
+Does a lookup of type based on the imports of the sourceModule of the TypeContext. Fully qualifies the type and makes sure all types
+are visible from the sourceModule before calling getType.
+*/
+TypePtr TypeContext::getTypeFromAst(const ast::TypeIdentifier& identifier)
 {
-    auto ptr = type.get();
-    if (types.insert({ type->identifier(), std::move(type) }).second)
+    return getTypeFromAst(identifier, sourceModule);
+}
+
+TypePtr TypeContext::getTypeFromAst(const ast::TypeIdentifier& identifier, const ImportedModule* lookupModule)
+{
+    Identifier id;
+    if (fullyQualifiedName(id, identifier, lookupModule))
     {
-        return ptr;
+        return getType(id);
     }
+    Log({}, "failed to fully qualify name: ", identifier.str());
     return nullptr;
 }
 
-Type* TypeContext::getType(GlobalIdentifierRef identifier)
+bool TypeContext::fullyQualifiedName(Identifier& identifier, const ast::TypeIdentifier& tid, const ImportedModule* lookupModule)
 {
-    return getType(identifier, sourceModule);
-}
-
-Type* TypeContext::getType(GlobalIdentifierRef identifier, const ImportedModule* lookupModule)
-{
-    // built in types
+    // check primitve type
+    if (tid.parameters.empty() && tid.identifier.moduleName.empty())
     {
-        auto it = types.find(identifier);
-        if (it != types.end())
+        Identifier id{ tid.identifier, {} };
+        if (types.find(id) != types.end())
         {
-            return it->second.get();
+            identifier = std::move(id);
+            return true;
         }
     }
-    const ImportedModule *astModule;
-    const llfp::ast::DataDeclaration *ast;
-    if (lookupModule->lookupType(identifier, astModule, ast))
-    {
-        if (identifier.moduleName.empty())
-        {
-            identifier.moduleName = astModule->name();
-        }
 
+    const ImportedModule* astModule;
+    const llfp::ast::DataDeclaration* ast;
+    std::tie(astModule, ast) = lookupModule->lookupType(tid.identifier);
+    if (astModule == nullptr || ast == nullptr)
+    {
+        return false;
+    }
+
+    identifier.name = {astModule->name(), ast->name};
+    assert(identifier.parameters.size() == 0);
+    for (auto& param : tid.parameters)
+    {
+        identifier.parameters.push_back({});
+        if (!fullyQualifiedName(identifier.parameters.back(), param, lookupModule))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+Get or create a type. The identifier is assumed to be fully qualified and of a concrete type.
+*/
+TypePtr TypeContext::getType(const Identifier& identifier)
+{
+    {
         auto it = types.find(identifier);
         if (it != types.end())
         {
-            return it->second.get();
+            return it->second;
+        }
+    }
+
+    const ImportedModule* astModule;
+    const llfp::ast::DataDeclaration* ast;
+    std::tie(astModule, ast) = sourceModule->lookupTypeGlobal(identifier.name);
+    if (astModule != nullptr && ast != nullptr)
+    {
+        if (ast->typeVariables.size() != identifier.parameters.size())
+        {
+            Log({}, "type arity mismatch between ", identifier.str(), " and ", astModule->name(), ':', ast->name, '/', ast->typeVariables.size());
+            return nullptr;
         }
 
-        GlobalIdentifier newIdentifier{ astModule->name(), ast->name };
-        auto llvmType = llvm::StructType::create(llvmContext, astModule->getMangledName(ast));
-        auto typePtr = std::make_unique<llfp::type::StructType>(std::move(newIdentifier), llvmType);
-        auto type = typePtr.get();
-
-        auto it2 = types.insert({ typePtr->identifier(), std::move(typePtr) });
+        auto llvmType = llvm::StructType::create(llvmContext, "");
+        auto typePtr = std::make_shared<StructType>(identifier, ast, llvmType);
+        auto it2 = types.insert({ identifier, typePtr });
 
         if (!it2.second)
         {
@@ -312,38 +626,84 @@ Type* TypeContext::getType(GlobalIdentifierRef identifier, const ImportedModule*
 
         // generate body
 
-        std::vector<type::Type*> fieldTypes;
-        for (auto &field : ast->fields)
+        std::map<std::string, Identifier> typeVariables; // I think we need to build this
+        for (int i = 0; i < ast->typeVariables.size(); ++i)
         {
-            fieldTypes.push_back(getType(field.type.identifier, astModule));
-            if (fieldTypes.back() == nullptr)
+            typeVariables[ast->typeVariables[i]] = identifier.parameters[i];
+        }
+
+        std::vector<TypePtr> fieldTypes;
+        for (auto& field : ast->fields)
+        {
+            TypePtr fieldType;
+            if (field.type.identifier.moduleName.empty())
+            {
+                auto it = typeVariables.find(field.type.identifier.name);
+                if (it != typeVariables.end())
+                {
+                    fieldType = getType(it->second);
+                }
+            }
+            if (fieldType == nullptr)
+            {
+                fieldType = getTypeFromAst(field.type, astModule);
+            }
+
+            if (fieldType == nullptr)
             {
                 Log(field.location, "unknown type: ", field.type.identifier.str());
                 return nullptr;
             }
+            fieldTypes.push_back(std::move(fieldType));
         }
 
-        if (!type->setFields(ast->fields, fieldTypes))
-        {
-            return nullptr;
-        }
+        llvmType->setName(astModule->getMangledName(ast, fieldTypes));
+        typePtr->setFields(std::move(fieldTypes));
 
-        return type;
+        return typePtr;
     }
 
+    Log({}, "unknown data ", identifier.name.str());
     return nullptr;
 }
 
-bool TypeContext::equals(Type *type, GlobalIdentifierRef id)
+bool TypeContext::equals(const TypePtr& type, const ast::TypeIdentifier& identifier)
 {
     if (type == nullptr)
     {
         return false;
     }
-    return type == getType(id);
+
+    Identifier id;
+    if (fullyQualifiedName(id, identifier, sourceModule))
+    {
+        return type->identifier() == id;
+    }
+    return false;
 }
 
-EmptyTypeScope::EmptyTypeScope(TypeScope *parent_) :
+bool TypeContext::equals(const TypePtr& type, llvm::StringRef identifier)
+{
+    if (type == nullptr)
+    {
+        return false;
+    }
+
+    return checkBasicType(type->identifier(), identifier);
+}
+
+TypePtr TypeContext::getBool() { return boolType; }
+TypePtr TypeContext::getChar() { return charType; }
+TypePtr TypeContext::getI64() { return i64Type; }
+TypePtr TypeContext::getU64() { return u64Type; }
+TypePtr TypeContext::getDouble() { return doubleType; }
+TypePtr TypeContext::getAnyType() { return anyType; }
+TypePtr TypeContext::getIntegerLiteralType() { return integerLiteralType; }
+TypePtr TypeContext::getSignedIntegerLiteralType() { return signedIntegerLiteralType; }
+TypePtr TypeContext::getFloatingLiteralType() { return floatingLiteralType; }
+
+
+EmptyTypeScope::EmptyTypeScope(TypeScope* parent_) :
     parent{ parent_ }
 {
 }
@@ -353,33 +713,38 @@ TypeContext* EmptyTypeScope::getTypeContext()
     return parent->getTypeContext();
 }
 
-Type* EmptyTypeScope::getVariableType(const std::string&)
+TypePtr EmptyTypeScope::getVariableType(const std::string&)
 {
     return nullptr;
 }
 
-const ast::Function* EmptyTypeScope::getFunctionAST(GlobalIdentifierRef identifier)
+FunAst EmptyTypeScope::getFunctionAST(const GlobalIdentifier& identifier)
 {
     return parent->getFunctionAST(identifier);
 }
 
+DataAst EmptyTypeScope::getDataAST(const GlobalIdentifier& identifier)
+{
+    return parent->getDataAST(identifier);
+}
 
-TypeInferer::TypeInferer(TypeScope *scope_) :
+
+TypeInferer::TypeInferer(TypeScope* scope_) :
     env{ scope_ }
 {
     assert(env != nullptr);
 }
 
-Type* TypeInferer::infer(ast::Exp &exp, TypeScope *scope_)
+TypePtr TypeInferer::infer(ast::Exp& exp, TypeScope* scope_)
 {
     TypeInferer inferer(scope_);
     exp.accept(&inferer);
     return inferer.result;
 }
 
-void TypeInferer::visit(ast::LetExp &exp)
+void TypeInferer::visit(ast::LetExp& exp)
 {
-    for (auto &var : exp.letStatments)
+    for (auto& var : exp.letStatments)
     {
         if (var->parameters.size() != 0)
         {
@@ -387,14 +752,14 @@ void TypeInferer::visit(ast::LetExp &exp)
             return;
         }
 
-        type::Type* varType;
+        TypePtr varType;
         if (var->type.identifier.name.empty())
         {
             varType = TypeInferer::infer(*var->functionBody, this);
         }
         else
         {
-            varType = env->getTypeByName(var->type.identifier);
+            varType = getTypeContext()->getTypeFromAst(var->type); // FIXME: if we're infering function call body sourceModule is no the correct one
         }
         if (varType == nullptr)
         {
@@ -415,12 +780,14 @@ void TypeInferer::visit(ast::LetExp &exp)
     result = TypeInferer::infer(*exp.exp, this);
 }
 
-void TypeInferer::visit(ast::IfExp &exp)
+void TypeInferer::visit(ast::IfExp& exp)
 {
-    result = TypeInferer::infer(*exp.elseExp, this);
+    result = getTypeContext()->unify(
+        TypeInferer::infer(*exp.thenExp, this),
+        TypeInferer::infer(*exp.elseExp, this));
 }
 
-void TypeInferer::visit(ast::CaseExp &exp)
+void TypeInferer::visit(ast::CaseExp& exp)
 {
     Log(exp.location, "case not implemented");
 }
@@ -428,11 +795,11 @@ void TypeInferer::visit(ast::CaseExp &exp)
 namespace
 {
 
-Type* inferMathExp(TypeInferer *inferer, ast::BinaryExp &exp)
+TypePtr inferMathExp(TypeInferer* inferer, ast::BinaryExp& exp)
 {
     auto lhs = TypeInferer::infer(*exp.lhs, inferer);
     auto rhs = TypeInferer::infer(*exp.rhs, inferer);
-    auto result = lhs->unify(rhs, inferer->getTypeContext());
+    auto result = inferer->getTypeContext()->unify(lhs, rhs);
     if (result != nullptr)
     {
         if (result->isNum())
@@ -451,11 +818,11 @@ Type* inferMathExp(TypeInferer *inferer, ast::BinaryExp &exp)
     return nullptr;
 }
 
-Type* inferBitExp(TypeInferer *inferer, ast::BinaryExp &exp)
+TypePtr inferBitExp(TypeInferer* inferer, ast::BinaryExp& exp)
 {
     auto lhs = TypeInferer::infer(*exp.lhs, inferer);
     auto rhs = TypeInferer::infer(*exp.rhs, inferer);
-    auto result = lhs->unify(rhs, inferer->getTypeContext());
+    auto result = inferer->getTypeContext()->unify(lhs, rhs);
     if (result != nullptr)
     {
         if (result->isInteger())
@@ -472,49 +839,50 @@ Type* inferBitExp(TypeInferer *inferer, ast::BinaryExp &exp)
 
 } // namespace
 
-void TypeInferer::visit(ast::BinaryExp &exp)
+void TypeInferer::visit(ast::BinaryExp& exp)
 {
     // math
-    if (exp.op == "*")      { result = inferMathExp(this, exp); } // Multiplication
+    if (exp.op == "*") { result = inferMathExp(this, exp); } // Multiplication
     else if (exp.op == "/") { result = inferMathExp(this, exp); } // Division
     else if (exp.op == "%") { result = inferMathExp(this, exp); } // Remainder
     else if (exp.op == "+") { result = inferMathExp(this, exp); } // Addition
     else if (exp.op == "-") { result = inferMathExp(this, exp); } // Subtraction
     // bitwise
-    else if (exp.op == "<<")  { result = inferBitExp(this, exp); } // Shift
-    else if (exp.op == ">>")  { result = inferBitExp(this, exp); } // Signed shift
+    else if (exp.op == "<<") { result = inferBitExp(this, exp); } // Shift
+    else if (exp.op == ">>") { result = inferBitExp(this, exp); } // Signed shift
     else if (exp.op == ">>>") { result = inferBitExp(this, exp); } // Logical shift
     // compare
-    else if (exp.op == ">")  { result = getTypeByName(name::Bool); } // Greater than
-    else if (exp.op == ">=") { result = getTypeByName(name::Bool); } // Greater or equal
-    else if (exp.op == "<")  { result = getTypeByName(name::Bool); } // Less than
-    else if (exp.op == "<=") { result = getTypeByName(name::Bool); } // Less or equal
-    else if (exp.op == "==") { result = getTypeByName(name::Bool); } // Equal
-    else if (exp.op == "!=") { result = getTypeByName(name::Bool); } // Not equal
+    else if (exp.op == ">") { result = getTypeContext()->getBool(); } // Greater than
+    else if (exp.op == ">=") { result = getTypeContext()->getBool(); } // Greater or equal
+    else if (exp.op == "<") { result = getTypeContext()->getBool(); } // Less than
+    else if (exp.op == "<=") { result = getTypeContext()->getBool(); } // Less or equal
+    else if (exp.op == "==") { result = getTypeContext()->getBool(); } // Equal
+    else if (exp.op == "!=") { result = getTypeContext()->getBool(); } // Not equal
     // bitwise
     else if (exp.op == "&") { result = inferBitExp(this, exp); }
     else if (exp.op == "|") { result = inferBitExp(this, exp); }
     else if (exp.op == "^") { result = inferBitExp(this, exp); }
     // logical
-    else if (exp.op == "&&") { result = getTypeByName(name::Bool); }
-    else if (exp.op == "||") { result = getTypeByName(name::Bool); }
+    else if (exp.op == "&&") { result = getTypeContext()->getBool(); }
+    else if (exp.op == "||") { result = getTypeContext()->getBool(); }
     else
     {
         Log(exp.location, "unknown operator: ", exp.op);
     }
 }
 
-void TypeInferer::visit(ast::UnaryExp &exp)
+void TypeInferer::visit(ast::UnaryExp& exp)
 {
     assert(exp.op == "-");
     result = TypeInferer::infer(*exp.operand, this);
-    if (getTypeContext()->equals(result, name::IntegerLiteral))
+    // type check number?
+    if (getTypeContext()->getIntegerLiteralType() == result) //getTypeContext()->equals(result, name::IntegerLiteral))
     {
-        result = getTypeByName(name::SignedIntegerLiteral);
+        result = getTypeContext()->getSignedIntegerLiteralType();
     }
 }
 
-void TypeInferer::visit(ast::LiteralExp &exp)
+void TypeInferer::visit(ast::LiteralExp& exp)
 {
     switch (exp.tokenType)
     {
@@ -522,23 +890,23 @@ void TypeInferer::visit(ast::LiteralExp &exp)
 
         if (exp.value.front() == '-')
         {
-            result = getTypeByName(name::SignedIntegerLiteral);
+            result = getTypeContext()->getSignedIntegerLiteralType();
         }
         else
         {
-            result = getTypeByName(name::IntegerLiteral);
+            result = getTypeContext()->getIntegerLiteralType();
         }
         // or signed
         break;
 
     case lex::tok_float:
 
-        result = getTypeByName(name::FloatingLiteral);
+        result = getTypeContext()->getFloatingLiteralType();
         break;
 
     case lex::tok_char:
 
-        result = getTypeByName(name::Char);
+        result = getTypeContext()->getChar();
         // add type classes?
         break;
 
@@ -549,7 +917,7 @@ void TypeInferer::visit(ast::LiteralExp &exp)
 
     case lex::tok_bool:
 
-        result = getTypeByName(name::Bool);
+        result = getTypeContext()->getBool();
         break;
 
     default:
@@ -559,9 +927,12 @@ void TypeInferer::visit(ast::LiteralExp &exp)
     }
 }
 
-void TypeInferer::visit(ast::CallExp &exp)
+void TypeInferer::visit(ast::CallExp& exp)
 {
-    auto ast = env->getFunctionAST(exp.identifier);
+    const ast::Function* ast;
+    ImportedModule* astModule;
+    std::tie(astModule, ast) = env->getFunctionAST(exp.identifier);
+
     if (ast != nullptr)
     {
         if (ast->type.identifier.name.empty())
@@ -576,7 +947,13 @@ void TypeInferer::visit(ast::CallExp &exp)
             TypeInferer inferer(&scope);
             for (int i = 0; i < exp.arguments.size(); ++i)
             {
-                inferer.variables[ast->parameters[i]->identifier] = TypeInferer::infer(*exp.arguments[i].get(), this);
+                auto type = TypeInferer::infer(*exp.arguments[i].get(), this);
+                if (type == nullptr)
+                {
+                    Log(exp.arguments[i]->location, "failed to infer type of argument");
+                    return;
+                }
+                inferer.variables[ast->parameters[i]->identifier] = std::move(type);
             }
 
             //FIXME: standard library does not have bodies?
@@ -585,12 +962,12 @@ void TypeInferer::visit(ast::CallExp &exp)
         }
         else
         {
-            result = env->getTypeByName(ast->type.identifier);
+            result = env->getTypeByName(ast->type, astModule);
         }
     }
 }
 
-void TypeInferer::visit(ast::VariableExp &exp)
+void TypeInferer::visit(ast::VariableExp& exp)
 {
     if (exp.identifier.moduleName.empty())
     {
@@ -602,8 +979,11 @@ void TypeInferer::visit(ast::VariableExp &exp)
     }
 
     // not a local variable
-    auto ast = env->getFunctionAST(exp.identifier);
-    if (ast != nullptr)
+
+    const ast::Function* ast;
+    ImportedModule* astModule;
+    std::tie(astModule, ast) = env->getFunctionAST(exp.identifier);
+    if (astModule != nullptr && ast != nullptr)
     {
         if (ast->type.identifier.name.empty())
         {
@@ -622,22 +1002,26 @@ void TypeInferer::visit(ast::VariableExp &exp)
         }
         else
         {
-            result = env->getTypeByName(ast->type.identifier);
+            result = env->getTypeByName(ast->type, astModule);
         }
     }
 }
 
-void TypeInferer::visit(ast::FieldExp &exp)
+void TypeInferer::visit(ast::FieldExp& exp)
 {
     auto structType = TypeInferer::infer(*exp.lhs, this);
-    if (!structType->isStructType())
+    if (structType == nullptr)
     {
-        Log(exp.location, "");
+        Log(exp.location, "failed to infer type of left hand side of field access");
+    }
+    else if (!structType->isStructType())
+    {
+        Log(exp.location, "left hand side of field access is not a struct type");
     }
     else
     {
         auto index = structType->getFieldIndex(exp.fieldIdentifier);
-        if (index == Type::InvalidFieldIndex)
+        if (index == Type::InvalidIndex)
         {
             Log(exp.location, "unknown field: ", exp.fieldIdentifier);
         }
@@ -648,9 +1032,219 @@ void TypeInferer::visit(ast::FieldExp &exp)
     }
 }
 
-void TypeInferer::visit(ast::ConstructorExp &exp)
+
+ConstructorTypeScope::ConstructorTypeScope(TypeScope* parent_, const ast::DataDeclaration* ast) :
+    parent{ parent_ }
 {
-    result = getTypeContext()->getType(exp.identifier);
+    for (auto& typeVar : ast->typeVariables)
+    {
+        typeMap.insert({ typeVar, getTypeContext()->getAnyType() });
+    }
+}
+
+ConstructorTypeScope::~ConstructorTypeScope()
+{}
+
+TypePtr ConstructorTypeScope::getTypeByName(const ast::TypeIdentifier& typeName, const ImportedModule *importModule)
+{
+    auto it = typeName.identifier.moduleName.empty() ?
+        typeMap.find(typeName.identifier.name) : typeMap.end();
+    if (it == typeMap.end())
+    {
+        if (typeName.parameters.empty())
+        {
+            return getTypeContext()->getTypeFromAst(typeName, importModule);
+        }
+
+        // if we have parameters those might be type variables and we have to recursively call this->getTypeByName
+
+        bool concrete = true;
+        std::vector<TypePtr> parameterTypes;
+        for (auto& param : typeName.parameters)
+        {
+            auto type = getTypeByName(param, importModule);
+            if (type == nullptr)
+            {
+                return nullptr;
+            }
+            concrete = concrete && type->isConcreteType();
+            parameterTypes.push_back(type);
+        }
+
+        const ImportedModule* astModule;
+        const ast::DataDeclaration* ast;
+        std::tie(astModule, ast) = importModule->lookupType(typeName.identifier);
+        if (astModule == nullptr || ast == nullptr)
+        {
+            Log({}, "unknown type: ", typeName.identifier.str());
+            return nullptr;
+        }
+
+        Identifier newId;
+        newId.name = { astModule->name(), typeName.identifier.name };
+        for (auto& paramType : parameterTypes)
+        {
+            newId.parameters.push_back(paramType->identifier());
+        }
+
+        if (concrete)
+        {
+            return getTypeContext()->getType(newId);
+        }
+        else
+        {
+            // construct new type
+            std::vector<TypePtr> fieldTypes;
+            for (auto& field : ast->fields)
+            {
+                fieldTypes.push_back(getTypeByName(field.type, importModule));
+                if (fieldTypes.back() == nullptr)
+                {
+                    Log({}, "unknown type: ", field.type.str());
+                    return nullptr;
+                }
+            }
+            return std::make_shared<StructType>(std::move(newId), ast, fieldTypes);
+        }
+    }
+    else
+    {
+        // found a typeVar, it is not allowed to have parameters
+        if (typeName.parameters.empty())
+        {
+            return it->second;
+        }
+        else
+        {
+            Log({}, "type variable can't have parameters");
+            return nullptr;
+        }
+    }
+}
+
+bool ConstructorTypeScope::updateType(const ast::TypeIdentifier& typeId, const TypePtr& type)
+{
+    // recurse down the typeId...
+    auto it = typeId.identifier.moduleName.empty() ?
+        typeMap.find(typeId.identifier.name) : typeMap.end();
+    if (it == typeMap.end())
+    {
+        assert(type->getFieldCount() == typeId.parameters.size());
+
+        bool result = true;
+        unsigned int i = 0;
+        for (auto& param : typeId.parameters)
+        {
+            result = result && updateType(param, type->getFieldType(i)); // check null? no, we have asserted getFieldCount
+            ++i;
+        }
+        return result;
+    }
+    else
+    {
+        return getTypeContext()->unify(it->second, type) != nullptr;
+    }
+}
+
+TypeContext* ConstructorTypeScope::getTypeContext()
+{
+    return parent->getTypeContext();
+}
+
+TypePtr ConstructorTypeScope::getVariableType(const std::string& variable)
+{
+    return parent->getVariableType(variable);
+}
+
+FunAst ConstructorTypeScope::getFunctionAST(const GlobalIdentifier& identifier)
+{
+    return parent->getFunctionAST(identifier);
+}
+
+DataAst ConstructorTypeScope::getDataAST(const GlobalIdentifier& identifier)
+{
+    return parent->getDataAST(identifier);
+}
+
+TypePtr ConstructorTypeScope::getTypeVariable(const std::string& typeVariable) const
+{
+    auto it = typeMap.find(typeVariable);
+    return it == typeMap.end() ? nullptr : it->second;
+}
+
+void TypeInferer::visit(ast::ConstructorExp& exp)
+{
+    const ImportedModule* astModule;
+    const ast::DataDeclaration* ast;
+    std::tie(astModule, ast) = getDataAST(exp.identifier);
+    if (astModule == nullptr || ast == nullptr)
+    {
+        return;
+    }
+
+    ConstructorTypeScope typeScope(this, ast);
+
+    int i = 0;
+    for (auto& field : ast->fields)
+    {
+        // TODO: can do a check if field.type contains typeVars, else continue
+
+        TypePtr fieldType = typeScope.getTypeByName(field.type, astModule); // replace all type vars
+        if (fieldType == nullptr)
+        {
+            return;
+        }
+        if (!fieldType->isConcreteType())
+        {
+            TypePtr argumentType = TypeInferer::infer(*exp.arguments[i]->exp, this);
+            auto resultingType = getTypeContext()->unify(fieldType, argumentType);
+
+            if (resultingType == nullptr)
+            {
+                Log(exp.location, "failed to unify types: ", fieldType->identifier().str(), " with ", argumentType->identifier().str());
+                return;
+            }
+
+            if (!typeScope.updateType(field.type, resultingType))
+            {
+                Log(exp.location, "failed to unify types: ", field.type.str(), " with ", resultingType->identifier().str());
+                return;
+            }
+        }
+
+        i++;
+    }
+
+    bool concreteType = std::all_of(ast->typeVariables.begin(), ast->typeVariables.end(),
+        [&typeScope](const std::string &typeVar)
+        {
+            auto type = typeScope.getTypeVariable(typeVar);
+            assert(type != nullptr);
+            return type->isConcreteType();
+        });
+
+    std::vector<Identifier> typeArgs;
+    for (auto& typeVar : ast->typeVariables)
+    {
+        auto type = typeScope.getTypeVariable(typeVar);
+        typeArgs.push_back(type->identifier());
+    }
+    Identifier typeId{ { astModule->name(), ast->name }, std::move(typeArgs) };
+
+    if (concreteType)
+    {
+        result = getTypeContext()->getType(typeId);
+    }
+    else // construct abstract type
+    {
+        std::vector<TypePtr> fieldTypes;
+        for (auto& field : ast->fields)
+        {
+            fieldTypes.push_back(typeScope.getTypeByName(field.type, astModule));
+            assert(fieldTypes.back() != nullptr);
+        }
+        result = std::make_shared<StructType>(std::move(typeId), ast, std::move(fieldTypes));
+    }
 }
 
 TypeContext* TypeInferer::getTypeContext()
@@ -658,7 +1252,7 @@ TypeContext* TypeInferer::getTypeContext()
     return env->getTypeContext();
 }
 
-Type* TypeInferer::getVariableType(const std::string& name)
+TypePtr TypeInferer::getVariableType(const std::string& name)
 {
     auto it = variables.find(name);
     if (it != variables.end())
@@ -668,9 +1262,14 @@ Type* TypeInferer::getVariableType(const std::string& name)
     return env->getVariableType(name);
 }
 
-const ast::Function* TypeInferer::getFunctionAST(GlobalIdentifierRef identifier)
+FunAst TypeInferer::getFunctionAST(const GlobalIdentifier& identifier)
 {
     return env->getFunctionAST(identifier);
+}
+
+DataAst TypeInferer::getDataAST(const GlobalIdentifier& identifier)
+{
+    return env->getDataAST(identifier);
 }
 
 } // namespace Type

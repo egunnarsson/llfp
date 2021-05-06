@@ -20,22 +20,6 @@ struct SourceLocation
     llvm::StringRef File;
 };
 
-struct GlobalIdentifierRef
-{
-    llvm::StringRef moduleName;
-    llvm::StringRef name;
-
-    std::string str() const
-    {
-        return moduleName.str() + ':' + name.str();
-    }
-
-    bool operator ==(const GlobalIdentifierRef &id) const
-    {
-        return moduleName == id.moduleName && name == id.name;
-    }
-};
-
 struct GlobalIdentifier
 {
     std::string moduleName;
@@ -46,8 +30,6 @@ struct GlobalIdentifier
         return moduleName + ':' + name;
     }
 
-    operator GlobalIdentifierRef() const { return { moduleName, name }; }
-
     bool operator ==(const GlobalIdentifier &id) const
     {
         return moduleName == id.moduleName && name == id.name;
@@ -56,29 +38,6 @@ struct GlobalIdentifier
     bool operator !=(const GlobalIdentifier &id) const
     {
         return moduleName != id.moduleName || name != id.name;
-    }
-
-    bool operator ==(GlobalIdentifierRef id) const
-    {
-        return moduleName == id.moduleName && name == id.name;
-    }
-
-    bool operator !=(GlobalIdentifierRef id) const
-    {
-        return moduleName != id.moduleName || name != id.name;
-    }
-};
-
-/**
-Careful with this!
-*/
-struct GlobalIdentifierRefHash
-{
-    size_t operator()(llfp::GlobalIdentifierRef x) const
-    {
-        auto a = llvm::hash_value(x.moduleName);
-        auto b = llvm::hash_value(x.name);
-        return llvm::hash_combine(a, b);
     }
 };
 

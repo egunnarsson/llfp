@@ -57,6 +57,19 @@ bool SourceModule::setAST(std::unique_ptr<ast::Module> astModule_)
             Log(dataDecl->location, "data already defined");
             result = false;
         }
+
+        // check duplicate fields;
+        auto end = dataDecl->fields.end();
+        for (auto it = dataDecl->fields.begin(); it != end; ++it)
+        {
+            auto predicate = [it](const llfp::ast::Field& field) { return it->name == field.name; };
+            auto it1 = std::find_if(it + 1, end, predicate);
+            if (it1 != end)
+            {
+                Log(it1->location, "duplicate field \"", it1->name, '"');
+                result = false;
+            }
+        }
     }
 
     return result;
@@ -81,6 +94,11 @@ bool SourceModule::addImportedModules(const std::vector<ImportedModule*> &module
             Log(importDecl.location, "unresolved imported module ", importDecl.name);
             result = false;
         }
+    }
+
+    for (auto m : moduleList)
+    {
+        allModules.insert({m->name(), m});
     }
 
     return result;
@@ -113,7 +131,7 @@ const ast::DataDeclaration* SourceModule::getType(const std::string &name) const
 }
 
 // [%@][-a-zA-Z$._][-a-zA-Z$._0-9]*
-std::string SourceModule::getMangledName(const ast::Function*function, const std::vector<type::Type*> &types) const
+std::string SourceModule::getMangledName(const ast::Function*function, const std::vector<type::TypePtr> &types) const
 {
     assert(!types.empty());
     if (function->exported)
@@ -123,24 +141,22 @@ std::string SourceModule::getMangledName(const ast::Function*function, const std
 
     std::string result;
     result += name();
-    result += '.';
+    result += ':';
     result += function->name;
     for (auto type : types)
     {
-        if (type->isLiteral())
+        if (!type->isConcreteType())
         {
-            Log({}, "trying to mangle with literal type");
+            Log({}, "trying to mangle with abstract type");
             return "";
         }
         result += '$';
-        result += type->identifier().moduleName;
-        result += '.';
-        result += type->identifier().name;
+        result += type->identifier().str();
     }
     return result;
 }
 
-std::string SourceModule::getMangledName(const ast::DataDeclaration *data) const
+std::string SourceModule::getMangledName(const ast::DataDeclaration *data, const std::vector<type::TypePtr>& types) const
 {
     return name() + '_' + data->name;
 }
@@ -161,36 +177,30 @@ llvm::Module* SourceModule::getLLVM()
 }
 
 template<class AstNode, class LocalFun, class GlobalFun>
-bool SourceModule::lookup(
-    GlobalIdentifierRef identifier,
-    ImportedModule*& astModule,
-    const AstNode*& ast,
+AstNode SourceModule::lookup(
+    const GlobalIdentifier& identifier,
     LocalFun localLookup,
     GlobalFun globalLookup,
     llvm::StringLiteral errorMsg) const
 {
-    // make copy for lookup functions
-    std::string identifierName = identifier.name.str();
-
     if (identifier.moduleName.empty())
     {
+        std::tuple_element_t<1, AstNode> ast;
         std::vector<ImportedModule*> modules;
 
-        AstNode* localAst = localLookup(identifierName);
+        auto localAst = localLookup(identifier.name);
         if (localAst != nullptr)
         {
-            astModule = const_cast<SourceModule*>(this);
             ast = localAst;
-            modules.push_back(astModule);
+            modules.push_back(const_cast<SourceModule*>(this));
         }
 
         for (auto &itm : importedModules)
         {
             auto importedModule = itm.second;
-            const AstNode* globalAst = globalLookup(importedModule, identifierName);
+            auto globalAst = globalLookup(importedModule, identifier.name);
             if (globalAst != nullptr)
             {
-                astModule = importedModule;
                 ast = globalAst;
                 modules.push_back(importedModule);
             }
@@ -198,77 +208,86 @@ bool SourceModule::lookup(
 
         if (modules.size() == 1)
         {
-            return true;
+            return { modules.back(), ast };
         }
         else if (!modules.empty())
         {
-            astModule = nullptr;
-            ast = nullptr;
             Log({}, "reference to ", identifier.str(), " is ambiguous");
-            return false;
+            return { nullptr, nullptr };
         }
         else
         {
             Log({}, errorMsg, identifier.str());
-            return false;
+            return { nullptr, nullptr };
         }
     }
     else
     {
         if (identifier.moduleName == name())
         {
-            AstNode* localAst = localLookup(identifierName);
+            auto localAst = localLookup(identifier.name);
             if (localAst != nullptr)
             {
-                astModule = const_cast<SourceModule*>(this);
-                ast = localAst;
-                return true;
+                return { const_cast<SourceModule*>(this), localAst };
             }
         }
         else
         {
-            auto itm = importedModules.find(identifier.moduleName.str());
+            auto itm = importedModules.find(identifier.moduleName);
             if (itm != importedModules.end())
             {
                 auto importedModule = itm->second;
-                const AstNode* globalAst = globalLookup(importedModule, identifierName);
+                auto globalAst = globalLookup(importedModule, identifier.name);
 
                 if (globalAst != nullptr)
                 {
-                    astModule = importedModule;
-                    ast = globalAst;
-                    return true;
+                    return { importedModule, globalAst };
                 }
             }
             else
             {
                 Log({}, "undefined module ", identifier.moduleName);
-                return false;
+                return { nullptr, nullptr };
             }
         }
     }
 
     Log({}, errorMsg, identifier.str());
-    return false;
+    return { nullptr, nullptr };
 }
 
-bool SourceModule::lookupFunction(GlobalIdentifierRef identifier, ImportedModule*& funModule, const ast::Function*& ast)
+type::FunAst SourceModule::lookupFunction(const GlobalIdentifier& identifier)
 {
-    return lookup(identifier, funModule, ast,
+    return lookup<type::FunAst>(identifier,
         [this](const std::string& id) { return llfp::find(functions, id); },
         [](ImportedModule* module, const std::string& id) { return module->getFunction(id); },
         "undefined function ");
 }
 
-bool SourceModule::lookupType(GlobalIdentifierRef identifier, const ImportedModule*& dataModule, const ast::DataDeclaration*& ast) const
+type::DataAst SourceModule::lookupType(const GlobalIdentifier& identifier) const
 {
-    ImportedModule* tmpModule;
-    auto result = lookup(identifier, tmpModule, ast,
+    return lookup<type::DataAst>(identifier,
         [this](const std::string& id) { return llfp::find(dataDeclarations, id); },
         [](ImportedModule* module, const std::string& id) { return module->getType(id); },
-        "undefined type ");
-    dataModule = tmpModule;
-    return result;
+        "undefined data type ");
+}
+
+type::DataAst SourceModule::lookupTypeGlobal(const GlobalIdentifier& identifier) const
+{
+    assert(!identifier.moduleName.empty());
+    assert(!identifier.name.empty());
+
+    auto it = allModules.find(identifier.moduleName);
+    if (it != allModules.end())
+    {
+        auto astType = it->second->getType(identifier.name);
+        if (astType != nullptr)
+        {
+            return { it->second, astType };
+        }
+    }
+
+    return { nullptr, nullptr };
 }
 
 void SourceModule::requireFunctionInstance(FunctionIdentifier function)
@@ -304,7 +323,7 @@ bool SourceModule::generateNextFunction()
         }
         auto ast = it->second;
 
-        std::vector<type::Type*> types;
+        std::vector<type::TypePtr> types;
         for (auto t : *function.types)
         {
             //TODO: Now we try to find type in this module with its imports

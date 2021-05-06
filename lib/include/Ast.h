@@ -17,6 +17,8 @@ struct TypeIdentifier
 {
     GlobalIdentifier            identifier;
     std::vector<TypeIdentifier> parameters;
+
+    std::string str() const;
 };
 
 class LetExp;

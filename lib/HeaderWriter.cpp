@@ -23,26 +23,26 @@ namespace
 std::string convertType(llfp::SourceModule &module, GlobalIdentifier& type)
 {
     static std::unordered_map<std::string, llvm::StringRef> map {
-        {type::name::Bool.name.str(), "bool"},
+        {type::name::Bool.str(), "bool"},
 
-        {type::name::I8.name.str(), "int8_t"},
-        {type::name::I16.name.str(), "int16_t"},
-        {type::name::I32.name.str(), "int32_t"},
-        {type::name::I64.name.str(), "int64_t"},
+        {type::name::I8.str(), "int8_t"},
+        {type::name::I16.str(), "int16_t"},
+        {type::name::I32.str(), "int32_t"},
+        {type::name::I64.str(), "int64_t"},
         // {type::name::I128, "i128"}, // unsupported
 
-        {type::name::U8.name.str(), "uint8_t"},
-        {type::name::U16.name.str(), "uint16_t"},
-        {type::name::U32.name.str(), "uint32_t"},
-        {type::name::U64.name.str(), "uint64_t"},
+        {type::name::U8.str(), "uint8_t"},
+        {type::name::U16.str(), "uint16_t"},
+        {type::name::U32.str(), "uint32_t"},
+        {type::name::U64.str(), "uint64_t"},
         // {type::name::U128, "u128"}, // unsupported
 
         // {type::name::Half, "half"}, // unsupported
-        {type::name::Float.name.str(), "float"},
-        {type::name::Double.name.str(), "double"},
+        {type::name::Float.str(), "float"},
+        {type::name::Double.str(), "double"},
         // long double usually 80 bit?
 
-        {type::name::Char.name.str(), "unsigned char"},
+        {type::name::Char.str(), "unsigned char"},
     };
 
     if (type.moduleName.empty())
@@ -56,9 +56,18 @@ std::string convertType(llfp::SourceModule &module, GlobalIdentifier& type)
 
     const ImportedModule *importedModule;
     const ast::DataDeclaration *typeDeclaration;
-    if (module.lookupType(type, importedModule, typeDeclaration))
+    std::tie(importedModule, typeDeclaration) = module.lookupType(type);
+    if (importedModule != nullptr && typeDeclaration != nullptr)
     {
-        return importedModule->getMangledName(typeDeclaration);
+        if (typeDeclaration->typeVariables.empty())
+        {
+            return importedModule->getMangledName(typeDeclaration, {});
+        }
+        else
+        {
+            llvm::errs() << "cannot export data type with type variables: " << importedModule->name() << ':' << typeDeclaration->name;
+            return std::string();
+        }
     }
 
     // TODO: If we end up here we should delete the output file
@@ -102,7 +111,12 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
         {
             continue;
         }
-        os << "struct " << module.getMangledName(d.get()) << "\n{\n";
+        if (!d->typeVariables.empty())
+        {
+            llvm::errs() << "cannot export data type with type variables: " << module.name() << ':' << d->name;
+            continue;
+        }
+        os << "struct " << module.getMangledName(d.get(), {}) << "\n{\n";
         for (auto &f : d->fields)
         {
             os << '\t' << convertType(module, f.type.identifier) << ' ' << f.name << ";\n";

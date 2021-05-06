@@ -26,6 +26,7 @@ std::unique_ptr<llfp::SourceModule> compile(const char *string)
 
     if (srcModule->getAST() != nullptr)
     {
+        srcModule->addImportedModules({ srcModule.get() });
         srcModule->createCodeGenerator();
         srcModule->generateExportedFunctions();
         while (srcModule->generateNextFunction()) {}
@@ -92,7 +93,7 @@ TEST(CodegenTest, Functions)
     auto m = llfpModule->getLLVM();
 
     EXPECT_EQ(m->getName(), "m");
-    EXPECT_NE(m->getFunction("m.x$.i32"), nullptr);
+    EXPECT_NE(m->getFunction("m:x$:i32"), nullptr);
     EXPECT_NE(m->getFunction("m_y"), nullptr);
 
     // negative
@@ -121,7 +122,7 @@ TEST(CodegenTest, DataDeclaration)
     EXPECT_TRUE(type->elements()[1]->isFloatTy());
 
     // negative
-    EXPECT_EQ(compileError(M"data foo { i32 x; i32 x; }\nexport i32 f(m:foo x) = 1;"), "string(2,19): duplicate field \"x\"\nstring(3,14): unknown type \"m:foo\"\n");
+    EXPECT_EQ(compileError(M"data foo { i32 x; i32 x; }\nexport i32 f(m:foo x) = 1;"), "string(2,19): duplicate field \"x\"\n");
     EXPECT_EQ(compileError(M"data x{}\ndata x{}\nexport i32 f(m:x y) = 1;"), "string(3,1): data already defined\n");
 }
 
@@ -157,9 +158,9 @@ TEST(CodegenTest, Modules)
 
     EXPECT_EQ(modules[0]->getLLVM()->getName(), "m");
     EXPECT_EQ(modules[1]->getLLVM()->getName(), "n");
-    EXPECT_NE(modules[0]->getLLVM()->getFunction("m.foo$.i32"), nullptr);
+    EXPECT_NE(modules[0]->getLLVM()->getFunction("m:foo$:i32"), nullptr);
     EXPECT_NE(modules[1]->getLLVM()->getFunction("n_bar"), nullptr);
-    EXPECT_NE(modules[1]->getLLVM()->getFunction("m.foo$.i32"), nullptr);
+    EXPECT_NE(modules[1]->getLLVM()->getFunction("m:foo$:i32"), nullptr);
 
     // import type
 
@@ -182,6 +183,17 @@ TEST(CodegenTest, TypeCheck)
     // call with wrong type
     // assign with wrong return type, let i32 x = funcReturnBool()
 }
+
+/*
+
+T[A] {A,A} ... T{true, 1} should fail
+T[A,B] {A,B}
+T[A] {A, int32}
+T[A] {A, Maybe[A]}
+
+data T[A] = { A[int32] x; }; // error type variable cant have parameters
+
+*/
 
 // recursion
 /*
