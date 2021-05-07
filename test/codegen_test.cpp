@@ -83,6 +83,15 @@ std::array<std::unique_ptr<llfp::SourceModule>, N> compile(std::array<const char
     return modules;
 }
 
+bool empty(llvm::Function *f)
+{
+    if (f->getInstructionCount() == 0) { return true; }
+    std::string str;
+    llvm::raw_string_ostream ss(str);
+    ss << *f->getBasicBlockList().begin()->getInstList().begin();
+    return str.find("ret void") != std::string::npos;
+}
+
 #define M "module m;\n"
 
 TEST(CodegenTest, Functions)
@@ -93,7 +102,7 @@ TEST(CodegenTest, Functions)
     auto m = llfpModule->getLLVM();
 
     EXPECT_EQ(m->getName(), "m");
-    EXPECT_NE(m->getFunction("m:x$:i32"), nullptr);
+    EXPECT_NE(m->getFunction("m:x$i32"), nullptr);
     EXPECT_NE(m->getFunction("m_y"), nullptr);
 
     // negative
@@ -115,7 +124,7 @@ TEST(CodegenTest, DataDeclaration)
     // "export m:d foo()"
 
     ASSERT_NE(func, nullptr);
-    EXPECT_NE(func->getInstructionCount(), 0u);
+    EXPECT_FALSE(empty(func));
     ASSERT_NE(type, nullptr);
     EXPECT_EQ(type->getNumElements(), 2u);
     EXPECT_TRUE(type->elements()[0]->isIntegerTy(32));
@@ -128,18 +137,34 @@ TEST(CodegenTest, DataDeclaration)
 
 TEST(CodegenTest, DataConstructor)
 {
-    auto llfpModule = compile(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{z,z};");
-    ASSERT_NE(llfpModule->getAST(), nullptr);
+    {
+        auto llfpModule = compile(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{z,z};");
+        ASSERT_NE(llfpModule->getAST(), nullptr);
 
-    auto llvm = llfpModule->getLLVM();
-    auto func = llvm->getFunction("m_f");
-    auto type = llvm->getTypeByName("m_d");
+        auto llvm = llfpModule->getLLVM();
+        auto func = llvm->getFunction("m_f");
+        auto type = llvm->getTypeByName("m_d");
 
-    ASSERT_NE(func, nullptr);
-    EXPECT_NE(func->getInstructionCount(), 0u);
-    ASSERT_NE(type, nullptr);
+        ASSERT_NE(func, nullptr);
+        EXPECT_FALSE(empty(func));
+        ASSERT_NE(type, nullptr);
+    }
+    {
+        auto llfpModule = compile(
+           M"data d[a]   {a x; a y;}\n"
+            "data d2[a,b]{a x; b y;}\n"
+            "export i32 f1() = f2().x;\nf2() = d{1,1};\n"
+            "export i32 f3() = d2{1,true}.x;");
+        ASSERT_NE(llfpModule->getAST(), nullptr);
 
-    // what happens if we fail compile first arg, but 2nd is valid?
+        auto llvm = llfpModule->getLLVM();
+        auto func_f1 = llvm->getFunction("m_f1");
+        ASSERT_NE(func_f1, nullptr);
+        EXPECT_FALSE(empty(func_f1));
+        auto func_f3 = llvm->getFunction("m_f3");
+        ASSERT_NE(func_f3, nullptr);
+        EXPECT_FALSE(empty(func_f3));
+    }
 
     // negative
     // unkown type, how do I trigger that code? type checks will fail before that always...
@@ -147,6 +172,7 @@ TEST(CodegenTest, DataConstructor)
     EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{z,z,z};"),   "string(3,21): incorrect number of arguments\n");
     EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{x=z,j=z};"), "string(3,27): unknown field name\n");
     EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{y=z,x=z};"), "string(3,23): incorrect field position\n");
+    EXPECT_EQ(compileError(M"data d[a]{a x; a y;}\nexport i32 f1() = d{1,true}.x;"), "string(3,23): failed to unify types, '@IntegerLiteral' with 'bool'\n");
 }
 
 TEST(CodegenTest, Modules)
@@ -158,9 +184,9 @@ TEST(CodegenTest, Modules)
 
     EXPECT_EQ(modules[0]->getLLVM()->getName(), "m");
     EXPECT_EQ(modules[1]->getLLVM()->getName(), "n");
-    EXPECT_NE(modules[0]->getLLVM()->getFunction("m:foo$:i32"), nullptr);
+    EXPECT_NE(modules[0]->getLLVM()->getFunction("m:foo$i32"), nullptr);
     EXPECT_NE(modules[1]->getLLVM()->getFunction("n_bar"), nullptr);
-    EXPECT_NE(modules[1]->getLLVM()->getFunction("m:foo$:i32"), nullptr);
+    EXPECT_NE(modules[1]->getLLVM()->getFunction("m:foo$i32"), nullptr);
 
     // import type
 

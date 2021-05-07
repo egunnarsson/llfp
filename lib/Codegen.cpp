@@ -555,7 +555,7 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
         }
         else
         {
-            Log(exp.location, "failed to unify types: ", lhsT->identifier().str(), " and ", rhsT->identifier().str());
+            Log(exp.location, "failed to unify types, '", lhsT->identifier().str(), "' and '", rhsT->identifier().str(), '\'');
         }
     }
 }
@@ -809,7 +809,7 @@ void ExpCodeGenerator::visit(ast::FieldExp &exp)
     auto fieldType = getTypeContext()->fixify(expectedType, inferedFieldType);
     if (fieldType == nullptr)
     {
-        Log(exp.location, "failed to unify types: ", expectedType->identifier().str(), " and ", inferedFieldType->identifier().str());
+        Log(exp.location, "failed to unify types, '", expectedType->identifier().str(), "' and '", inferedFieldType->identifier().str(), '\'');
         return;
     }
     if (fieldType != inferedFieldType) // the fieldType could be a literal for example

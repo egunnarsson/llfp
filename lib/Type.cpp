@@ -139,7 +139,7 @@ bool Type::isBound() const
 
 unsigned int Type::getTypeParameterCount() const
 {
-    return InvalidIndex;
+    return 0;
 }
 
 TypePtr Type::getTypeParameter(unsigned int index) const
@@ -313,7 +313,7 @@ TypePtr TypeContext::unify(const TypePtr& a, const TypePtr& b)
 {
     auto error = [&a, &b]()
     {
-        Log({}, "failed to unify types: ", a->identifier().str(), " with ", b->identifier().str());
+        Log({}, "failed to unify types, '", a->identifier().str(), "' with '", b->identifier().str(), '\'');
         return nullptr;
     };
 
@@ -489,11 +489,14 @@ void StructType::setFields(std::vector<TypePtr> fieldTypes)
         parameters.push_back(result);
     }
 
-    std::vector<llvm::Type*> llvmTypes;
-    std::transform(fieldTypes.begin(), fieldTypes.end(), std::back_inserter(llvmTypes),
-        [](const TypePtr& type) {return type->llvmType(); });
+    if (llvmType_ != nullptr)
+    {
+        std::vector<llvm::Type*> llvmTypes;
+        std::transform(fieldTypes.begin(), fieldTypes.end(), std::back_inserter(llvmTypes),
+            [](const TypePtr& type) {return type->llvmType(); });
 
-    llvmType_->setBody(llvmTypes);
+        llvmType_->setBody(llvmTypes);
+    }
     fields = std::move(fieldTypes);
 }
 
@@ -813,7 +816,7 @@ TypePtr inferMathExp(TypeInferer* inferer, ast::BinaryExp& exp)
     }
     else
     {
-        Log(exp.location, "failed to unify types: ", lhs->identifier().str(), " and ", rhs->identifier().str());
+        Log(exp.location, "failed to unify types, '", lhs->identifier().str(), "' and '", rhs->identifier().str(), '\'');
     }
     return nullptr;
 }
@@ -1142,7 +1145,9 @@ bool ConstructorTypeScope::updateType(const ast::TypeIdentifier& typeId, const T
     }
     else
     {
-        return getTypeContext()->unify(it->second, type) != nullptr;
+        auto newType = getTypeContext()->unify(it->second, type);
+        it->second = newType;
+        return newType != nullptr;
     }
 }
 
@@ -1196,18 +1201,20 @@ void TypeInferer::visit(ast::ConstructorExp& exp)
         }
         if (!fieldType->isConcreteType())
         {
-            TypePtr argumentType = TypeInferer::infer(*exp.arguments[i]->exp, this);
+            auto &argAst = exp.arguments[i];
+            TypePtr argumentType = TypeInferer::infer(*argAst->exp, this);
             auto resultingType = getTypeContext()->unify(fieldType, argumentType);
 
             if (resultingType == nullptr)
             {
-                Log(exp.location, "failed to unify types: ", fieldType->identifier().str(), " with ", argumentType->identifier().str());
+                Log(argAst->location, "failed to unify types, '", fieldType->identifier().str(), "' with '", argumentType->identifier().str(), '\'');
                 return;
             }
 
             if (!typeScope.updateType(field.type, resultingType))
             {
-                Log(exp.location, "failed to unify types: ", field.type.str(), " with ", resultingType->identifier().str());
+                // How could this fail? It should always be possible to just write the type back to the type scope...
+                Log(argAst->location, "");
                 return;
             }
         }

@@ -27,7 +27,7 @@ struct GlobalIdentifier
 
     std::string str() const
     {
-        return moduleName + ':' + name;
+        return moduleName.empty() ? name : moduleName + ':' + name;
     }
 
     bool operator ==(const GlobalIdentifier &id) const
