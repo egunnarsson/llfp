@@ -196,6 +196,13 @@ private:
 
     Token parseToken();
     Token error(const char *msg);
+
+    Token parseIdentifier();
+    Token parseNumber();
+    Token parseChar();
+    Token parseString();
+    Token parseOperator();
+    Token parseComment();
 };
 
 } // namespace lex
