@@ -36,8 +36,8 @@ private:
     std::unique_ptr<T>        error(const char *msg);
     bool                      expect(lex::Token token);
 
-    template<llfp::lex::Token StartToken = llfp::lex::tok_open_parenthesis,
-             llfp::lex::Token EndToken = llfp::lex::tok_close_parenthesis,
+    template<llfp::lex::Token StartToken = llfp::lex::Token::Open_parenthesis,
+             llfp::lex::Token EndToken = llfp::lex::Token::Close_parenthesis,
              class F>
     bool                      parseList(F parseElement);
     bool                      parseDeclaration(const std::unique_ptr<ast::Module> &module);

@@ -628,7 +628,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
     switch (exp.tokenType)
     {
-    case lex::tok_integer:
+    case lex::Token::Integer:
 
         if (expectedType->isFloating())
         {
@@ -644,7 +644,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
         }
         break;
 
-    case lex::tok_float:
+    case lex::Token::Float:
 
         if (!expectedType->isFloating())
         {
@@ -656,7 +656,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
         }
         break;
 
-    case lex::tok_char:
+    case lex::Token::Char:
 
         if (!getTypeContext()->equals(expectedType, type::name::Char))
         {
@@ -669,12 +669,12 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
         }
         break;
 
-    case lex::tok_string:
+    case lex::Token::String:
 
         Log(exp.location, "string not supported");
         break;
 
-    case lex::tok_bool:
+    case lex::Token::Bool:
 
         if (!expectedType->isBool())
         {

@@ -17,46 +17,46 @@ namespace llfp
 namespace lex
 {
 
-enum Token
+enum class Token
 {
-    tok_invalid = -3,
-    tok_error = -2,
-    tok_eof = -1,
+    Invalid = -3,
+    Error = -2,
+    Eof = -1,
 
     //tok_function, /* "function" */
-    tok_module,
-    tok_import,
-    tok_export,
-    tok_data,     /* "data"     */
-    tok_class,    /* "class"    */
-    tok_instance, /* "instance" */
+    Module,
+    Import,
+    Export,
+    Data,     /* "data"     */
+    Class,    /* "class"    */
+    Instance, /* "instance" */
 
-    tok_identifier,
-    tok_integer,
-    tok_float,
-    tok_char, // unicode support?
-    tok_string,
-    tok_bool,
+    Identifier,
+    Integer,
+    Float,
+    Char, // unicode support?
+    String,
+    Bool,
 
-    tok_if,
-    tok_then,
-    tok_else,
-    tok_let,
-    tok_in,
+    If,
+    Then,
+    Else,
+    Let,
+    In,
 
-    tok_operator,
-    tok_colon,
-    tok_semicolon,
-    tok_open_parenthesis,
-    tok_close_parenthesis,
-    tok_open_bracket,
-    tok_close_bracket,
-    tok_open_brace,
-    tok_close_brace,
-    tok_comma,
-    tok_equal,
+    Operator,
+    Colon,
+    Semicolon,
+    Open_parenthesis,
+    Close_parenthesis,
+    Open_bracket,
+    Close_bracket,
+    Open_brace,
+    Close_brace,
+    Comma,
+    Equal,
 
-    tok_comment,
+    Comment,
 };
 
 class Input
@@ -152,37 +152,37 @@ public:
     {
         switch (token)
         {
-        case tok_error: return "error";
-        case tok_eof: return "eof";
-        case tok_module: return "module";
-        case tok_import: return "import";
-        case tok_export: return "export";
-        case tok_data: return "data";
-        case tok_class: return "class";
-        case tok_instance: return "instance";
-        case tok_identifier: return "identifier";
-        case tok_integer: return "integer";
-        case tok_float: return "float";
-        case tok_char: return "char";
-        case tok_string: return "string";
-        case tok_bool: return "boolean";
-        case tok_if: return "if";
-        case tok_then: return "then";
-        case tok_else: return "else";
-        case tok_let: return "let";
-        case tok_in: return "in";
-        case tok_operator: return "operator";
-        case tok_colon: return "colon";
-        case tok_semicolon: return "semicolon";
-        case tok_open_parenthesis: return "parenthesis";
-        case tok_close_parenthesis: return "parenthesis";
-        case tok_open_bracket: return "bracket";
-        case tok_close_bracket: return "bracket";
-        case tok_open_brace: return "brace";
-        case tok_close_brace: return "brace";
-        case tok_comma: return "comma";
-        case tok_equal: return "equal";
-        case tok_comment: return "comment";
+        case Token::Error: return "error";
+        case Token::Eof: return "eof";
+        case Token::Module: return "module";
+        case Token::Import: return "import";
+        case Token::Export: return "export";
+        case Token::Data: return "data";
+        case Token::Class: return "class";
+        case Token::Instance: return "instance";
+        case Token::Identifier: return "identifier";
+        case Token::Integer: return "integer";
+        case Token::Float: return "float";
+        case Token::Char: return "char";
+        case Token::String: return "string";
+        case Token::Bool: return "boolean";
+        case Token::If: return "if";
+        case Token::Then: return "then";
+        case Token::Else: return "else";
+        case Token::Let: return "let";
+        case Token::In: return "in";
+        case Token::Operator: return "operator";
+        case Token::Colon: return "colon";
+        case Token::Semicolon: return "semicolon";
+        case Token::Open_parenthesis: return "parenthesis";
+        case Token::Close_parenthesis: return "parenthesis";
+        case Token::Open_bracket: return "bracket";
+        case Token::Close_bracket: return "bracket";
+        case Token::Open_brace: return "brace";
+        case Token::Close_brace: return "brace";
+        case Token::Comma: return "comma";
+        case Token::Equal: return "equal";
+        case Token::Comment: return "comment";
         default: return nullptr;
         }
     }

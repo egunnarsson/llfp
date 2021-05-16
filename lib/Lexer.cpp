@@ -47,7 +47,7 @@ int FileInput::getCharInt()
 
 Lexer::Lexer(Input *input) :
     input(input),
-    currentToken(tok_invalid)
+    currentToken(Token::Invalid)
 {
     lastChar = input->getChar();
     nextToken();
@@ -97,16 +97,16 @@ constexpr Token punctuation(int _C)
 {
     switch (_C)
     {
-    case '(': return tok_open_parenthesis;
-    case ')': return tok_close_parenthesis;
-    case ',': return tok_comma;
-    case ':': return tok_colon;
-    case ';': return tok_semicolon;
-    case '[': return tok_open_bracket;
-    case ']': return tok_close_bracket;
-    case '{': return tok_open_brace;
-    case '}': return tok_close_brace;
-    default: return tok_error;
+    case '(': return Token::Open_parenthesis;
+    case ')': return Token::Close_parenthesis;
+    case ',': return Token::Comma;
+    case ':': return Token::Colon;
+    case ';': return Token::Semicolon;
+    case '[': return Token::Open_bracket;
+    case ']': return Token::Close_bracket;
+    case '{': return Token::Open_brace;
+    case '}': return Token::Close_brace;
+    default: return Token::Error;
     }
 }
 
@@ -139,7 +139,7 @@ SourceLocation Lexer::getLocation() const
 
 Token Lexer::parseToken()
 {
-    if (currentToken == tok_error)
+    if (currentToken == Token::Error)
     {
         return currentToken;
     }
@@ -181,7 +181,7 @@ Token Lexer::parseToken()
     }
 
     auto ptoken = punctuation(lastChar);
-    if (ptoken != tok_error)
+    if (ptoken != Token::Error)
     {
         tokenString = static_cast<char>(lastChar);
 
@@ -200,7 +200,7 @@ Token Lexer::parseToken()
     if (lastChar == EOF)
     {
         tokenString.clear();
-        return tok_eof;
+        return Token::Eof;
     }
 
     return error("unknown token");
@@ -209,7 +209,7 @@ Token Lexer::parseToken()
 Token Lexer::error(const char *msg)
 {
     tokenString = msg;
-    return currentToken = tok_error;
+    return currentToken = Token::Error;
 }
 
 // identifier: letter (letter | digit | '_' | '\'')*
@@ -222,31 +222,31 @@ Token Lexer::parseIdentifier()
 
     // TODO: change to switch or map
     if (tokenString == "module")
-        return tok_module;
+        return Token::Module;
     if (tokenString == "import")
-        return tok_import;
+        return Token::Import;
     if (tokenString == "export")
-        return tok_export;
+        return Token::Export;
     if (tokenString == "data")
-        return tok_data;
+        return Token::Data;
     if (tokenString == "class")
-        return tok_class;
+        return Token::Class;
     if (tokenString == "instance")
-        return tok_instance;
+        return Token::Instance;
     if (tokenString == "if")
-        return tok_if;
+        return Token::If;
     if (tokenString == "then")
-        return tok_then;
+        return Token::Then;
     if (tokenString == "else")
-        return tok_else;
+        return Token::Else;
     if (tokenString == "let")
-        return tok_let;
+        return Token::Let;
     if (tokenString == "in")
-        return tok_in;
+        return Token::In;
     if (tokenString == "true" || tokenString == "false")
-        return tok_bool;
+        return Token::Bool;
 
-    return tok_identifier;
+    return Token::Identifier;
 }
 
 // Number: '.'? digit+ | digit* '.' digit+ ('e' '-'? digit+)?
@@ -262,7 +262,7 @@ Token Lexer::parseNumber()
 
     if (lastChar != '.') // integer
     {
-        return isalpha(lastChar) ? error("invalid number") : tok_integer;
+        return isalpha(lastChar) ? error("invalid number") : Token::Integer;
     }
     else // float
     {
@@ -279,11 +279,11 @@ Token Lexer::parseNumber()
         }
         if (tokenString == ".")
         {
-            return tok_operator; // should continue parsing operator... even though there are no operators starting with '.'
+            return Token::Operator; // should continue parsing operator... even though there are no operators starting with '.'
         }
         else
         {
-            return isalpha(lastChar) ? error("invalid number") : tok_float;
+            return isalpha(lastChar) ? error("invalid number") : Token::Float;
         }
     }
 }
@@ -323,7 +323,7 @@ Token Lexer::parseChar()
     }
 
     lastChar = input->getChar();
-    return tok_char;
+    return Token::Char;
 }
 
 // String: '"' ((char - ["\"\\"]) | ('\\' ["\"\\nt"]))* '"'
@@ -358,7 +358,7 @@ Token Lexer::parseString()
     }
 
     lastChar = input->getChar();
-    return tok_string;
+    return Token::String;
 }
 
 Token Lexer::parseOperator()
@@ -372,10 +372,10 @@ Token Lexer::parseOperator()
 
     if (tokenString == "=")
     {
-        return tok_equal;
+        return Token::Equal;
     }
 
-    return tok_operator;
+    return Token::Operator;
 }
 
 // Comments: '#'[.-'\n']*'\n' | #{.*}#
@@ -431,7 +431,7 @@ Token Lexer::parseComment()
     }
     else
     {
-        return tok_comment;
+        return Token::Comment;
     }
 }
 

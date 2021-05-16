@@ -11,11 +11,11 @@ class ExpPrint : public llfp::ast::ExpVisitor
     constexpr const char* litName(llfp::lex::Token t)
     {
         switch (t) {
-            case llfp::lex::tok_integer: return "int";
-            case llfp::lex::tok_float:   return "flt";
-            case llfp::lex::tok_char:    return "char";
-            case llfp::lex::tok_string:  return "str";
-            case llfp::lex::tok_bool:    return "bool";
+            case llfp::lex::Token::Integer: return "int";
+            case llfp::lex::Token::Float:   return "flt";
+            case llfp::lex::Token::Char:    return "char";
+            case llfp::lex::Token::String:  return "str";
+            case llfp::lex::Token::Bool:    return "bool";
             default:                     return "XXX";
         }
     }
@@ -83,7 +83,7 @@ std::ostream& operator<<(std::ostream& os, const llfp::ast::ImportDeclaration& i
 
 std::ostream& operator<<(std::ostream &os, const llfp::ast::Module &m)
 {
-    return os << '{' << m.name << ", " << m.publicDeclarations << ", " << m.imports << ", " << m.functionDeclarations << ", " << m.dataDeclarations << '}';
+    return os << '{' << m.name << ", " << m.publicDeclarations << ", " << m.imports << ", " << m.functionDeclarations << ", " << m.dataDeclarations << ", " << m.classDeclarations << ", "  << m.instanceDeclarations << '}';
 }
 
 std::ostream& operator<<(std::ostream& os, const llfp::ast::NamedArgument& i) { return os << i.name << " = " << i.exp; }

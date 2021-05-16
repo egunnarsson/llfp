@@ -889,7 +889,7 @@ void TypeInferer::visit(ast::LiteralExp& exp)
 {
     switch (exp.tokenType)
     {
-    case lex::tok_integer:
+    case lex::Token::Integer:
 
         if (exp.value.front() == '-')
         {
@@ -902,23 +902,23 @@ void TypeInferer::visit(ast::LiteralExp& exp)
         // or signed
         break;
 
-    case lex::tok_float:
+    case lex::Token::Float:
 
         result = getTypeContext()->getFloatingLiteralType();
         break;
 
-    case lex::tok_char:
+    case lex::Token::Char:
 
         result = getTypeContext()->getChar();
         // add type classes?
         break;
 
-    case lex::tok_string:
+    case lex::Token::String:
 
         Log(exp.location, "string not supported");
         break;
 
-    case lex::tok_bool:
+    case lex::Token::Bool:
 
         result = getTypeContext()->getBool();
         break;

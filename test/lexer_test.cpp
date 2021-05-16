@@ -71,9 +71,9 @@ testing::AssertionResult Parse(const char*, const char*, const char *string, std
     // and that any error is kept
     
     auto lt = lexer.getToken();
-    if ((tokens.end() - 1)->type == tok_error)
+    if ((tokens.end() - 1)->type == Token::Error)
     {
-        if (lt != tok_error)
+        if (lt != Token::Error)
         {
             return testing::AssertionFailure() << "2nd call to getToken after error";
         }
@@ -82,7 +82,7 @@ testing::AssertionResult Parse(const char*, const char*, const char *string, std
             return testing::AssertionFailure() << "getString changed after error";
         }
     }
-    else if (lt != tok_eof)
+    else if (lt != Token::Eof)
     {
         auto ls = lexer.getString();
         TestToken parsedToken = { lt, ls.c_str() };
@@ -90,7 +90,7 @@ testing::AssertionResult Parse(const char*, const char*, const char *string, std
         testing::Message msg;
         msg << " Parsing:" << string << "\n";
         msg << "  Actual:" << parsedToken << "\n";
-        msg << "Expected: " << Lexer::tokenName(tok_eof) << "()";
+        msg << "Expected: " << Lexer::tokenName(Token::Eof) << "()";
         
         return testing::AssertionFailure() << msg;
     }
@@ -112,37 +112,37 @@ TEST(LexerTest, StringInput)
 
 TEST(LexerTest, Tokens)
 {
-    PARSE_TOKEN("module", tok_module, "module");
+    PARSE_TOKEN("module", Token::Module, "module");
     
-    PARSE_TOKEN("import", tok_import, "import");
-    PARSE_TOKEN("export", tok_export, "export");
-    PARSE_TOKEN("data", tok_data, "data");
-    PARSE_TOKEN("true", tok_bool, "true");
-    PARSE_TOKEN("false", tok_bool, "false");
-    PARSE_TOKEN("if", tok_if, "if");
-    PARSE_TOKEN("then", tok_then, "then");
-    PARSE_TOKEN("else", tok_else, "else");
-    PARSE_TOKEN("let", tok_let, "let");
-    PARSE_TOKEN("in", tok_in, "in");
+    PARSE_TOKEN("import", Token::Import, "import");
+    PARSE_TOKEN("export", Token::Export, "export");
+    PARSE_TOKEN("data", Token::Data, "data");
+    PARSE_TOKEN("true", Token::Bool, "true");
+    PARSE_TOKEN("false", Token::Bool, "false");
+    PARSE_TOKEN("if", Token::If, "if");
+    PARSE_TOKEN("then", Token::Then, "then");
+    PARSE_TOKEN("else", Token::Else, "else");
+    PARSE_TOKEN("let", Token::Let, "let");
+    PARSE_TOKEN("in", Token::In, "in");
     
-    PARSE_TOKEN("=", tok_equal, "=");
+    PARSE_TOKEN("=", Token::Equal, "=");
     
-    PARSE_TOKEN("(", tok_open_parenthesis, "(");
-    PARSE_TOKEN(")", tok_close_parenthesis, ")");
-    PARSE_TOKEN("[", tok_open_bracket, "[");
-    PARSE_TOKEN("]", tok_close_bracket, "]");
-    PARSE_TOKEN("{", tok_open_brace, "{");
-    PARSE_TOKEN("}", tok_close_brace, "}");
-    PARSE_TOKEN(",", tok_comma, ",");
-    PARSE_TOKEN(":", tok_colon, ":");
-    PARSE_TOKEN(";", tok_semicolon, ";");
+    PARSE_TOKEN("(", Token::Open_parenthesis, "(");
+    PARSE_TOKEN(")", Token::Close_parenthesis, ")");
+    PARSE_TOKEN("[", Token::Open_bracket, "[");
+    PARSE_TOKEN("]", Token::Close_bracket, "]");
+    PARSE_TOKEN("{", Token::Open_brace, "{");
+    PARSE_TOKEN("}", Token::Close_brace, "}");
+    PARSE_TOKEN(",", Token::Comma, ",");
+    PARSE_TOKEN(":", Token::Colon, ":");
+    PARSE_TOKEN(";", Token::Semicolon, ";");
     
-    PARSE_TOKEN("ö", tok_error, "unknown token");
+    PARSE_TOKEN("ö", Token::Error, "unknown token");
 }
 
 TEST(LexerTest, Whitespace)
 {
-    std::initializer_list<TestToken> tokens = { {tok_eof, ""} };
+    std::initializer_list<TestToken> tokens = { {Token::Eof, ""} };
     PARSE_TOKENS("", tokens);
     PARSE_TOKENS(" ", tokens);
     PARSE_TOKENS("\t", tokens);
@@ -150,68 +150,68 @@ TEST(LexerTest, Whitespace)
     PARSE_TOKENS("\r\n", tokens);
     PARSE_TOKENS("  ", tokens);
     
-    tokens = { {tok_identifier, "a"}, {tok_identifier, "b"} };
+    tokens = { {Token::Identifier, "a"}, {Token::Identifier, "b"} };
     PARSE_TOKENS("a b", tokens);
-    tokens = { {tok_identifier, "a"} };
+    tokens = { {Token::Identifier, "a"} };
     PARSE_TOKENS(" a", tokens);
     PARSE_TOKENS("a ", tokens);
 }
 
 TEST(LexerTest, Operators)
 {
-    PARSE_TOKEN("+", tok_operator, "+");
-    PARSE_TOKEN("-", tok_operator, "-");
-    PARSE_TOKEN("*", tok_operator, "*");
-    PARSE_TOKEN("/", tok_operator, "/");
-    PARSE_TOKEN("%", tok_operator, "%");
+    PARSE_TOKEN("+", Token::Operator, "+");
+    PARSE_TOKEN("-", Token::Operator, "-");
+    PARSE_TOKEN("*", Token::Operator, "*");
+    PARSE_TOKEN("/", Token::Operator, "/");
+    PARSE_TOKEN("%", Token::Operator, "%");
     
     // special...
-    //PARSE_TOKEN("=", tok_operator, "=");
+    //PARSE_TOKEN("=", Token::Operator, "=");
     
-    PARSE_TOKEN("==", tok_operator, "==");
-    PARSE_TOKEN("!=", tok_operator, "!=");
-    PARSE_TOKEN("<", tok_operator, "<");
-    PARSE_TOKEN(">", tok_operator, ">");
-    PARSE_TOKEN("<=", tok_operator, "<=");
-    PARSE_TOKEN(">=", tok_operator, ">=");
+    PARSE_TOKEN("==", Token::Operator, "==");
+    PARSE_TOKEN("!=", Token::Operator, "!=");
+    PARSE_TOKEN("<", Token::Operator, "<");
+    PARSE_TOKEN(">", Token::Operator, ">");
+    PARSE_TOKEN("<=", Token::Operator, "<=");
+    PARSE_TOKEN(">=", Token::Operator, ">=");
 
-    PARSE_TOKEN("<<", tok_operator, "<<");
-    PARSE_TOKEN(">>", tok_operator, ">>");
-    PARSE_TOKEN(">>>", tok_operator, ">>>");
+    PARSE_TOKEN("<<", Token::Operator, "<<");
+    PARSE_TOKEN(">>", Token::Operator, ">>");
+    PARSE_TOKEN(">>>", Token::Operator, ">>>");
     
-    PARSE_TOKEN("&", tok_operator, "&");
-    PARSE_TOKEN("|", tok_operator, "|");
-    PARSE_TOKEN("^", tok_operator, "^");
+    PARSE_TOKEN("&", Token::Operator, "&");
+    PARSE_TOKEN("|", Token::Operator, "|");
+    PARSE_TOKEN("^", Token::Operator, "^");
     
-    PARSE_TOKEN("&&", tok_operator, "&&");
-    PARSE_TOKEN("||", tok_operator, "||");
+    PARSE_TOKEN("&&", Token::Operator, "&&");
+    PARSE_TOKEN("||", Token::Operator, "||");
     
-    PARSE_TOKEN("!", tok_operator, "!");
-    PARSE_TOKEN("~", tok_operator, "~");
+    PARSE_TOKEN("!", Token::Operator, "!");
+    PARSE_TOKEN("~", Token::Operator, "~");
     
-    PARSE_TOKEN(".", tok_operator, ".");
+    PARSE_TOKEN(".", Token::Operator, ".");
 
     // not valid operator but should be parsed as an operator...
-    PARSE_TOKEN(".+", tok_operator, ".+");
+    PARSE_TOKEN(".+", Token::Operator, ".+");
 
     std::initializer_list<TestToken> tokens;
 
-    tokens = { { tok_identifier, "a" }, { tok_operator, ".",  }, { tok_identifier, "b" } };
+    tokens = { { Token::Identifier, "a" }, { Token::Operator, ".",  }, { Token::Identifier, "b" } };
     PARSE_TOKENS("a.b", tokens);
-    //tokens = { { tok_identifier, "a" },{ tok_float, ".2" } };
+    //tokens = { { Token::identifier, "a" },{ Token::float, ".2" } };
     //PARSE_TOKENS("a.2", tokens);
-    tokens = { {tok_operator, "!"}, {tok_open_parenthesis, "("}, {tok_operator, "+"} };
+    tokens = { {Token::Operator, "!"}, {Token::Open_parenthesis, "("}, {Token::Operator, "+"} };
     PARSE_TOKENS("!(+", tokens);
-    tokens = { {tok_operator, "-"}, {tok_close_parenthesis, ")"}, {tok_operator, "/"} };
+    tokens = { {Token::Operator, "-"}, {Token::Close_parenthesis, ")"}, {Token::Operator, "/"} };
     PARSE_TOKENS("-)/", tokens);
-    tokens = { {tok_operator, "&"}, {tok_comma, ","}, {tok_operator, "^"} };
+    tokens = { {Token::Operator, "&"}, {Token::Comma, ","}, {Token::Operator, "^"} };
     PARSE_TOKENS("&,^", tokens);
-    tokens = { {tok_operator, "|"}, {tok_colon, ":"}, {tok_operator, "+-"} };
+    tokens = { {Token::Operator, "|"}, {Token::Colon, ":"}, {Token::Operator, "+-"} };
     PARSE_TOKENS("|:+-", tokens);
-    tokens = { {tok_operator, "!!"}, {tok_semicolon, ";"}, {tok_operator, "+"} };
+    tokens = { {Token::Operator, "!!"}, {Token::Semicolon, ";"}, {Token::Operator, "+"} };
     PARSE_TOKENS("!!;+", tokens);
     
-    tokens = { {tok_operator, "~"}, {tok_identifier, "a"}, {tok_operator, "*"} };
+    tokens = { {Token::Operator, "~"}, {Token::Identifier, "a"}, {Token::Operator, "*"} };
     PARSE_TOKENS("~a*", tokens);
     
     // "["
@@ -219,15 +219,15 @@ TEST(LexerTest, Operators)
 
 TEST(LexerTest, Identifiers)
 {
-    PARSE_TOKEN("a", tok_identifier, "a");
-    PARSE_TOKEN("zz", tok_identifier, "zz");
-    PARSE_TOKEN("A1", tok_identifier, "A1");
-    PARSE_TOKEN("Z'", tok_identifier, "Z'");
-    PARSE_TOKEN("y'a'", tok_identifier, "y'a'");
-    PARSE_TOKEN("Z'b", tok_identifier, "Z'b");
-    PARSE_TOKEN("a_", tok_identifier, "a_");
-    //PARSE_TOKEN("_a", tok_identifier, "_a"); decide what to do with this
-    PARSE_TOKEN("a_b", tok_identifier, "a_b");
+    PARSE_TOKEN("a", Token::Identifier, "a");
+    PARSE_TOKEN("zz", Token::Identifier, "zz");
+    PARSE_TOKEN("A1", Token::Identifier, "A1");
+    PARSE_TOKEN("Z'", Token::Identifier, "Z'");
+    PARSE_TOKEN("y'a'", Token::Identifier, "y'a'");
+    PARSE_TOKEN("Z'b", Token::Identifier, "Z'b");
+    PARSE_TOKEN("a_", Token::Identifier, "a_");
+    //PARSE_TOKEN("_a", Token::identifier, "_a"); decide what to do with this
+    PARSE_TOKEN("a_b", Token::Identifier, "a_b");
 }
 
 //TEST(LexerTest, Integers)
@@ -235,20 +235,20 @@ TEST(LexerTest, Identifiers)
 
 TEST(LexerTest, Numbers)
 {
-    PARSE_TOKEN("1", tok_integer, "1");
-    PARSE_TOKEN("23", tok_integer, "23");
-    PARSE_TOKEN("4.5", tok_float, "4.5");
-    PARSE_TOKEN("67.89", tok_float, "67.89");
-    PARSE_TOKEN(".0", tok_float, ".0");
-    PARSE_TOKEN(".12", tok_float, ".12");
+    PARSE_TOKEN("1", Token::Integer, "1");
+    PARSE_TOKEN("23", Token::Integer, "23");
+    PARSE_TOKEN("4.5", Token::Float, "4.5");
+    PARSE_TOKEN("67.89", Token::Float, "67.89");
+    PARSE_TOKEN(".0", Token::Float, ".0");
+    PARSE_TOKEN(".12", Token::Float, ".12");
     
     std::initializer_list<TestToken> tokens;
     
-    tokens = {{tok_operator, "-"}, {tok_integer, "0"}};
+    tokens = {{Token::Operator, "-"}, {Token::Integer, "0"}};
     PARSE_TOKENS("-0", tokens);
     
-    PARSE_TOKEN("3a", tok_error, "invalid number");
-    PARSE_TOKEN("4.56a", tok_error, "invalid number");
+    PARSE_TOKEN("3a", Token::Error, "invalid number");
+    PARSE_TOKEN("4.56a", Token::Error, "invalid number");
     
     // "1.2,3"
 }
@@ -258,27 +258,27 @@ TEST(LexerTest, Numbers)
 
 TEST(LexerTest, StringsAndChars)
 {
-    PARSE_TOKEN("'a'", tok_char, "a");
-    PARSE_TOKEN("'\\n'", tok_char, "\n");
-    PARSE_TOKEN("'\\t'", tok_char, "\t");
-    PARSE_TOKEN("'\\''", tok_char, "'");
-    PARSE_TOKEN("'\\\\'", tok_char, "\\");
+    PARSE_TOKEN("'a'", Token::Char, "a");
+    PARSE_TOKEN("'\\n'", Token::Char, "\n");
+    PARSE_TOKEN("'\\t'", Token::Char, "\t");
+    PARSE_TOKEN("'\\''", Token::Char, "'");
+    PARSE_TOKEN("'\\\\'", Token::Char, "\\");
     
-    PARSE_TOKEN("\"\"", tok_string, "");
-    PARSE_TOKEN("\"aa\"", tok_string, "aa");
-    PARSE_TOKEN("\"aa\\\"aa\"", tok_string, "aa\"aa");
+    PARSE_TOKEN("\"\"", Token::String, "");
+    PARSE_TOKEN("\"aa\"", Token::String, "aa");
+    PARSE_TOKEN("\"aa\\\"aa\"", Token::String, "aa\"aa");
     
     // invalid
-    PARSE_TOKEN("''", tok_error, "empty character");
-    PARSE_TOKEN("'", tok_error, "unclosed character");
-    PARSE_TOKEN("'''", tok_error, "empty character");
-    PARSE_TOKEN("'aa", tok_error, "unclosed character");
-    PARSE_TOKEN("'\\a'", tok_error, "invalid escape character");
-    PARSE_TOKEN("'\\na'", tok_error, "unclosed character");
+    PARSE_TOKEN("''", Token::Error, "empty character");
+    PARSE_TOKEN("'", Token::Error, "unclosed character");
+    PARSE_TOKEN("'''", Token::Error, "empty character");
+    PARSE_TOKEN("'aa", Token::Error, "unclosed character");
+    PARSE_TOKEN("'\\a'", Token::Error, "invalid escape character");
+    PARSE_TOKEN("'\\na'", Token::Error, "unclosed character");
     
-    PARSE_TOKEN("\"", tok_error, "unclosed string at end of file");
-    PARSE_TOKEN("\"a", tok_error, "unclosed string at end of file");
-    PARSE_TOKEN("\"\\a\"", tok_error, "invalid escape character");
+    PARSE_TOKEN("\"", Token::Error, "unclosed string at end of file");
+    PARSE_TOKEN("\"a", Token::Error, "unclosed string at end of file");
+    PARSE_TOKEN("\"\\a\"", Token::Error, "invalid escape character");
 }
 
 TEST(LexerTest, Comments)
