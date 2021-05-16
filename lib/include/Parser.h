@@ -46,7 +46,7 @@ private:
     std::unique_ptr<ast::Function>         parseFunction(bool exported);
     std::unique_ptr<ast::ClassDeclaration> parseClass();
     std::unique_ptr<ast::ClassInstance>    parseInstance();
-    std::unique_ptr<ast::FunctionDecl>     parseFunctionDefinition();
+    std::unique_ptr<ast::FunctionDecl>     parseFunctionDeclaration();
 
     std::unique_ptr<ast::Exp> parseLiteralExp();
     std::unique_ptr<ast::Exp> parseParenthesizedExp();

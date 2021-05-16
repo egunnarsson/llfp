@@ -296,7 +296,7 @@ std::unique_ptr<ast::Function> Parser::parseFunction(bool exported)
     if (!parseType(type)) { return nullptr; }
     if (type.identifier.name.empty())
     {
-        return error<ast::Function>("expected an identifier"); // bad error when "t[] f() = 1;"
+        return error<ast::Function>("expected an identifier"); // TODO: bad error when "t[] f() = 1;"
     }
     std::string identifier;
 
@@ -383,7 +383,7 @@ std::unique_ptr<ast::Function> Parser::parseFunction(bool exported)
         exported);
 }
 
-// "class" <id> <id> "{" [ <funDecl> ] "}" ";"
+// "class" <id> <id> "{" <funDecl> [ <funDecl> ] "}"
 std::unique_ptr<ast::ClassDeclaration> Parser::parseClass()
 {
     auto location = lexer->getLocation();
@@ -409,7 +409,7 @@ std::unique_ptr<ast::ClassDeclaration> Parser::parseClass()
     std::vector<std::unique_ptr<ast::FunctionDecl>> functions;
     while (true)
     {
-        auto fun = parseFunctionDefinition();
+        auto fun = parseFunctionDeclaration();
         if (fun == nullptr) { return nullptr; }
         functions.push_back(std::move(fun));
 
@@ -420,12 +420,10 @@ std::unique_ptr<ast::ClassDeclaration> Parser::parseClass()
     }
     lexer->nextToken(); // eat '}'
 
-    if (!expect(lex::tok_semicolon)) { return nullptr; }
-
     return std::make_unique<ast::ClassDeclaration>(location, std::move(identifier), std::move(typeVar), std::move(functions));
 }
 
-//"instance" <gid> <tid> "{" { <fun> } "}" ";"
+//"instance" <gid> <tid> "{" { <fun> } "}"
 std::unique_ptr<ast::ClassInstance> Parser::parseInstance()
 {
     auto location = lexer->getLocation();
@@ -462,12 +460,10 @@ std::unique_ptr<ast::ClassInstance> Parser::parseInstance()
     }
     lexer->nextToken(); // eat '}'
 
-    if (!expect(lex::tok_semicolon)) { return nullptr; }
-
     return std::make_unique<ast::ClassInstance>(location, std::move(identifier), std::move(typeArg), std::move(functions));
 }
 
-std::unique_ptr<ast::FunctionDecl> Parser::parseFunctionDefinition()
+std::unique_ptr<ast::FunctionDecl> Parser::parseFunctionDeclaration()
 {
     auto location = lexer->getLocation();
 
@@ -475,7 +471,7 @@ std::unique_ptr<ast::FunctionDecl> Parser::parseFunctionDefinition()
     if (!parseType(returnType)) { return nullptr; }
     if (returnType.identifier.name.empty())
     {
-        return error<ast::FunctionDecl>("expected return type");
+        return error<ast::FunctionDecl>("expected a function declaration");
     }
 
     if (lexer->getToken() != lex::tok_identifier)
@@ -486,28 +482,35 @@ std::unique_ptr<ast::FunctionDecl> Parser::parseFunctionDefinition()
     lexer->nextToken();
 
     std::vector<std::unique_ptr<ast::Parameter>> args;
-    auto parseArg = [this, &args]()
+    if (lexer->getToken() == lex::tok_open_parenthesis)
     {
-        auto paramLocation = lexer->getLocation();
-        ast::TypeIdentifier argTypeName;
-        if (!parseType(argTypeName)) { return false; }
-        if (argTypeName.identifier.name.empty())
+        auto parseArg = [this, &args]()
         {
-            Log(lexer->getLocation(), "expected an identifier");
-            return false;
-        }
+            auto paramLocation = lexer->getLocation();
+            ast::TypeIdentifier argTypeName;
+            if (!parseType(argTypeName)) { return false; }
+            if (argTypeName.identifier.name.empty())
+            {
+                Log(lexer->getLocation(), "expected an identifier");
+                return false;
+            }
 
-        std::string argIdentifier;
-        if (lexer->getToken() == lex::tok_identifier)
-        {
-            argIdentifier = lexer->getString();
-            lexer->nextToken();
-        }
+            std::string argIdentifier;
+            if (lexer->getToken() == lex::tok_identifier)
+            {
+                argIdentifier = lexer->getString();
+                lexer->nextToken();
+            }
 
-        args.push_back(std::make_unique<ast::Parameter>(paramLocation, std::move(argTypeName), std::move(argIdentifier)));
-        return true;
-    };
-    if (!parseList(parseArg)) { return nullptr; }
+            args.push_back(std::make_unique<ast::Parameter>(paramLocation, std::move(argTypeName), std::move(argIdentifier)));
+            return true;
+        };
+        if (!parseList(parseArg)) { return nullptr; }
+    }
+    else
+    {
+        return error<ast::FunctionDecl>("expected 'parenthesis'");
+    }
 
     if (!expect(lex::tok_semicolon)) { return nullptr; }
 
