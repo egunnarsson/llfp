@@ -24,20 +24,18 @@ is it ok to fix the type in these cases?
 #pragma warning(pop)
 
 #include "Ast.h"
+#include "IModule.h"
 #include "Common.h"
 
 
 namespace llfp
 {
 
-class SourceModule;
 class ImportedModule;
+class SourceModule;
 
 namespace type
 {
-
-typedef std::tuple<ImportedModule*, const ast::Function*> FunAst;
-typedef std::tuple<const ImportedModule*, const ast::DataDeclaration*> DataAst;
 
 struct Identifier
 {
@@ -166,20 +164,20 @@ public:
     const std::unordered_set<TypeClass*>& getTypeClasses() const;
 
     // only used in unify struct types, remove if we do type visitor
-    virtual const ast::DataDeclaration* getAst() const { return nullptr; }
+    virtual const ast::Data* getAst() const { return nullptr; }
 };
 
 class StructType : public Type
 {
-    llvm::StructType* const     llvmType_; // without this Types could be shared between contexts...
-    const ast::DataDeclaration* ast;
-    std::vector<TypePtr>        fields;
-    std::vector<TypePtr>        parameters;
+    llvm::StructType* const llvmType_; // without this Types could be shared between contexts...
+    const ast::Data*        ast;
+    std::vector<TypePtr>    fields;
+    std::vector<TypePtr>    parameters;
 
 public:
 
-    StructType(Identifier identifier, const ast::DataDeclaration* ast, llvm::StructType *llvmType);
-    StructType(Identifier identifier, const ast::DataDeclaration* ast, std::vector<TypePtr> fieldTypes);
+    StructType(Identifier identifier, const ast::Data* ast, llvm::StructType *llvmType);
+    StructType(Identifier identifier, const ast::Data* ast, std::vector<TypePtr> fieldTypes);
 
     bool                 isConcreteType() const override;
 
@@ -193,7 +191,7 @@ public:
 
     void                 setFields(std::vector<TypePtr> fieldTypes);
 
-    const ast::DataDeclaration* getAst() const override;
+    const ast::Data*     getAst() const override;
 };
 
 struct IdentifierHash
@@ -212,8 +210,8 @@ struct IdentifierHash
 
 class TypeContext
 {
-    llvm::LLVMContext& llvmContext;
-    SourceModule*      sourceModule;
+    llvm::LLVMContext& llvmContext; // to create types
+    SourceModule*      sourceModule; // to do global lookups (actually need parent), qualify names for equals function
 
     std::unordered_map<Identifier, TypePtr, IdentifierHash> types;
 
@@ -267,6 +265,7 @@ public:
     TypePtr getFloatingLiteralType();
 
     TypePtr getType(const Identifier& identifier);
+    bool    isPrimitive(const Identifier& identifier);
 
 private:
 
@@ -274,8 +273,6 @@ private:
     TypePtr unifyConcreteAndLiteral(const TypePtr& nonLiteralType, const TypePtr& literalType);
     TypePtr unifyCheckTypeClass(const TypePtr& t, const TypePtr& typeClass);
     TypePtr unifyStructTypes(const TypePtr& a, const TypePtr& b);
-
-    bool    fullyQualifiedName(Identifier& identifier, const ast::TypeIdentifier& tid, const ImportedModule* lookupModule);
 };
 
 class TypeScope
@@ -287,8 +284,9 @@ public:
     virtual TypePtr      getTypeByName(const ast::TypeIdentifier& identifier, const ImportedModule *astModule)
         { return getTypeContext()->getTypeFromAst(identifier, astModule); }
     // a bit out of place but...
-    virtual FunAst       getFunctionAST(const GlobalIdentifier &identifier) = 0;
-    virtual DataAst      getDataAST(const GlobalIdentifier &identifier) = 0;
+    virtual llfp::FunAst       getFunctionAST(const GlobalIdentifier &identifier) = 0;
+    virtual llfp::FunDeclAst   getFunctionDeclarationAST(const GlobalIdentifier& identifier) = 0;
+    virtual llfp::DataAst      getDataAST(const GlobalIdentifier &identifier) = 0;
 
 protected:
 
@@ -310,6 +308,7 @@ public:
     TypeContext* getTypeContext() override;
     TypePtr      getVariableType(const std::string& variable) override;
     FunAst       getFunctionAST(const GlobalIdentifier& identifier) override;
+    FunDeclAst   getFunctionDeclarationAST(const GlobalIdentifier& identifier) override;
     DataAst      getDataAST(const GlobalIdentifier& identifier) override;
 };
 
@@ -323,7 +322,7 @@ class ConstructorTypeScope : public TypeScope
 
 public:
 
-    ConstructorTypeScope(TypeScope *parent_, const ast::DataDeclaration *ast);
+    ConstructorTypeScope(TypeScope *parent_, const ast::Data *ast);
     virtual ~ConstructorTypeScope();
 
     bool updateType(const ast::TypeIdentifier& identifier, const TypePtr &type);
@@ -334,6 +333,7 @@ public:
     TypePtr      getTypeByName(const ast::TypeIdentifier& identifier, const ImportedModule*astModule) override;// { return getTypeContext()->getType(identifier); }
     // a bit out of place but...
     FunAst       getFunctionAST(const GlobalIdentifier& identifier) override;
+    FunDeclAst   getFunctionDeclarationAST(const GlobalIdentifier& identifier) override;
     DataAst      getDataAST(const GlobalIdentifier& identifier) override;
 
 };
@@ -365,8 +365,26 @@ public:
     TypeContext* getTypeContext() override;
     TypePtr      getVariableType(const std::string& variable) override;
     FunAst       getFunctionAST(const GlobalIdentifier& identifier) override;
+    FunDeclAst   getFunctionDeclarationAST(const GlobalIdentifier& identifier) override;
     DataAst      getDataAST(const GlobalIdentifier& identifier) override;
 };
 
 } // namespace type
 } // namespace llfp
+
+/*namespace std
+{
+template<> struct hash<llfp::type::Identifier>
+{
+    std::size_t operator()(llfp::type::Identifier const& id) const noexcept
+    {
+        std::vector<llvm::hash_code> tmp(id.parameters.size(), 0);
+        std::transform(id.parameters.begin(), id.parameters.end(), tmp.begin(),
+            [](llfp::type::Identifier const& id) { return hash<llfp::type::Identifier>{}(id); });
+
+        return llvm::hash_combine(
+            std::hash<llfp::GlobalIdentifier>{}(id.name),
+            llvm::hash_combine_range(tmp.begin(), tmp.end()));
+    }
+};
+}*/

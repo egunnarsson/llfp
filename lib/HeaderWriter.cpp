@@ -54,18 +54,18 @@ std::string convertType(llfp::SourceModule &module, GlobalIdentifier& type)
         }
     }
 
-    const ImportedModule *importedModule;
-    const ast::DataDeclaration *typeDeclaration;
-    std::tie(importedModule, typeDeclaration) = module.lookupType(type);
-    if (importedModule != nullptr && typeDeclaration != nullptr)
+    //const ImportedModule *importedModule;
+    //const ast::Data *typeDeclaration;
+    auto ast = module.lookupType(type);
+    if (ast.importedModule != nullptr && ast.data != nullptr)
     {
-        if (typeDeclaration->typeVariables.empty())
+        if (ast.data->typeVariables.empty())
         {
-            return importedModule->getMangledName(typeDeclaration, {});
+            return ast.importedModule->getMangledName(ast.data, {});
         }
         else
         {
-            llvm::errs() << "cannot export data type with type variables: " << importedModule->name() << ':' << typeDeclaration->name;
+            llvm::errs() << "cannot export data type with type variables: " << ast.importedModule->name() << ':' << ast.data->name;
             return std::string();
         }
     }
@@ -101,7 +101,7 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
     // for data used from other modules we need to #include ""
 
     // TODO: C requires these to be in order if they refer to each other
-    for (auto &d : module.getAST()->dataDeclarations)
+    for (auto &d : module.getAST()->datas)
     {
         // TODO: instead we should mark them as needed?
         // otherwise we need to check recursively if all children are also exported
@@ -124,7 +124,7 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
         os << "};\n\n";
     }
 
-    for (auto &f : module.getAST()->functionDeclarations)
+    for (auto &f : module.getAST()->functions)
     {
         if (!f->exported) { continue; }
 

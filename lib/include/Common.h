@@ -53,3 +53,15 @@ T find(const std::unordered_map<std::string, T> &map, const std::string &key, T 
 }
 
 } // llfp
+
+
+namespace std
+{
+template<> struct hash<llfp::GlobalIdentifier>
+{
+    std::size_t operator()(llfp::GlobalIdentifier const& id) const noexcept
+    {
+        return llvm::hash_combine(llvm::hash_value(id.name), llvm::hash_value(id.moduleName));
+    }
+};
+}

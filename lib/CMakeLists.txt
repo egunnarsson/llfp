@@ -4,6 +4,7 @@ include_directories(${LLVM_INCLUDE_DIRS} ${LLFP_INCLUDE_DIR})
 add_library(llfp_lib
 	Ast.cpp
 	Codegen.cpp
+	Compiler.cpp
 	HeaderWriter.cpp
 	Lexer.cpp
 	Module.cpp
@@ -12,7 +13,9 @@ add_library(llfp_lib
 	include/Ast.h
 	include/Codegen.h
 	include/Common.h
+	include/Compiler.h
 	include/HeaderWriter.h
+	include/IModule.h
 	include/Lexer.h
 	include/Log.h
 	include/Module.h

@@ -1,4 +1,6 @@
 
+#include <stack>
+
 #pragma warning(push, 0)
 // C4996 use of function, class member, variable, or typedef that's marked deprecated
 #pragma warning(disable : 4996)
@@ -10,6 +12,7 @@
 
 #pragma warning(pop)
 
+#include "Compiler.h"
 #include "Log.h"
 #include "Module.h"
 
@@ -83,7 +86,7 @@ bool CodeGenerator::generateFunction(const ast::Function*ast, std::vector<type::
     return f != nullptr;
 }
 
-Function* CodeGenerator::generatePrototype(const ImportedModule* module, const ast::Function*ast, std::vector<type::TypePtr> types)
+Function* CodeGenerator::generatePrototype(const ImportedModule* module, const ast::Function* ast, std::vector<type::TypePtr> types)
 {
     if (types.empty())
     {
@@ -204,17 +207,98 @@ void CodeGenerator::AddDllMain()
     llvmBuilder.CreateRet(value);
 }
 
+std::stack<int> findTypeVariableIndex(const std::string &typeVar, const ast::TypeIdentifier& type)
+{
+    int paramIndex = 0;
+    for (auto& param : type.parameters)
+    {
+        if (param.parameters.empty() && param.identifier.moduleName.empty() && param.identifier.name == typeVar)
+        {
+            std::stack<int> typeVarIndex;
+            typeVarIndex.push(paramIndex);
+            return typeVarIndex;
+        }
+
+        {
+            auto typeVarIndex = findTypeVariableIndex(typeVar, param);
+            if (!typeVarIndex.empty())
+            {
+                typeVarIndex.push(paramIndex);
+                return typeVarIndex;
+            }
+        }
+
+        ++paramIndex;
+    }
+    return {};
+}
+
+type::Identifier getTypeByIndex(std::stack<int> index, const type::TypePtr& type)
+{
+    if (index.empty())
+    {
+        return type->identifier();
+    }
+    else
+    {
+        auto currentIndex = index.top();
+        index.pop();
+        return getTypeByIndex(std::move(index), type->getTypeParameter(currentIndex));
+    }
+}
+
+type::Identifier findInstanceType(const ast::Class *classDecl, const ast::FunctionDeclaration* funDecl, const std::vector<type::TypePtr> & types)
+{
+    int first = -1;
+    auto typeVariableIndex = findTypeVariableIndex(classDecl->typeVariable, funDecl->type);
+    if (typeVariableIndex.empty())
+    {
+        for (int paramIndex = 0; paramIndex < funDecl->parameters.size(); ++paramIndex)
+        {
+            typeVariableIndex = findTypeVariableIndex(classDecl->typeVariable, funDecl->parameters[paramIndex]->type);
+            if (!typeVariableIndex.empty())
+            {
+                first = paramIndex + 1;
+            }
+        }
+    }
+    else
+    {
+        first = 0;
+    }
+
+    if (first == -1)
+    {
+        return {};
+    }
+    else
+    {
+        return getTypeByIndex(std::move(typeVariableIndex), types[first]);
+    }
+}
+
 Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::vector<type::TypePtr> types)
 {
-    ImportedModule *importedModule;
-    const ast::Function *function;
-    std::tie(importedModule, function) = sourceModule->lookupFunction(identifier);
-    if (importedModule != nullptr && function != nullptr)
+    FunAst ast;
+
+    auto astDecl = sourceModule->lookupFunctionDecl(identifier);
+    if (astDecl.function != nullptr)
     {
-        auto proto = generatePrototype(importedModule, function, std::move(types));
+        type::Identifier instanceType = findInstanceType(astDecl.class_, astDecl.function, types);
+        // if (identifier.moduleName.empty()) ?
+        ast = sourceModule->getParent()->lookupInstance(identifier.name, instanceType);
+    }
+    else
+    {
+        ast = sourceModule->lookupFunction(identifier);
+    }
+
+    if (ast.function != nullptr)
+    {
+        auto proto = generatePrototype(ast.importedModule, ast.function, std::move(types));
         if (proto != nullptr)
         {
-            importedModule->requireFunctionInstance({ identifier.name, &proto->types });
+            sourceModule->getParent()->requireFunctionInstance({ ast, &proto->types });
         }
         return proto;
     }
@@ -920,12 +1004,17 @@ Function* ExpCodeGenerator::getFunction(const GlobalIdentifier& identifier, std:
     return generator->getFunction(identifier, std::move(types));
 }
 
-type::FunAst ExpCodeGenerator::getFunctionAST(const GlobalIdentifier& identifier)
+FunAst ExpCodeGenerator::getFunctionAST(const GlobalIdentifier& identifier)
 {
     return generator->sourceModule->lookupFunction(identifier);
 }
 
-type::DataAst ExpCodeGenerator::getDataAST(const GlobalIdentifier& identifier)
+FunDeclAst ExpCodeGenerator::getFunctionDeclarationAST(const GlobalIdentifier& identifier)
+{
+    return generator->sourceModule->lookupFunctionDecl(identifier);
+}
+
+DataAst ExpCodeGenerator::getDataAST(const GlobalIdentifier& identifier)
 {
     return generator->sourceModule->lookupType(identifier);
 }

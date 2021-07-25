@@ -12,13 +12,13 @@
 #pragma warning(pop)
 
 #include "Ast.h"
+#include "IModule.h"
 #include "Type.h"
 
 
 namespace llfp
 {
 
-class ImportedModule;
 class SourceModule;
 
 namespace codegen
@@ -28,8 +28,8 @@ class ExpCodeGenerator;
 
 struct Function
 {
-    const ast::Function*     ast;
-    llvm::Function*          llvm;
+    const ast::Function*       ast;
+    llvm::Function*            llvm;
     std::vector<type::TypePtr> types;
 };
 
@@ -41,7 +41,7 @@ struct Value
 
 class CodeGenerator
 {
-    SourceModule*                 sourceModule;
+    SourceModule*                 sourceModule; //lookup (local and global thru parent) 
 
     llvm::LLVMContext             llvmContext; // one context per module, one module compiled per thread
     llvm::IRBuilder<>             llvmBuilder;
@@ -98,8 +98,9 @@ public:
 
     type::TypeContext*   getTypeContext() override { return generator->getTypeContext(); }
     type::TypePtr        getVariableType(const std::string& variable) override;
-    type::FunAst         getFunctionAST(const GlobalIdentifier& identifier) override;
-    type::DataAst        getDataAST(const GlobalIdentifier& identifier) override;
+    FunAst               getFunctionAST(const GlobalIdentifier& identifier) override;
+    FunDeclAst           getFunctionDeclarationAST(const GlobalIdentifier& identifier) override;
+    DataAst              getDataAST(const GlobalIdentifier& identifier) override;
 
     llvm::Value*         getResult();
 

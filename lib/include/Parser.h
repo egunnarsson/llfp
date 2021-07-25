@@ -42,11 +42,11 @@ private:
     bool                      parseList(F parseElement);
     bool                      parseDeclaration(const std::unique_ptr<ast::Module> &module);
 
-    std::unique_ptr<ast::DataDeclaration>  parseData(bool exported);
-    std::unique_ptr<ast::Function>         parseFunction(bool exported);
-    std::unique_ptr<ast::ClassDeclaration> parseClass();
-    std::unique_ptr<ast::ClassInstance>    parseInstance();
-    std::unique_ptr<ast::FunctionDecl>     parseFunctionDeclaration();
+    std::unique_ptr<ast::Data>                parseData(bool exported);
+    std::unique_ptr<ast::Function>            parseFunction(bool exported);
+    std::unique_ptr<ast::Class>               parseClass();
+    std::unique_ptr<ast::ClassInstance>       parseInstance();
+    std::unique_ptr<ast::FunctionDeclaration> parseFunctionDeclaration();
 
     std::unique_ptr<ast::Exp> parseLiteralExp();
     std::unique_ptr<ast::Exp> parseParenthesizedExp();

@@ -40,7 +40,7 @@ Field::Field(SourceLocation location_, TypeIdentifier type_, std::string name_) 
 Field::~Field() {}
 
 
-DataDeclaration::DataDeclaration(
+Data::Data(
     SourceLocation location_,
     std::string name_,
     std::vector<std::string> typeVariables_,
@@ -54,7 +54,7 @@ DataDeclaration::DataDeclaration(
     exported{ exported_ }
 {}
 
-DataDeclaration::~DataDeclaration() {}
+Data::~Data() {}
 
 
 Parameter::Parameter(SourceLocation location_, TypeIdentifier type_, std::string identifier_) :
@@ -89,7 +89,7 @@ Function::Function(
 Function::~Function() {}
 
 
-FunctionDecl::FunctionDecl(
+FunctionDeclaration::FunctionDeclaration(
     SourceLocation location_,
     std::string name_,
     TypeIdentifier type_,
@@ -101,14 +101,14 @@ FunctionDecl::FunctionDecl(
     parameters(std::move(parameters_))
 {}
 
-FunctionDecl::~FunctionDecl() {}
+FunctionDeclaration::~FunctionDeclaration() {}
 
 
-ClassDeclaration::ClassDeclaration(
+Class::Class(
     SourceLocation location_,
     std::string name_,
     std::string typeVariable_,
-    std::vector<std::unique_ptr<FunctionDecl>> functions_) :
+    std::vector<std::unique_ptr<FunctionDeclaration>> functions_) :
 
     Node(location_),
     name(std::move(name_)),
@@ -116,7 +116,7 @@ ClassDeclaration::ClassDeclaration(
     functions(std::move(functions_))
 {}
 
-ClassDeclaration::~ClassDeclaration() {}
+Class::~Class() {}
 
 
 ClassInstance::ClassInstance(
@@ -134,20 +134,20 @@ ClassInstance::ClassInstance(
 ClassInstance::~ClassInstance() {}
 
 
-PublicDeclaration::PublicDeclaration(SourceLocation location_, std::string name_) :
+Public::Public(SourceLocation location_, std::string name_) :
     Node(location_),
     name{ std::move(name_) }
 {}
 
-PublicDeclaration::~PublicDeclaration() {}
+Public::~Public() {}
 
 
-ImportDeclaration::ImportDeclaration(SourceLocation location_, std::string name_) :
+Import::Import(SourceLocation location_, std::string name_) :
     Node(location_),
     name{ std::move(name_) }
 {}
 
-ImportDeclaration::~ImportDeclaration() {}
+Import::~Import() {}
 
 
 Module::Module(SourceLocation location_, std::string name_) :

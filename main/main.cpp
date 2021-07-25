@@ -161,7 +161,7 @@ int write(llfp::SourceModule* module, llvm::SmallString<128> &output)
     if (result) { return result; }
     result = writeHeaderFile(module, output);
     if (result) { return result; }
-    return 0;
+    return NoError;
 }
 
 int main(int argc, char *argv[])

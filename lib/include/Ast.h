@@ -15,6 +15,8 @@ namespace ast
 
 struct TypeIdentifier
 {
+    // location?
+
     GlobalIdentifier            identifier;
     std::vector<TypeIdentifier> parameters;
 
@@ -74,7 +76,7 @@ public:
     virtual ~Field();
 };
 
-class DataDeclaration : public Node
+class Data : public Node
 {
 public:
 
@@ -83,13 +85,13 @@ public:
     std::vector<Field>       fields;
     bool                     exported;
 
-    DataDeclaration(
+    Data(
         SourceLocation location_,
         std::string name_,
         std::vector<std::string> typeVariables_,
         std::vector<Field> fields_,
         bool exported_);
-    virtual ~DataDeclaration();
+    virtual ~Data();
 };
 
 class Parameter : public Node
@@ -115,7 +117,14 @@ public:
 
     virtual ~Exp();
 };
-
+/*
+enum FunctionType
+{
+    Exported,
+    Local,
+    Instance
+};
+*/
 class Function : public Node
 {
 public:
@@ -123,7 +132,7 @@ public:
     std::string          name;
     TypeIdentifier       type;
     std::vector<std::unique_ptr<Parameter>> parameters;
-    std::unique_ptr<Exp> functionBody;
+    std::unique_ptr<Exp> functionBody; // rename body
     bool                 exported;
 
     Function(
@@ -136,7 +145,7 @@ public:
     virtual ~Function();
 };
 
-class FunctionDecl : public Node
+class FunctionDeclaration : public Node
 {
 public:
 
@@ -144,28 +153,28 @@ public:
     TypeIdentifier type;
     std::vector<std::unique_ptr<Parameter>> parameters;
 
-    FunctionDecl(
+    FunctionDeclaration(
         SourceLocation location_,
         std::string name_,
         TypeIdentifier type_,
         std::vector<std::unique_ptr<Parameter>> parameters_);
-    virtual ~FunctionDecl();
+    virtual ~FunctionDeclaration();
 };
 
-class ClassDeclaration : public Node
+class Class : public Node
 {
 public:
 
     std::string name;
     std::string typeVariable;
-    std::vector<std::unique_ptr<FunctionDecl>> functions;
+    std::vector<std::unique_ptr<FunctionDeclaration>> functions;
 
-    ClassDeclaration(
+    Class(
         SourceLocation location_,
         std::string name_,
         std::string typeVariable_,
-        std::vector<std::unique_ptr<FunctionDecl>> functions_);
-    virtual ~ClassDeclaration();
+        std::vector<std::unique_ptr<FunctionDeclaration>> functions_);
+    virtual ~Class();
 };
 
 class ClassInstance : public Node
@@ -184,37 +193,37 @@ public:
     virtual ~ClassInstance();
 };
 
-class PublicDeclaration : public Node
+class Public : public Node
 {
 public:
 
     std::string name;
 
-    PublicDeclaration(SourceLocation location_, std::string name_);
-    virtual ~PublicDeclaration();
+    Public(SourceLocation location_, std::string name_);
+    virtual ~Public();
 };
 
-class ImportDeclaration : public Node
+class Import : public Node
 {
 public:
 
     std::string name;
 
-    ImportDeclaration(SourceLocation location_, std::string name_);
-    virtual ~ImportDeclaration();
+    Import(SourceLocation location_, std::string name_);
+    virtual ~Import();
 };
 
 class Module : public Node
 {
 public:
 
-    std::string                                    name;
-    std::vector<PublicDeclaration>                 publicDeclarations;
-    std::vector<ImportDeclaration>                 imports;
-    std::vector<std::unique_ptr<DataDeclaration>>  dataDeclarations;
-    std::vector<std::unique_ptr<Function>>         functionDeclarations;
-    std::vector<std::unique_ptr<ClassDeclaration>> classDeclarations;
-    std::vector<std::unique_ptr<ClassInstance>>    instanceDeclarations;
+    std::string                                 name;
+    std::vector<Public>                         publics;
+    std::vector<Import>                         imports;
+    std::vector<std::unique_ptr<Data>>          datas;
+    std::vector<std::unique_ptr<Function>>      functions;
+    std::vector<std::unique_ptr<Class>>         classes;
+    std::vector<std::unique_ptr<ClassInstance>> classInstances;
 
     Module(SourceLocation location_, std::string name_);
     virtual ~Module();
@@ -289,7 +298,7 @@ class LiteralExp : public Exp
 {
 public:
 
-    lex::Token  tokenType;
+    lex::Token  tokenType; // remove this dependency
     std::string value;
 
     LiteralExp(SourceLocation location_, lex::Token tokenType_, std::string value_);

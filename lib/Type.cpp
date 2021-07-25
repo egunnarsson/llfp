@@ -9,6 +9,7 @@
 
 #pragma warning(pop)
 
+#include "Compiler.h"
 #include "Log.h"
 #include "Module.h"
 
@@ -389,14 +390,14 @@ TypePtr TypeContext::fix(const TypePtr& t)
 }
 
 
-StructType::StructType(Identifier identifier, const ast::DataDeclaration* ast_, llvm::StructType* llvmType) :
+StructType::StructType(Identifier identifier, const ast::Data* ast_, llvm::StructType* llvmType) :
     Type(std::move(identifier), llvmType),
     llvmType_{ llvmType },
     ast{ ast_ }
 {
 }
 
-StructType::StructType(Identifier identifier, const ast::DataDeclaration* ast_, std::vector<TypePtr> fieldTypes) :
+StructType::StructType(Identifier identifier, const ast::Data* ast_, std::vector<TypePtr> fieldTypes) :
     Type(std::move(identifier), false),
     llvmType_{ nullptr },
     ast{ ast_ }
@@ -500,7 +501,7 @@ void StructType::setFields(std::vector<TypePtr> fieldTypes)
     fields = std::move(fieldTypes);
 }
 
-const ast::DataDeclaration* StructType::getAst() const
+const ast::Data* StructType::getAst() const
 {
     return ast;
 }
@@ -550,46 +551,12 @@ TypePtr TypeContext::getTypeFromAst(const ast::TypeIdentifier& identifier)
 TypePtr TypeContext::getTypeFromAst(const ast::TypeIdentifier& identifier, const ImportedModule* lookupModule)
 {
     Identifier id;
-    if (fullyQualifiedName(id, identifier, lookupModule))
+    if (lookupModule->fullyQualifiedName(id, identifier))
     {
         return getType(id);
     }
     Log({}, "failed to fully qualify name: ", identifier.str());
     return nullptr;
-}
-
-bool TypeContext::fullyQualifiedName(Identifier& identifier, const ast::TypeIdentifier& tid, const ImportedModule* lookupModule)
-{
-    // check primitve type
-    if (tid.parameters.empty() && tid.identifier.moduleName.empty())
-    {
-        Identifier id{ tid.identifier, {} };
-        if (types.find(id) != types.end())
-        {
-            identifier = std::move(id);
-            return true;
-        }
-    }
-
-    const ImportedModule* astModule;
-    const llfp::ast::DataDeclaration* ast;
-    std::tie(astModule, ast) = lookupModule->lookupType(tid.identifier);
-    if (astModule == nullptr || ast == nullptr)
-    {
-        return false;
-    }
-
-    identifier.name = {astModule->name(), ast->name};
-    assert(identifier.parameters.size() == 0);
-    for (auto& param : tid.parameters)
-    {
-        identifier.parameters.push_back({});
-        if (!fullyQualifiedName(identifier.parameters.back(), param, lookupModule))
-        {
-            return false;
-        }
-    }
-    return true;
 }
 
 /**
@@ -605,14 +572,12 @@ TypePtr TypeContext::getType(const Identifier& identifier)
         }
     }
 
-    const ImportedModule* astModule;
-    const llfp::ast::DataDeclaration* ast;
-    std::tie(astModule, ast) = sourceModule->lookupTypeGlobal(identifier.name);
-    if (astModule != nullptr && ast != nullptr)
+    auto ast = sourceModule->getParent()->lookupTypeGlobal(identifier.name);
+    if (ast.data != nullptr)
     {
-        if (ast->typeVariables.size() != identifier.parameters.size())
+        if (ast.data->typeVariables.size() != identifier.parameters.size())
         {
-            Log({}, "type arity mismatch between ", identifier.str(), " and ", astModule->name(), ':', ast->name, '/', ast->typeVariables.size());
+            Log({}, "type arity mismatch between ", identifier.str(), " and ", ast.importedModule->name(), ':', ast.data->name, '/', ast.data->typeVariables.size());
             return nullptr;
         }
 
@@ -630,13 +595,13 @@ TypePtr TypeContext::getType(const Identifier& identifier)
         // generate body
 
         std::map<std::string, Identifier> typeVariables; // I think we need to build this
-        for (int i = 0; i < ast->typeVariables.size(); ++i)
+        for (int i = 0; i < ast.data->typeVariables.size(); ++i)
         {
-            typeVariables[ast->typeVariables[i]] = identifier.parameters[i];
+            typeVariables[ast.data->typeVariables[i]] = identifier.parameters[i];
         }
 
         std::vector<TypePtr> fieldTypes;
-        for (auto& field : ast->fields)
+        for (auto& field : ast.data->fields)
         {
             TypePtr fieldType;
             if (field.type.identifier.moduleName.empty())
@@ -649,7 +614,7 @@ TypePtr TypeContext::getType(const Identifier& identifier)
             }
             if (fieldType == nullptr)
             {
-                fieldType = getTypeFromAst(field.type, astModule);
+                fieldType = getTypeFromAst(field.type, ast.importedModule);
             }
 
             if (fieldType == nullptr)
@@ -660,7 +625,7 @@ TypePtr TypeContext::getType(const Identifier& identifier)
             fieldTypes.push_back(std::move(fieldType));
         }
 
-        llvmType->setName(astModule->getMangledName(ast, fieldTypes));
+        llvmType->setName(ast.importedModule->getMangledName(ast.data, fieldTypes));
         typePtr->setFields(std::move(fieldTypes));
 
         return typePtr;
@@ -668,6 +633,17 @@ TypePtr TypeContext::getType(const Identifier& identifier)
 
     Log({}, "unknown data ", identifier.name.str());
     return nullptr;
+}
+
+bool TypeContext::isPrimitive(const Identifier& identifier)
+{
+    auto it = types.find(identifier);
+    if (it != types.end())
+    {
+        auto &type = it->second;
+        return !type->isStructType() && type->isConcreteType();
+    }
+    return false;
 }
 
 bool TypeContext::equals(const TypePtr& type, const ast::TypeIdentifier& identifier)
@@ -678,7 +654,7 @@ bool TypeContext::equals(const TypePtr& type, const ast::TypeIdentifier& identif
     }
 
     Identifier id;
-    if (fullyQualifiedName(id, identifier, sourceModule))
+    if (sourceModule->fullyQualifiedName(id, identifier))
     {
         return type->identifier() == id;
     }
@@ -932,15 +908,30 @@ void TypeInferer::visit(ast::LiteralExp& exp)
 
 void TypeInferer::visit(ast::CallExp& exp)
 {
-    const ast::Function* ast;
-    ImportedModule* astModule;
-    std::tie(astModule, ast) = env->getFunctionAST(exp.identifier);
-
-    if (ast != nullptr)
+    auto astDecl = env->getFunctionDeclarationAST(exp.identifier);
+    if (astDecl.function != nullptr)
     {
-        if (ast->type.identifier.name.empty())
+
+        if (astDecl.function->type.parameters.empty() &&
+            astDecl.function->type.identifier.moduleName.empty() &&
+            astDecl.class_->typeVariable == astDecl.function->type.identifier.name)
         {
-            if (exp.arguments.size() != ast->parameters.size())
+            result = std::make_shared<Type>(std::unordered_set<TypeClass*>{});
+            return;
+        }
+        else
+        {
+            result = env->getTypeByName(astDecl.function->type, astDecl.importedModule);
+            return;
+        }
+    }
+
+    auto ast = env->getFunctionAST(exp.identifier);
+    if (ast.function != nullptr)
+    {
+        if (ast.function->type.identifier.name.empty())
+        {
+            if (exp.arguments.size() != ast.function->parameters.size())
             {
                 Log(exp.location, "parameter count mismatch");
                 return;
@@ -956,16 +947,16 @@ void TypeInferer::visit(ast::CallExp& exp)
                     Log(exp.arguments[i]->location, "failed to infer type of argument");
                     return;
                 }
-                inferer.variables[ast->parameters[i]->identifier] = std::move(type);
+                inferer.variables[ast.function->parameters[i]->identifier] = std::move(type);
             }
 
             //FIXME: standard library does not have bodies?
-            ast->functionBody->accept(&inferer);
+            ast.function->functionBody->accept(&inferer);
             result = inferer.result;
         }
         else
         {
-            result = env->getTypeByName(ast->type, astModule);
+            result = env->getTypeByName(ast.function->type, ast.importedModule);
         }
     }
 }
@@ -983,14 +974,12 @@ void TypeInferer::visit(ast::VariableExp& exp)
 
     // not a local variable
 
-    const ast::Function* ast;
-    ImportedModule* astModule;
-    std::tie(astModule, ast) = env->getFunctionAST(exp.identifier);
-    if (astModule != nullptr && ast != nullptr)
+    auto ast = env->getFunctionAST(exp.identifier);
+    if (ast.function != nullptr)
     {
-        if (ast->type.identifier.name.empty())
+        if (ast.function->type.identifier.name.empty())
         {
-            if (0 != ast->parameters.size())
+            if (0 != ast.function->parameters.size())
             {
                 Log(exp.location, "constant does not take arguments");
                 return;
@@ -1000,12 +989,12 @@ void TypeInferer::visit(ast::VariableExp& exp)
             TypeInferer inferer(&scope);
 
             //FIXME: standard library does not have bodies?
-            ast->functionBody->accept(&inferer);
+            ast.function->functionBody->accept(&inferer);
             result = inferer.result;
         }
         else
         {
-            result = env->getTypeByName(ast->type, astModule);
+            result = env->getTypeByName(ast.function->type, ast.importedModule);
         }
     }
 }
@@ -1036,7 +1025,7 @@ void TypeInferer::visit(ast::FieldExp& exp)
 }
 
 
-ConstructorTypeScope::ConstructorTypeScope(TypeScope* parent_, const ast::DataDeclaration* ast) :
+ConstructorTypeScope::ConstructorTypeScope(TypeScope* parent_, const ast::Data* ast) :
     parent{ parent_ }
 {
     for (auto& typeVar : ast->typeVariables)
@@ -1074,17 +1063,15 @@ TypePtr ConstructorTypeScope::getTypeByName(const ast::TypeIdentifier& typeName,
             parameterTypes.push_back(type);
         }
 
-        const ImportedModule* astModule;
-        const ast::DataDeclaration* ast;
-        std::tie(astModule, ast) = importModule->lookupType(typeName.identifier);
-        if (astModule == nullptr || ast == nullptr)
+        auto ast = importModule->lookupType(typeName.identifier);
+        if (ast.data == nullptr)
         {
             Log({}, "unknown type: ", typeName.identifier.str());
             return nullptr;
         }
 
         Identifier newId;
-        newId.name = { astModule->name(), typeName.identifier.name };
+        newId.name = { ast.importedModule->name(), typeName.identifier.name };
         for (auto& paramType : parameterTypes)
         {
             newId.parameters.push_back(paramType->identifier());
@@ -1098,7 +1085,7 @@ TypePtr ConstructorTypeScope::getTypeByName(const ast::TypeIdentifier& typeName,
         {
             // construct new type
             std::vector<TypePtr> fieldTypes;
-            for (auto& field : ast->fields)
+            for (auto& field : ast.data->fields)
             {
                 fieldTypes.push_back(getTypeByName(field.type, importModule));
                 if (fieldTypes.back() == nullptr)
@@ -1179,22 +1166,20 @@ TypePtr ConstructorTypeScope::getTypeVariable(const std::string& typeVariable) c
 
 void TypeInferer::visit(ast::ConstructorExp& exp)
 {
-    const ImportedModule* astModule;
-    const ast::DataDeclaration* ast;
-    std::tie(astModule, ast) = getDataAST(exp.identifier);
-    if (astModule == nullptr || ast == nullptr)
+    auto ast = getDataAST(exp.identifier);
+    if (ast.data == nullptr)
     {
         return;
     }
 
-    ConstructorTypeScope typeScope(this, ast);
+    ConstructorTypeScope typeScope(this, ast.data);
 
     int i = 0;
-    for (auto& field : ast->fields)
+    for (auto& field : ast.data->fields)
     {
         // TODO: can do a check if field.type contains typeVars, else continue
 
-        TypePtr fieldType = typeScope.getTypeByName(field.type, astModule); // replace all type vars
+        TypePtr fieldType = typeScope.getTypeByName(field.type, ast.importedModule); // replace all type vars
         if (fieldType == nullptr)
         {
             return;
@@ -1222,7 +1207,7 @@ void TypeInferer::visit(ast::ConstructorExp& exp)
         i++;
     }
 
-    bool concreteType = std::all_of(ast->typeVariables.begin(), ast->typeVariables.end(),
+    bool concreteType = std::all_of(ast.data->typeVariables.begin(), ast.data->typeVariables.end(),
         [&typeScope](const std::string &typeVar)
         {
             auto type = typeScope.getTypeVariable(typeVar);
@@ -1231,12 +1216,12 @@ void TypeInferer::visit(ast::ConstructorExp& exp)
         });
 
     std::vector<Identifier> typeArgs;
-    for (auto& typeVar : ast->typeVariables)
+    for (auto& typeVar : ast.data->typeVariables)
     {
         auto type = typeScope.getTypeVariable(typeVar);
         typeArgs.push_back(type->identifier());
     }
-    Identifier typeId{ { astModule->name(), ast->name }, std::move(typeArgs) };
+    Identifier typeId{ { ast.importedModule->name(), ast.data->name }, std::move(typeArgs) };
 
     if (concreteType)
     {
@@ -1245,9 +1230,9 @@ void TypeInferer::visit(ast::ConstructorExp& exp)
     else // construct abstract type
     {
         std::vector<TypePtr> fieldTypes;
-        for (auto& field : ast->fields)
+        for (auto& field : ast.data->fields)
         {
-            fieldTypes.push_back(typeScope.getTypeByName(field.type, astModule));
+            fieldTypes.push_back(typeScope.getTypeByName(field.type, ast.importedModule));
             assert(fieldTypes.back() != nullptr);
         }
         result = std::make_shared<StructType>(std::move(typeId), ast, std::move(fieldTypes));

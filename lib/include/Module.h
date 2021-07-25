@@ -12,11 +12,14 @@
 #pragma warning(pop)
 
 #include "Ast.h"
+#include "IModule.h"
 #include "Type.h"
 
 
 namespace llfp
 {
+
+class Compiler;
 
 namespace codegen
 {
@@ -25,75 +28,55 @@ class CodeGenerator;
 
 } // codegen
 
-struct FunctionIdentifier
-{
-    llvm::StringRef           name;
-    std::vector<type::TypePtr>* types;
-};
-
-class ImportedModule
-{
-public:
-
-    virtual ~ImportedModule();
-
-    virtual const std::string&          name() const = 0;
-    virtual const ast::Function*        getFunction(const std::string &name) const = 0;
-    virtual const ast::DataDeclaration* getType(const std::string &name) const = 0;
-    virtual std::string                 getMangledName(const ast::Function *function, const std::vector<type::TypePtr> &types) const = 0;
-    virtual std::string                 getMangledName(const ast::DataDeclaration *data, const std::vector<type::TypePtr>& types) const = 0;
-    virtual std::string                 getExportedName(const ast::Function *function) const = 0;
-
-    virtual type::DataAst lookupType(const GlobalIdentifier &) const
-    {
-        return { nullptr, nullptr };
-    }
-
-    //TODO: thread safe!
-    virtual void requireFunctionInstance(FunctionIdentifier function) = 0;
-};
-
 // a module generted from source code
 class SourceModule : public ImportedModule
 {
+    // for global lookup? others to be able to call getParent... to act like context
+    Compiler*                               parent;
+
     std::string                             path;
     std::unique_ptr<ast::Module>            astModule;
-    std::unique_ptr<codegen::CodeGenerator> codeGenerator; // should be its own thing?
+    //std::unique_ptr<codegen::CodeGenerator> codeGenerator; // should be its own thing?
 
+    //TODO: move all these lookup stuff to some helper
     std::unordered_map<std::string, ast::Function*>        functions;
     std::unordered_map<std::string, ast::Function*>        publicFunctions;
-    std::unordered_map<std::string, ast::DataDeclaration*> dataDeclarations;
+    std::unordered_map<std::string, std::tuple<ast::Class*, ast::FunctionDeclaration*>> functionDeclarations;
+    std::unordered_map<std::string, std::unordered_map<type::Identifier, FunAst>> functionInstances; // we only do global lookups in this, so it shouldnt be in module
+    std::unordered_map<std::string, ast::Data*>            dataDeclarations;
     std::unordered_map<std::string, ImportedModule*>       importedModules;
-    std::unordered_map<std::string, ImportedModule*>       allModules;
-
-    std::vector<FunctionIdentifier>         pendingGeneration; // Driver
 
 public:
 
-    SourceModule(std::string path_);
+    SourceModule(Compiler* parent_, std::string path_);
     ~SourceModule();
+
+    std::unique_ptr<SourceModule> create(std::string path_, std::unique_ptr<ast::Module> astModule_);
 
     bool setAST(std::unique_ptr<ast::Module> astModule_);
     bool addImportedModules(const std::vector<ImportedModule*> &moduleList);
-    void createCodeGenerator();
+    //void createCodeGenerator();
 
     const std::string&          filePath() const;
     const std::string&          name() const override;
-    const ast::Function*        getFunction(const std::string &name) const override; // lookup public function
-    const ast::DataDeclaration* getType(const std::string &name) const override;
-    std::string                 getMangledName(const ast::Function *function, const std::vector<type::TypePtr> &types) const override;
-    std::string                 getMangledName(const ast::DataDeclaration *data, const std::vector<type::TypePtr>& types) const override;
-    std::string                 getExportedName(const ast::Function *function) const override;
 
+    FunAst     getFunction(const std::string &name) override; // lookup public function
+    FunDeclAst getFunctionDecl(const std::string &name) override;
+    DataAst    getType(const std::string &name) const override;
+
+    std::string                 getMangledName(const ast::Function *function, const std::vector<type::TypePtr> &types) const override;
+    std::string                 getMangledName(const ast::Data *data, const std::vector<type::TypePtr>& types) const override;
+    std::string                 getExportedName(const ast::Function *function) const override;
+    bool                        fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const override;
+
+    Compiler*                   getParent();
     ast::Module*                getAST();
-    llvm::Module*               getLLVM();
+    //llvm::Module*               getLLVM();
 
     // lookup local function or global from imported modules
-    type::FunAst  lookupFunction(const GlobalIdentifier& identifier);
-    type::DataAst lookupType(const GlobalIdentifier& identifier) const override;
-    type::DataAst lookupTypeGlobal(const GlobalIdentifier& identifier) const;
-
-    void requireFunctionInstance(FunctionIdentifier function) override;
+    FunAst     lookupFunction(const GlobalIdentifier& identifier) override;
+    FunDeclAst lookupFunctionDecl(const GlobalIdentifier& identifier) override;
+    DataAst    lookupType(const GlobalIdentifier& identifier) const override;
 
     // Driver
     bool generateExportedFunctions();
@@ -111,13 +94,12 @@ class StandardModule : public ImportedModule
 
 public:
 
-    const std::string&   name() const override;
-    const ast::Function* getFunction(const std::string &name) const override;
-    std::string          getMangledName(const ast::Function*function, const std::vector<type::TypePtr> &types) const override;
-    std::string          getExportedName(const ast::Function*function) const override;
+    const std::string& name() const override;
+    FunAst             getFunction(const std::string &name) override;
+    FunDeclAst         getFunctionDecl(const std::string &name) override;
 
-    // only type check
-    void requireFunctionInstance(FunctionIdentifier function) override;
+    std::string        getMangledName(const ast::Function*function, const std::vector<type::TypePtr> &types) const override;
+    std::string        getExportedName(const ast::Function*function) const override;
 };
 
 } // llfp
