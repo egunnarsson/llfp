@@ -89,7 +89,18 @@ TypeID(FloatingLiteral, "@FloatingLiteral");
 
 #undef TypeID
 
+constexpr llvm::StringLiteral AllTypes[] {
+    Bool,
+    I8, I16, I32, I64, I128,
+    U8, U16, U32, U64, U128,
+    Half, Float, Double,
+    Char
+};
+
 } // namespace name
+
+bool isPrimitive(const Identifier &id);
+
 /*
 namespace typeclass
 {
@@ -181,8 +192,8 @@ public:
 
     bool                 isConcreteType() const override;
 
-    virtual unsigned int getTypeParameterCount() const;
-    virtual TypePtr      getTypeParameter(unsigned int index) const;
+    unsigned int         getTypeParameterCount() const override;
+    TypePtr              getTypeParameter(unsigned int index) const override;
 
     bool                 isStructType() const override;
     unsigned int         getFieldIndex(const std::string &fieldIdentifier) const override;
@@ -265,7 +276,6 @@ public:
     TypePtr getFloatingLiteralType();
 
     TypePtr getType(const Identifier& identifier);
-    bool    isPrimitive(const Identifier& identifier);
 
 private:
 
@@ -279,14 +289,14 @@ class TypeScope
 {
 public:
 
-    virtual TypeContext* getTypeContext() = 0;
-    virtual TypePtr      getVariableType(const std::string& variable) = 0;
-    virtual TypePtr      getTypeByName(const ast::TypeIdentifier& identifier, const ImportedModule *astModule)
+    virtual TypeContext*     getTypeContext() = 0;
+    virtual TypePtr          getVariableType(const std::string& variable) = 0;
+    virtual TypePtr          getTypeByName(const ast::TypeIdentifier& identifier, const ImportedModule *astModule)
         { return getTypeContext()->getTypeFromAst(identifier, astModule); }
     // a bit out of place but...
-    virtual llfp::FunAst       getFunctionAST(const GlobalIdentifier &identifier) = 0;
-    virtual llfp::FunDeclAst   getFunctionDeclarationAST(const GlobalIdentifier& identifier) = 0;
-    virtual llfp::DataAst      getDataAST(const GlobalIdentifier &identifier) = 0;
+    virtual llfp::FunAst     getFunctionAST(const GlobalIdentifier &identifier) = 0;
+    virtual llfp::FunDeclAst getFunctionDeclarationAST(const GlobalIdentifier& identifier) = 0;
+    virtual llfp::DataAst    getDataAST(const GlobalIdentifier &identifier) = 0;
 
 protected:
 
@@ -325,8 +335,8 @@ public:
     ConstructorTypeScope(TypeScope *parent_, const ast::Data *ast);
     virtual ~ConstructorTypeScope();
 
-    bool updateType(const ast::TypeIdentifier& identifier, const TypePtr &type);
-    TypePtr getTypeVariable(const std::string& typeVariable) const;
+    bool         updateType(const ast::TypeIdentifier& identifier, const TypePtr &type);
+    TypePtr      getTypeVariable(const std::string& typeVariable) const;
 
     TypeContext* getTypeContext() override;
     TypePtr      getVariableType(const std::string& variable) override;
@@ -372,7 +382,7 @@ public:
 } // namespace type
 } // namespace llfp
 
-/*namespace std
+namespace std
 {
 template<> struct hash<llfp::type::Identifier>
 {
@@ -387,4 +397,4 @@ template<> struct hash<llfp::type::Identifier>
             llvm::hash_combine_range(tmp.begin(), tmp.end()));
     }
 };
-}*/
+}

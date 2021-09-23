@@ -16,7 +16,7 @@ class ExpPrint : public llfp::ast::ExpVisitor
             case llfp::lex::Token::Char:    return "char";
             case llfp::lex::Token::String:  return "str";
             case llfp::lex::Token::Bool:    return "bool";
-            default:                     return "XXX";
+            default:                        return "XXX";
         }
     }
     
@@ -54,7 +54,7 @@ std::ostream& operator<<(std::ostream& os, const llfp::ast::TypeIdentifier& t)
 
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Field& f) { return os << f.type << ' ' << f.name; }
 
-std::ostream& operator<<(std::ostream& os, const llfp::ast::DataDeclaration& d)
+std::ostream& operator<<(std::ostream& os, const llfp::ast::Data& d)
 {
     return os << '{' << (d.exported ? '+' : '-') << d.name << ' ' << d.fields << '}';
 }
@@ -68,22 +68,22 @@ std::ostream& operator<<(std::ostream& os, const llfp::ast::Function& f)
     return os << '{' << (f.exported ? '+' : '-') << ' ' << f.type << ' ' << f.name << ' ' << f.parameters << f.functionBody << '}';
 }
 
-std::ostream& operator<<(std::ostream& os, const llfp::ast::FunctionDecl& f) { return os << '{' << f.name << f.type << f.parameters << '}'; }
+std::ostream& operator<<(std::ostream& os, const llfp::ast::FunctionDeclaration& f) { return os << '{' << f.name << f.type << f.parameters << '}'; }
 
-std::ostream& operator<<(std::ostream& os, const llfp::ast::ClassDeclaration& f) { return os << '{' << f.name << f.typeVariable << f.functions << '}'; }
+std::ostream& operator<<(std::ostream& os, const llfp::ast::Class& f) { return os << '{' << f.name << f.typeVariable << f.functions << '}'; }
 
 std::ostream& operator<<(std::ostream& os, const llfp::ast::ClassInstance& f)
 {
     return os << '{' << f.classIdentifier << f.typeArgument << f.functions << '}';
 }
 
-std::ostream& operator<<(std::ostream& os, const llfp::ast::PublicDeclaration& p) { return os << p.name; }
+std::ostream& operator<<(std::ostream& os, const llfp::ast::Public& p) { return os << p.name; }
 
-std::ostream& operator<<(std::ostream& os, const llfp::ast::ImportDeclaration& i) { return os << i.name; }
+std::ostream& operator<<(std::ostream& os, const llfp::ast::Import& i) { return os << i.name; }
 
 std::ostream& operator<<(std::ostream &os, const llfp::ast::Module &m)
 {
-    return os << '{' << m.name << ", " << m.publicDeclarations << ", " << m.imports << ", " << m.functionDeclarations << ", " << m.dataDeclarations << ", " << m.classDeclarations << ", "  << m.instanceDeclarations << '}';
+    return os << '{' << m.name << ", " << m.publics << ", " << m.imports << ", " << m.functions << ", " << m.datas << ", " << m.classes << ", "  << m.classInstances << '}';
 }
 
 std::ostream& operator<<(std::ostream& os, const llfp::ast::NamedArgument& i) { return os << i.name << " = " << i.exp; }

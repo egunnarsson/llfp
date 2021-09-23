@@ -41,24 +41,24 @@ struct Value
 
 class CodeGenerator
 {
-    SourceModule*                 sourceModule; //lookup (local and global thru parent) 
+    SourceModule*      sourceModule; //lookup (local and global thru parent) 
 
-    llvm::LLVMContext             llvmContext; // one context per module, one module compiled per thread
-    llvm::IRBuilder<>             llvmBuilder;
-    std::unique_ptr<llvm::Module> llvmModule;
+    llvm::LLVMContext* llvmContext; // one context per module, one module compiled per thread
+    llvm::IRBuilder<>  llvmBuilder;
+    llvm::Module*      llvmModule;
 
     // mangled name as id
     std::unordered_map<std::string, Function> functions;
-    type::TypeContext             typeContext; // move to source module (if it should create types it needs the llvmContext)
+    type::TypeContext  typeContext; // move to source module (if it should create types it needs the llvmContext)
 
 public:
 
-    CodeGenerator(SourceModule *sourceModule_);
+    CodeGenerator(SourceModule *sourceModule_, llvm::LLVMContext* llvmContext_, llvm::Module* llvmModule_);
 
     bool               generateFunction(const ast::Function*ast);
     bool               generateFunction(const ast::Function*ast, std::vector<type::TypePtr> types);
 
-    llvm::Module*      getLLVM() { return llvmModule.get(); }
+    llvm::Module*      getLLVM() { return llvmModule; }
     type::TypeContext* getTypeContext() { return &typeContext; }
 
 private:
@@ -119,7 +119,7 @@ private:
 
     const Value& getNamedValue(const std::string &name);
 
-    auto& llvmContext() { return generator->llvmContext; }
+    auto& llvmContext() { return *generator->llvmContext; }
     auto& llvmBuilder() { return generator->llvmBuilder; }
 
     auto generateBinary(const type::TypePtr &type, ast::BinaryExp &exp)

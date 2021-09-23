@@ -47,39 +47,39 @@ struct ModulePtr
         return *ptr == *other.ptr;
     }
 
-    ModulePtr& publics(std::vector<PublicDeclaration> f)
+    ModulePtr& publics(std::vector<Public> f)
     {
-        ptr->publicDeclarations = std::move(f);
+        ptr->publics = std::move(f);
         return *this;
     }
 
-    ModulePtr& imports(std::vector<ImportDeclaration> f)
+    ModulePtr& imports(std::vector<Import> f)
     {
         ptr->imports = std::move(f);
         return *this;
     }
 
-    ModulePtr& datas(std::initializer_list<movable_il<std::unique_ptr<DataDeclaration>>> d)
+    ModulePtr& datas(std::initializer_list<movable_il<std::unique_ptr<Data>>> d)
     {
-        ptr->dataDeclarations = vector_from_il(d);
+        ptr->datas = vector_from_il(d);
         return *this;
     }
 
     ModulePtr& functions(std::initializer_list<movable_il<std::unique_ptr<Function>>> funs)
     {
-        ptr->functionDeclarations = vector_from_il(funs);
+        ptr->functions = vector_from_il(funs);
         return *this;
     }
 
-    ModulePtr& classes(std::initializer_list<movable_il<std::unique_ptr<ClassDeclaration>>> c)
+    ModulePtr& classes(std::initializer_list<movable_il<std::unique_ptr<Class>>> c)
     {
-        ptr->classDeclarations = vector_from_il(c);
+        ptr->classes = vector_from_il(c);
         return *this;
     }
 
     ModulePtr& instances(std::initializer_list<movable_il<std::unique_ptr<ClassInstance>>> i)
     {
-        ptr->instanceDeclarations = vector_from_il(i);
+        ptr->classInstances = vector_from_il(i);
         return *this;
     }
 };
@@ -111,7 +111,7 @@ auto MakeTypeId(std::string moduleName, std::string name, std::vector< llfp::ast
 
 auto MakeDataDecl(llfp::SourceLocation location, bool exported, std::string name, std::vector<Field> fields)
 {
-    return std::make_unique<DataDeclaration>(location, std::move(name), std::vector<std::string>{}, std::move(fields), exported);
+    return std::make_unique<Data>(location, std::move(name), std::vector<std::string>{}, std::move(fields), exported);
 }
 
 auto MakeFunction(
@@ -213,9 +213,9 @@ std::unique_ptr<NamedArgument> MakeNamedArg(llfp::SourceLocation location, std::
     return std::make_unique<NamedArgument>(location, std::move(name), std::move(exp));
 }
 
-std::unique_ptr<ClassDeclaration> MakeClass(llfp::SourceLocation location, std::string name, std::string typeVar, std::initializer_list<movable_il<std::unique_ptr<FunctionDecl>>> funs)
+std::unique_ptr<Class> MakeClass(llfp::SourceLocation location, std::string name, std::string typeVar, std::initializer_list<movable_il<std::unique_ptr<FunctionDeclaration>>> funs)
 {
-    return std::make_unique<ClassDeclaration>(location, std::move(name), std::move(typeVar), vector_from_il(funs));
+    return std::make_unique<Class>(location, std::move(name), std::move(typeVar), vector_from_il(funs));
 }
 
 std::unique_ptr<ClassInstance> MakeInstance(llfp::SourceLocation location, llfp::GlobalIdentifier id, TypeIdentifier typeArg, std::initializer_list<movable_il<std::unique_ptr<Function>>> funs)
@@ -223,9 +223,9 @@ std::unique_ptr<ClassInstance> MakeInstance(llfp::SourceLocation location, llfp:
     return std::make_unique<ClassInstance>(location, std::move(id), std::move(typeArg), vector_from_il(funs));
 }
 
-std::unique_ptr<FunctionDecl> MakeFunctionDecl(llfp::SourceLocation location, TypeIdentifier type, std::string name, std::initializer_list<movable_il<std::unique_ptr<Parameter>>> params)
+std::unique_ptr<FunctionDeclaration> MakeFunctionDecl(llfp::SourceLocation location, TypeIdentifier type, std::string name, std::initializer_list<movable_il<std::unique_ptr<Parameter>>> params)
 {
-    return std::make_unique<FunctionDecl>(location, std::move(name), std::move(type), vector_from_il(params));
+    return std::make_unique<FunctionDeclaration>(location, std::move(name), std::move(type), vector_from_il(params));
 }
 
 

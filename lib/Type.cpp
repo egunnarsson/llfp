@@ -31,6 +31,21 @@ bool checkBasicType(const Identifier& id, llvm::StringRef name)
 
 } // namespace
 
+bool isPrimitive(const Identifier &id)
+{
+    if (id.parameters.empty() && id.name.moduleName.empty())
+    {
+        for (auto &type : name::AllTypes)
+        {
+            if (type == id.name.name)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 std::string Identifier::str() const
 {
     std::string result = name.str();
@@ -513,30 +528,30 @@ TypeContext::TypeContext(llvm::LLVMContext& llvmContext_, SourceModule* sourceMo
     llvmContext{ llvmContext_ },
     sourceModule{ sourceModule_ }
 {
-    boolType = ADD_TYPE("bool", getInt1Ty, false);
+    boolType = ADD_TYPE(name::Bool, getInt1Ty, false);
 
-    i8Type   = ADD_TYPE("i8",   getInt8Ty,   true);
-    i16Type  = ADD_TYPE("i16",  getInt16Ty,  true);
-    i32Type  = ADD_TYPE("i32",  getInt32Ty,  true);
-    i64Type  = ADD_TYPE("i64",  getInt64Ty,  true);
-    i128Type = ADD_TYPE("i128", getInt128Ty, true);
+    i8Type   = ADD_TYPE(name::I8,   getInt8Ty,   true);
+    i16Type  = ADD_TYPE(name::I16,  getInt16Ty,  true);
+    i32Type  = ADD_TYPE(name::I32,  getInt32Ty,  true);
+    i64Type  = ADD_TYPE(name::I64,  getInt64Ty,  true);
+    i128Type = ADD_TYPE(name::I128, getInt128Ty, true);
 
-    u8Type   = ADD_TYPE("u8",   getInt8Ty,   false);
-    u16Type  = ADD_TYPE("u16",  getInt16Ty,  false);
-    u32Type  = ADD_TYPE("u32",  getInt32Ty,  false);
-    u64Type  = ADD_TYPE("u64",  getInt64Ty,  false);
-    u128Type = ADD_TYPE("u128", getInt128Ty, false);
+    u8Type   = ADD_TYPE(name::U8,   getInt8Ty,   false);
+    u16Type  = ADD_TYPE(name::U16,  getInt16Ty,  false);
+    u32Type  = ADD_TYPE(name::U32,  getInt32Ty,  false);
+    u64Type  = ADD_TYPE(name::U64,  getInt64Ty,  false);
+    u128Type = ADD_TYPE(name::U128, getInt128Ty, false);
 
-    halfType   = ADD_TYPE("half",   getHalfTy,   true);
-    floatType  = ADD_TYPE("float",  getFloatTy,  true);
-    doubleType = ADD_TYPE("double", getDoubleTy, true);
+    halfType   = ADD_TYPE(name::Half,   getHalfTy,   true);
+    floatType  = ADD_TYPE(name::Float,  getFloatTy,  true);
+    doubleType = ADD_TYPE(name::Double, getDoubleTy, true);
 
-    charType = ADD_TYPE("char", getInt8Ty, false);
+    charType = ADD_TYPE(name::Char, getInt8Ty, false);
 
-    anyType                  = ADD_TYPE_L("",                      false, false);
-    integerLiteralType       = ADD_TYPE_L("@IntegerLiteral",       false, false);
-    signedIntegerLiteralType = ADD_TYPE_L("@SignedIntegerLiteral", false, true);
-    floatingLiteralType      = ADD_TYPE_L("@FloatingLiteral",      true,  true);
+    anyType                  = ADD_TYPE_L(name::Any,                  false, false);
+    integerLiteralType       = ADD_TYPE_L(name::IntegerLiteral,       false, false);
+    signedIntegerLiteralType = ADD_TYPE_L(name::SignedIntegerLiteral, false, true);
+    floatingLiteralType      = ADD_TYPE_L(name::FloatingLiteral,      true,  true);
 }
 
 /**
@@ -582,7 +597,7 @@ TypePtr TypeContext::getType(const Identifier& identifier)
         }
 
         auto llvmType = llvm::StructType::create(llvmContext, "");
-        auto typePtr = std::make_shared<StructType>(identifier, ast, llvmType);
+        auto typePtr = std::make_shared<StructType>(identifier, ast.data, llvmType);
         auto it2 = types.insert({ identifier, typePtr });
 
         if (!it2.second)
@@ -633,17 +648,6 @@ TypePtr TypeContext::getType(const Identifier& identifier)
 
     Log({}, "unknown data ", identifier.name.str());
     return nullptr;
-}
-
-bool TypeContext::isPrimitive(const Identifier& identifier)
-{
-    auto it = types.find(identifier);
-    if (it != types.end())
-    {
-        auto &type = it->second;
-        return !type->isStructType() && type->isConcreteType();
-    }
-    return false;
 }
 
 bool TypeContext::equals(const TypePtr& type, const ast::TypeIdentifier& identifier)
@@ -700,6 +704,11 @@ TypePtr EmptyTypeScope::getVariableType(const std::string&)
 FunAst EmptyTypeScope::getFunctionAST(const GlobalIdentifier& identifier)
 {
     return parent->getFunctionAST(identifier);
+}
+
+FunDeclAst EmptyTypeScope::getFunctionDeclarationAST(const GlobalIdentifier& identifier)
+{
+    return parent->getFunctionDeclarationAST(identifier);
 }
 
 DataAst EmptyTypeScope::getDataAST(const GlobalIdentifier& identifier)
@@ -854,8 +863,12 @@ void TypeInferer::visit(ast::UnaryExp& exp)
 {
     assert(exp.op == "-");
     result = TypeInferer::infer(*exp.operand, this);
-    // type check number?
-    if (getTypeContext()->getIntegerLiteralType() == result) //getTypeContext()->equals(result, name::IntegerLiteral))
+    if (!result->isNum())
+    {
+        Log(exp.location, "operand of unary '-' is not a number");
+        result = nullptr;
+    }
+    else if (getTypeContext()->getIntegerLiteralType() == result)
     {
         result = getTypeContext()->getSignedIntegerLiteralType();
     }
@@ -1094,7 +1107,7 @@ TypePtr ConstructorTypeScope::getTypeByName(const ast::TypeIdentifier& typeName,
                     return nullptr;
                 }
             }
-            return std::make_shared<StructType>(std::move(newId), ast, fieldTypes);
+            return std::make_shared<StructType>(std::move(newId), ast.data, fieldTypes);
         }
     }
     else
@@ -1151,6 +1164,11 @@ TypePtr ConstructorTypeScope::getVariableType(const std::string& variable)
 FunAst ConstructorTypeScope::getFunctionAST(const GlobalIdentifier& identifier)
 {
     return parent->getFunctionAST(identifier);
+}
+
+FunDeclAst ConstructorTypeScope::getFunctionDeclarationAST(const GlobalIdentifier& identifier)
+{
+    return parent->getFunctionDeclarationAST(identifier);
 }
 
 DataAst ConstructorTypeScope::getDataAST(const GlobalIdentifier& identifier)
@@ -1235,7 +1253,7 @@ void TypeInferer::visit(ast::ConstructorExp& exp)
             fieldTypes.push_back(typeScope.getTypeByName(field.type, ast.importedModule));
             assert(fieldTypes.back() != nullptr);
         }
-        result = std::make_shared<StructType>(std::move(typeId), ast, std::move(fieldTypes));
+        result = std::make_shared<StructType>(std::move(typeId), ast.data, std::move(fieldTypes));
     }
 }
 
@@ -1257,6 +1275,11 @@ TypePtr TypeInferer::getVariableType(const std::string& name)
 FunAst TypeInferer::getFunctionAST(const GlobalIdentifier& identifier)
 {
     return env->getFunctionAST(identifier);
+}
+
+FunDeclAst TypeInferer::getFunctionDeclarationAST(const GlobalIdentifier& identifier)
+{
+    return env->getFunctionDeclarationAST(identifier);
 }
 
 DataAst TypeInferer::getDataAST(const GlobalIdentifier& identifier)

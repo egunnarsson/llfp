@@ -26,13 +26,13 @@ namespace codegen
 
 const Value ExpCodeGenerator::EmptyValue{ nullptr, nullptr };
 
-CodeGenerator::CodeGenerator(SourceModule *sourceModule_) :
+CodeGenerator::CodeGenerator(SourceModule *sourceModule_, llvm::LLVMContext* llvmContext_, llvm::Module* llvmModule_) :
     sourceModule{ sourceModule_ },
-    llvmContext{},
-    llvmBuilder(llvmContext),
-    typeContext(llvmContext, sourceModule)
+    llvmContext{ llvmContext_ },
+    llvmBuilder(*llvmContext),
+    llvmModule{ llvmModule_ },
+    typeContext(*llvmContext, sourceModule)
 {
-    llvmModule = std::make_unique<llvm::Module>(sourceModule->name(), llvmContext);
 }
 
 bool CodeGenerator::generateFunction(const ast::Function*ast)
@@ -127,7 +127,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
         }
 
         auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
-        auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule.get());
+        auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
 
         size_t i = 0;
         for (auto &p : llvmFunction->args())
@@ -147,7 +147,7 @@ bool CodeGenerator::generateFunctionBody(Function *function)
     auto ast = function->ast;
     auto& types = function->types;
 
-    auto bb = llvm::BasicBlock::Create(llvmContext, "entry", llvmFunction);
+    auto bb = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
     llvmBuilder.SetInsertPoint(bb);
 
     std::map<std::string, Value> namedValues;
@@ -194,14 +194,14 @@ bool CodeGenerator::generateFunctionBody(Function *function)
 void CodeGenerator::AddDllMain()
 {
     std::vector<llvm::Type*> parameterTypes;
-    parameterTypes.push_back(llvm::Type::getInt8PtrTy(llvmContext));
-    parameterTypes.push_back(llvm::Type::getInt32Ty(llvmContext));
-    parameterTypes.push_back(llvm::Type::getInt8PtrTy(llvmContext));
-    auto returnType = llvm::Type::getInt32Ty(llvmContext);
+    parameterTypes.push_back(llvm::Type::getInt8PtrTy(*llvmContext));
+    parameterTypes.push_back(llvm::Type::getInt32Ty(*llvmContext));
+    parameterTypes.push_back(llvm::Type::getInt8PtrTy(*llvmContext));
+    auto returnType = llvm::Type::getInt32Ty(*llvmContext);
     llvm::FunctionType *functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
-    auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, "_DllMainCRTStartup", llvmModule.get());
+    auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, "_DllMainCRTStartup", llvmModule);
     llvmFunction->setCallingConv(llvm::CallingConv::X86_StdCall);
-    auto bb = llvm::BasicBlock::Create(llvmContext, "entry", llvmFunction);
+    auto bb = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
     llvmBuilder.SetInsertPoint(bb);
     auto value = llvm::ConstantInt::get(returnType, 1);
     llvmBuilder.CreateRet(value);

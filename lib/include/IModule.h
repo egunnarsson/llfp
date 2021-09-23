@@ -17,6 +17,8 @@ namespace type
 class Type;
 typedef std::shared_ptr<Type> TypePtr;
 
+class Identifier;
+
 }
 
 struct FunAst
@@ -74,6 +76,7 @@ public:
     virtual DataAst     lookupType(const GlobalIdentifier &) const = 0;
 
     //virtual void        requireFunctionInstance(FunctionIdentifier function) = 0;
+    //virtual bool        generateFunction(const ast::Function *ast, std::vector<const type::Identifier*> types) = 0; 
 };
 
 } // llfp

@@ -11,26 +11,23 @@ namespace llfp
 ImportedModule::~ImportedModule() {}
 
 
-SourceModule::SourceModule(Compiler* parent_, std::string path_) :
-    parent { parent_ },
-    path { std::move(path_) }
+SourceModule::SourceModule(Compiler* parent_) :
+    parent { parent_ }
 {}
 
 SourceModule::~SourceModule() {}
 
-bool SourceModule::setAST(std::unique_ptr<ast::Module> astModule_)
+std::unique_ptr<SourceModule> SourceModule::create(Compiler* parent, std::unique_ptr<ast::Module> astModule)
 {
-    bool result = true;
-
-    astModule = std::move(astModule_);
+    std::unique_ptr<SourceModule> sourceModule = std::make_unique<SourceModule>(parent);
 
     for (auto &function : astModule->functions)
     {
-        auto insert = functions.insert((std::make_pair(function->name, function.get())));
+        auto insert = sourceModule->functions.insert((std::make_pair(function->name, function.get())));
         if (!insert.second)
         {
             Log(function->location, "function already defined");
-            result = false;
+            return nullptr;
         }
     }
 
@@ -41,12 +38,12 @@ bool SourceModule::setAST(std::unique_ptr<ast::Module> astModule_)
         if (it != astModule->functions.end())
         {
             auto &function = *it;
-            publicFunctions.insert(std::make_pair(function->name, function.get()));
+            sourceModule->publicFunctions.insert(std::make_pair(function->name, function.get()));
         }
         else
         {
             Log(publicDecl.location, "function declared as public is not defined ", publicDecl.name);
-            result = false;
+            return nullptr;
         }
     }
 
@@ -54,22 +51,22 @@ bool SourceModule::setAST(std::unique_ptr<ast::Module> astModule_)
     {
         for (auto& funDecl : classDecl->functions)
         {
-            auto it = functionDeclarations.insert(std::make_pair(funDecl->name, std::make_tuple(classDecl.get(), funDecl.get())));
+            auto it = sourceModule->functionDeclarations.insert(std::make_pair(funDecl->name, std::make_tuple(classDecl.get(), funDecl.get())));
             if (!it.second)
             {
                 Log(funDecl->location, "function declaration already defined");
-                result = false;
+                return nullptr;
             }
         }
     }
 
     for (auto &dataDecl : astModule->datas)
     {
-        auto insert = dataDeclarations.insert(std::make_pair(dataDecl->name, dataDecl.get()));
+        auto insert = sourceModule->dataDeclarations.insert(std::make_pair(dataDecl->name, dataDecl.get()));
         if (!insert.second)
         {
             Log(dataDecl->location, "data already defined");
-            result = false;
+            return nullptr;
         }
 
         // check duplicate fields;
@@ -81,26 +78,28 @@ bool SourceModule::setAST(std::unique_ptr<ast::Module> astModule_)
             if (it1 != end)
             {
                 Log(it1->location, "duplicate field \"", it1->name, '"');
-                result = false;
+                return nullptr;
             }
         }
     }
 
-    return result;
+    sourceModule->astModule = std::move(astModule);
+    return sourceModule;
 }
 
-bool SourceModule::addImportedModules(const std::vector<ImportedModule*> &moduleList)
+bool SourceModule::addImportedModules(const std::unordered_map<std::string, ImportedModule*> &modules)
 {
     assert(astModule != nullptr);
     bool result = true;
 
     for (auto &importDecl : astModule->imports)
     {
-        auto predicate = [&importDecl](ImportedModule *module) { return module->name() == importDecl.name; };
-        auto it = std::find_if(moduleList.begin(), moduleList.end(), predicate);
-        if (it != moduleList.end())
+        //auto predicate = [&importDecl](ImportedModule *module) { return module->name() == importDecl.name; };
+        //auto it = std::find_if(moduleList.begin(), moduleList.end(), predicate);
+        auto it = modules.find(importDecl.name);
+        if (it != modules.end())
         {
-            auto module = *it;
+            auto module = it->second;
             importedModules.insert(std::make_pair(module->name(), module));
         }
         else
@@ -111,17 +110,6 @@ bool SourceModule::addImportedModules(const std::vector<ImportedModule*> &module
     }
 
     return result;
-}
-
-/*void SourceModule::createCodeGenerator()
-{
-    assert(astModule != nullptr);
-    codeGenerator = std::make_unique<codegen::CodeGenerator>(this);
-}*/
-
-const std::string& SourceModule::filePath() const
-{
-    return path;
 }
 
 const std::string& SourceModule::name() const
@@ -145,7 +133,7 @@ FunDeclAst SourceModule::getFunctionDecl(const std::string& name)
 
 DataAst SourceModule::getType(const std::string &name) const
 {
-    auto ast =  find(dataDeclarations, name);
+    auto ast = find(dataDeclarations, name);
     return ast != nullptr ? DataAst{ this, ast } : DataAst{};
 }
 
@@ -191,7 +179,7 @@ bool SourceModule::fullyQualifiedName(type::Identifier& identifier, const ast::T
     if (tid.parameters.empty() && tid.identifier.moduleName.empty())
     {
         type::Identifier id{ tid.identifier, {} };
-        if (codeGenerator->getTypeContext()->isPrimitive(id)) // change this check, split type and typeContext and put check in type?
+        if (type::isPrimitive(id))
         {
             identifier = std::move(id);
             return true;
@@ -217,15 +205,15 @@ bool SourceModule::fullyQualifiedName(type::Identifier& identifier, const ast::T
     return true;
 }
 
+Compiler* SourceModule::getParent()
+{
+    return parent;
+}
+
 ast::Module* SourceModule::getAST()
 {
     return astModule.get();
 }
-
-/*llvm::Module* SourceModule::getLLVM()
-{
-    return codeGenerator->getLLVM();
-}*/
 
 template<class AstNode, class LocalFun, class GlobalFun>
 AstNode SourceModule::lookup(
@@ -327,57 +315,6 @@ DataAst SourceModule::lookupType(const GlobalIdentifier& identifier) const
         [this](const std::string& id) { return getType(id); },
         [](ImportedModule* module, const std::string& id) { return module->getType(id); },
         "undefined data type ");
-}
-
-bool SourceModule::generateExportedFunctions()
-{
-    bool result = true;
-    for (auto &fun : astModule->functions)
-    {
-        if (fun->exported)
-        {
-            result &= codeGenerator->generateFunction(fun.get());
-        }
-    }
-    return result;
-}
-
-// return success or fail, or no more to generate?
-bool SourceModule::generateNextFunction()
-{
-    if (!pendingGeneration.empty())
-    {
-        auto &function = pendingGeneration.back();
-        auto it = functions.find(function.name.str());
-        if (it == functions.end())
-        {
-            Log({}, "undefined function: ", name(), ':', function.name);
-            pendingGeneration.pop_back();
-            return false;
-        }
-        auto ast = it->second;
-
-        std::vector<type::TypePtr> types;
-        for (auto t : *function.types)
-        {
-            //TODO: Now we try to find type in this module with its imports
-            // but this might be called from another module with its own type...
-            // an import in this module should not be required
-            types.push_back(codeGenerator->getTypeContext()->getType(t->identifier()));
-        }
-
-        if (std::any_of(types.begin(), types.end(), [](auto x) { return x == nullptr; }))
-        {
-            Log(ast->location, "unknown type in: ", name(), ':', function.name);
-            pendingGeneration.pop_back();
-            return false;
-        }
-
-        bool result = codeGenerator->generateFunction(ast, std::move(types));
-        pendingGeneration.pop_back();
-        return result;
-    }
-    return false;
 }
 
 } // llfp

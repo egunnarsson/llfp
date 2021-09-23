@@ -241,12 +241,12 @@ bool operator==(const Parameter &p1, const Parameter &p2)
     return p1.type == p2.type && p1.identifier == p2.identifier;
 }
 
-bool operator==(const FunctionDecl& f1, const FunctionDecl& f2)
+bool operator==(const FunctionDeclaration& f1, const FunctionDeclaration& f2)
 {
     return f1.name == f2.name && f1.type == f2.type && EqPtrV(f1.parameters, f2.parameters);
 }
 
-bool operator==(const ClassDeclaration& c1, const ClassDeclaration& c2)
+bool operator==(const Class& c1, const Class& c2)
 {
     return c1.name == c2.name &&
         c1.typeVariable == c2.typeVariable &&
@@ -260,12 +260,12 @@ bool operator==(const ClassInstance& c1, const ClassInstance& c2)
         EqPtrV(c1.functions, c2.functions);
 }
 
-bool operator==(const ImportDeclaration &i1, const ImportDeclaration &i2)
+bool operator==(const Import &i1, const Import &i2)
 {
     return i1.name == i2.name;
 }
 
-bool operator==(const PublicDeclaration &p1, const PublicDeclaration &p2)
+bool operator==(const Public &p1, const Public &p2)
 {
     return p1.name == p2.name;
 }
@@ -280,7 +280,7 @@ bool operator==(const Field &f1, const Field &f2)
     return f1.type == f2.type && f1.name == f2.name;
 }
 
-bool operator==(const DataDeclaration &d1, const DataDeclaration &d2)
+bool operator==(const Data &d1, const Data &d2)
 {
     return d1.name == d2.name && EqV(d1.fields, d2.fields) && d1.exported == d2.exported;
 }
@@ -297,11 +297,11 @@ bool operator==(const Function &f1, const Function &f2)
 bool operator==(const Module &m1, const Module &m2)
 {
     return m1.name == m2.name &&
-           EqV(m1.publicDeclarations, m2.publicDeclarations) &&
+           EqV(m1.publics, m2.publics) &&
            EqV(m1.imports, m2.imports) &&
-           EqPtrV(m1.functionDeclarations, m2.functionDeclarations) &&
-           EqPtrV(m1.classDeclarations, m2.classDeclarations) &&
-           EqPtrV(m1.instanceDeclarations, m2.instanceDeclarations);
+           EqPtrV(m1.functions, m2.functions) &&
+           EqPtrV(m1.classes, m2.classes) &&
+           EqPtrV(m1.classInstances, m2.classInstances);
 }
 
 } // llfp::ast
