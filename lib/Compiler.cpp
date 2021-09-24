@@ -111,8 +111,7 @@ Compiler::ErrorCode Compiler::compile(const std::vector<std::unique_ptr<lex::Inp
     {
         auto sourceModulePtr = unit.sourceModule.get();
         unit.codeGenerator = std::make_unique<codegen::CodeGenerator>(sourceModulePtr, unit.llvmContext.get(), unit.llvmModule.get());
-        auto codeGeneratorPtr = unit.codeGenerator.get();
-        if (!generateExportedFunctions(codeGeneratorPtr, sourceModulePtr))
+        if (!generateExportedFunctions(unit.codeGenerator.get(), sourceModulePtr))
         {
             return TypeOrCodeGenerationError;
         }

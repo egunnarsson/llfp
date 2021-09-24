@@ -521,8 +521,8 @@ const ast::Data* StructType::getAst() const
     return ast;
 }
 
-#define ADD_TYPE(id, getF, sign) (*types.insert({ Identifier{{"",id},{}}, std::make_shared<Type>(Identifier{{"",id},{}}, llvm::Type::getF(llvmContext), sign) }).first).second
-#define ADD_TYPE_L(id, floating, sign) (*types.insert({ Identifier{{"",id},{}}, std::make_shared<Type>(Identifier{{"",id},{}}, floating, sign) }).first).second
+#define ADD_TYPE(id, getF, sign) (*types.insert({ Identifier{{"",id.str()},{}}, std::make_shared<Type>(Identifier{{"",id.str()},{}}, llvm::Type::getF(llvmContext), sign) }).first).second
+#define ADD_TYPE_L(id, floating, sign) (*types.insert({ Identifier{{"",id.str()},{}}, std::make_shared<Type>(Identifier{{"",id.str()},{}}, floating, sign) }).first).second
 
 TypeContext::TypeContext(llvm::LLVMContext& llvmContext_, SourceModule* sourceModule_) :
     llvmContext{ llvmContext_ },

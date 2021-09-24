@@ -75,4 +75,4 @@ private:
     bool      generateNextFunction();
 };
 
-} // namespece llfp
+} // namespace llfp

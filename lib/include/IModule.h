@@ -17,7 +17,7 @@ namespace type
 class Type;
 typedef std::shared_ptr<Type> TypePtr;
 
-class Identifier;
+struct Identifier;
 
 }
 
