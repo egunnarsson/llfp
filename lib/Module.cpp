@@ -179,7 +179,7 @@ bool SourceModule::fullyQualifiedName(type::Identifier& identifier, const ast::T
     if (tid.parameters.empty() && tid.identifier.moduleName.empty())
     {
         type::Identifier id{ tid.identifier, {} };
-        if (type::isPrimitive(id))
+        if (id.name.name.empty() || type::isPrimitive(id))
         {
             identifier = std::move(id);
             return true;
@@ -304,7 +304,11 @@ FunDeclAst SourceModule::lookupFunctionDecl(const GlobalIdentifier& identifier)
 FunAst SourceModule::lookupFunction(const GlobalIdentifier& identifier)
 {
     return lookup<FunAst>(identifier,
-        [this](const std::string& id) { return getFunction(id); },
+        [this](const std::string& id)
+        {
+            auto ast = find(functions, id);
+            return ast != nullptr ? FunAst{ this, ast } : FunAst{};
+        },
         [](ImportedModule* module, const std::string& id) { return module->getFunction(id); },
         "undefined function ");
 }

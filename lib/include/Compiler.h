@@ -10,6 +10,7 @@
 
 #pragma warning(pop)
 
+#include "Codegen.h"
 #include "IModule.h"
 #include "Type.h"
 
@@ -18,13 +19,6 @@ namespace llfp
 
 class SourceModule;
 class ImportedModule;
-
-namespace codegen
-{
-
-class CodeGenerator;
-
-}
 
 struct FunctionIdentifier
 {
@@ -69,6 +63,9 @@ public:
     DataAst   lookupTypeGlobal(const GlobalIdentifier& identifier) const;
 
     void      requireFunctionInstance(FunctionIdentifier function);
+
+    SourceModule* getModule(size_t index);
+    llvm::Module* getLlvmModule(size_t index);
 
 private:
 

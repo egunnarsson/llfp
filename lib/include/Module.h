@@ -35,7 +35,7 @@ class SourceModule : public ImportedModule
     Compiler* parent;
 
     std::unique_ptr<ast::Module> astModule;
-    
+
     std::unordered_map<std::string, ast::Function*>  functions;
     std::unordered_map<std::string, ast::Function*>  publicFunctions;
     std::unordered_map<std::string, std::tuple<ast::Class*, ast::FunctionDeclaration*>> functionDeclarations;

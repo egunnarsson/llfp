@@ -1,38 +1,19 @@
 
+#include "Compiler.h"
 #include "Codegen.h"
-
+#include "Lexer.h"
 #include "Module.h"
 #include "Parser.h"
 
 #include "gtest/gtest.h"
 
-std::unique_ptr<llfp::SourceModule> compile1(const char *string)
+std::unique_ptr<llfp::Compiler> compile(const char *string)
 {
-    auto input = llfp::lex::StringInput(string);
-    auto lexer = llfp::lex::Lexer(&input);
-    auto parser = llfp::parse::Parser(&lexer);
-
-    auto module = parser.parse();
-
-    std::unique_ptr<llfp::SourceModule> srcModule = std::make_unique<llfp::SourceModule>("string");
-    if (module) { srcModule->setAST(std::move(module)); }
-
-    return srcModule;
-}
-
-std::unique_ptr<llfp::SourceModule> compile(const char *string)
-{
-    auto srcModule = compile1(string);
-
-    if (srcModule->getAST() != nullptr)
-    {
-        srcModule->addImportedModules({ srcModule.get() });
-        srcModule->createCodeGenerator();
-        srcModule->generateExportedFunctions();
-        while (srcModule->generateNextFunction()) {}
-    }
-
-    return srcModule;
+    std::vector<std::unique_ptr<llfp::lex::Input>> input;
+    input.push_back(std::make_unique<llfp::lex::StringInput>(string));
+    auto C = std::make_unique<llfp::Compiler>();
+    auto errorCode = C->compile(input);
+    return errorCode == llfp::Compiler::NoError ? std::move(C) : nullptr;
 }
 
 std::string compileError(const char *string)
@@ -43,44 +24,17 @@ std::string compileError(const char *string)
 }
 
 template<size_t N>
-std::array<std::unique_ptr<llfp::SourceModule>, N> compile(std::array<const char*, N> source)
+std::unique_ptr<llfp::Compiler> compile(std::array<const char*, N> source)
 {
-    std::array<std::unique_ptr<llfp::SourceModule>, N> modules;
-    std::vector<llfp::ImportedModule*> modules2;
-
+    std::vector<std::unique_ptr<llfp::lex::Input>> inputs;
     for (size_t i = 0; i < N; i++)
     {
-        modules[i] = compile1(source[i]);
-        modules2.push_back(modules[i].get());
+        inputs.push_back(std::make_unique<llfp::lex::StringInput>(source[i]));
     }
 
-    for (auto &sourceModule : modules)
-    {
-        if (sourceModule->getAST() == nullptr) { return modules ; }
-        sourceModule->addImportedModules(modules2);
-    }
-
-    for (auto &sourceModule : modules)
-    {
-        sourceModule->createCodeGenerator();
-        sourceModule->generateExportedFunctions();
-    }
-
-    bool done = false;
-    while (!done)
-    {
-        done = true;
-        for (auto &sourceModule : modules)
-        {
-            if (sourceModule->generateNextFunction())
-            {
-                while (sourceModule->generateNextFunction()) {}
-                done = false;
-            }
-        }
-    }
-
-    return modules;
+    std::unique_ptr<llfp::Compiler> C = std::make_unique<llfp::Compiler>();
+    auto errorCode = C->compile(inputs);
+    return errorCode == llfp::Compiler::NoError ? std::move(C) : nullptr;
 }
 
 bool empty(llvm::Function *f)
@@ -96,16 +50,17 @@ bool empty(llvm::Function *f)
 
 TEST(CodegenTest, Functions)
 {
-    auto llfpModule = compile(M"i32 x = 1; export i32 y = x;");
-    ASSERT_NE(llfpModule->getAST(), nullptr);
+    auto C = compile(M"i32 x = 1; export i32 y = x;");
+    ASSERT_NE(C, nullptr);
 
-    auto m = llfpModule->getLLVM();
+    auto m = C->getLlvmModule(0);
 
     EXPECT_EQ(m->getName(), "m");
     EXPECT_NE(m->getFunction("m:x$i32"), nullptr);
     EXPECT_NE(m->getFunction("m_y"), nullptr);
 
     // negative
+    //EXPECT_EQ(compileError(M"export i32 f() = x();"), "string(,): unknown function \"x\"\n");
     EXPECT_EQ(compileError(M"export i32 f(i32 x, i32 x) = 1;"), "string(2,21): duplicate parameter \"x\"\n");
     EXPECT_EQ(compileError(M"f = 1;\nf = 2;"), "string(3,1): function already defined\n");
 }
@@ -113,10 +68,10 @@ TEST(CodegenTest, Functions)
 TEST(CodegenTest, DataDeclaration)
 {
     // test valid data with field and types
-    auto llfpModule = compile(M"data d { i32 x; float y; }\nexport i32 f(d x) = 1;");
-    ASSERT_NE(llfpModule->getAST(), nullptr);
+    auto C = compile(M"data d { i32 x; float y; }\nexport i32 f(d x) = 1;");
+    ASSERT_NE(C, nullptr);
 
-    auto llvm = llfpModule->getLLVM();
+    auto llvm = C->getLlvmModule(0);
     auto func = llvm->getFunction("m_f");
     auto type = llvm->getTypeByName("m_d");
 
@@ -138,10 +93,10 @@ TEST(CodegenTest, DataDeclaration)
 TEST(CodegenTest, DataConstructor)
 {
     {
-        auto llfpModule = compile(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{z,z};");
-        ASSERT_NE(llfpModule->getAST(), nullptr);
+        auto C = compile(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{z,z};");
+        ASSERT_NE(C, nullptr);
 
-        auto llvm = llfpModule->getLLVM();
+        auto llvm = C->getLlvmModule(0);
         auto func = llvm->getFunction("m_f");
         auto type = llvm->getTypeByName("m_d");
 
@@ -150,14 +105,14 @@ TEST(CodegenTest, DataConstructor)
         ASSERT_NE(type, nullptr);
     }
     {
-        auto llfpModule = compile(
+        auto C = compile(
            M"data d[a]   {a x; a y;}\n"
             "data d2[a,b]{a x; b y;}\n"
             "export i32 f1() = f2().x;\nf2() = d{1,1};\n"
             "export i32 f3() = d2{1,true}.x;");
-        ASSERT_NE(llfpModule->getAST(), nullptr);
+        ASSERT_NE(C, nullptr);
 
-        auto llvm = llfpModule->getLLVM();
+        auto llvm = C->getLlvmModule(0);
         auto func_f1 = llvm->getFunction("m_f1");
         ASSERT_NE(func_f1, nullptr);
         EXPECT_FALSE(empty(func_f1));
@@ -178,15 +133,16 @@ TEST(CodegenTest, DataConstructor)
 TEST(CodegenTest, Modules)
 {
     // call function
-    auto modules = compile<2>({
+    auto C = compile<2>({
         "module m(foo); i32 foo = 1;",
         "module n; import m; export i32 bar = foo();" });
+    ASSERT_NE(C, nullptr);
 
-    EXPECT_EQ(modules[0]->getLLVM()->getName(), "m");
-    EXPECT_EQ(modules[1]->getLLVM()->getName(), "n");
-    EXPECT_NE(modules[0]->getLLVM()->getFunction("m:foo$i32"), nullptr);
-    EXPECT_NE(modules[1]->getLLVM()->getFunction("n_bar"), nullptr);
-    EXPECT_NE(modules[1]->getLLVM()->getFunction("m:foo$i32"), nullptr);
+    EXPECT_EQ(C->getLlvmModule(0)->getName(), "m");
+    EXPECT_EQ(C->getLlvmModule(1)->getName(), "n");
+    EXPECT_NE(C->getLlvmModule(0)->getFunction("m:foo$i32"), nullptr);
+    EXPECT_NE(C->getLlvmModule(1)->getFunction("n_bar"), nullptr);
+    EXPECT_NE(C->getLlvmModule(1)->getFunction("m:foo$i32"), nullptr);
 
     // import type
 

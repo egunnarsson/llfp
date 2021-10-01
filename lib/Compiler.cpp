@@ -1,4 +1,15 @@
 
+#pragma warning(push, 0)
+
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/Host.h"
+
+#include "llvm/Target/TargetOptions.h"
+#include "llvm/Target/TargetMachine.h"
+
+#pragma warning(pop)
+
 #include "Codegen.h"
 #include "Lexer.h"
 #include "Log.h"
@@ -13,13 +24,51 @@ namespace llfp
 namespace
 {
 
+bool createDataLayout(const std::string& targetTriple, llvm::DataLayout& dataLayout)
+{
+#if 1
+    llvm::InitializeNativeTarget();
+#else
+    llvm::InitializeAllTargetInfos();
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmPrinters();
+#endif
+
+    std::string targetError;
+    auto target = llvm::TargetRegistry::lookupTarget(targetTriple, targetError);
+
+    if (target == nullptr)
+    {
+        llvm::errs() << targetError << "\n";
+        return false;
+    }
+
+    auto CPU = "generic";
+    auto Features = "";
+
+    llvm::TargetOptions opt;
+    auto RM = llvm::Optional<llvm::Reloc::Model>();
+    auto targetMachine = target->createTargetMachine(targetTriple, CPU, Features, opt, RM);
+
+    if (targetMachine == nullptr)
+    {
+        llvm::errs() << "Failed to create target machine\n";
+        return false;
+    }
+
+    dataLayout = targetMachine->createDataLayout();
+
+    return true;
+}
+
 bool generateExportedFunctions(codegen::CodeGenerator* codeGenerator, SourceModule *sourceModule)
 {
     for (auto& function : sourceModule->getAST()->functions)
     {
         if (function->exported)
         {
-            if (codeGenerator->generateFunction(function.get()))
+            if (!codeGenerator->generateFunction(function.get()))
             {
                 return false;
             }
@@ -65,6 +114,13 @@ bool buildFunctionInstances(SourceModule *sourceModule, std::unordered_map<std::
 
 Compiler::ErrorCode Compiler::compile(const std::vector<std::unique_ptr<lex::Input>> &sourceFiles)
 {
+    auto targetTriple = llvm::sys::getDefaultTargetTriple(); // 32 bit "i386-pc-windows-msvc"
+    llvm::DataLayout dataLayout("");
+    if (!createDataLayout(targetTriple, dataLayout))
+    {
+        return Compiler::LLVMError;
+    }
+
     // Lex & Parse Input
     for (auto &input : sourceFiles)
     {
@@ -77,15 +133,23 @@ Compiler::ErrorCode Compiler::compile(const std::vector<std::unique_ptr<lex::Inp
         }
 
         auto sourceModule = SourceModule::create(this, std::move(astModule));
-        if (sourceModule != nullptr)
+        if (sourceModule == nullptr)
         {
             return TypeOrCodeGenerationError;
         }
 
+        auto llvmModule = 
+
         allModules.insert({sourceModule->name(), sourceModule.get()});
+
         compileModules.push_back(Unit{});
-        compileModules.back().llvmContext = std::make_unique<llvm::LLVMContext>();
-        compileModules.back().sourceModule = std::move(sourceModule);
+        auto& unit = compileModules.back();
+        unit.llvmContext = std::make_unique<llvm::LLVMContext>();
+        unit.llvmModule = std::make_unique<llvm::Module>(sourceModule->name(), *unit.llvmContext);
+        unit.sourceModule = std::move(sourceModule);
+
+        unit.llvmModule->setTargetTriple(targetTriple);
+        unit.llvmModule->setDataLayout(dataLayout);
     }
 
     // Resolve imports
@@ -164,6 +228,16 @@ DataAst Compiler::lookupTypeGlobal(const GlobalIdentifier& identifier) const
 void Compiler::requireFunctionInstance(FunctionIdentifier function)
 {
     pendingGeneration.push_back(function);
+}
+
+SourceModule* Compiler::getModule(size_t index)
+{
+    return compileModules.at(index).sourceModule.get();
+}
+
+llvm::Module* Compiler::getLlvmModule(size_t index)
+{
+    return compileModules.at(index).llvmModule.get();
 }
 
 bool Compiler::generateNextFunction()

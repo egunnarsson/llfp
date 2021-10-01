@@ -39,7 +39,7 @@ namespace type
 
 struct Identifier
 {
-    GlobalIdentifier        name;
+    GlobalIdentifier        name; // baseName?
     std::vector<Identifier> parameters;
 
     std::string str() const;
