@@ -207,12 +207,19 @@ void CodeGenerator::AddDllMain()
     llvmBuilder.CreateRet(value);
 }
 
+bool typeVarEqual(const std::string& typeVar, const ast::TypeIdentifier& type)
+{
+    return type.parameters.empty() &&
+        type.identifier.moduleName.empty() &&
+        type.identifier.name == typeVar;
+}
+
 std::stack<int> findTypeVariableIndex(const std::string &typeVar, const ast::TypeIdentifier& type)
 {
     int paramIndex = 0;
     for (auto& param : type.parameters)
     {
-        if (param.parameters.empty() && param.identifier.moduleName.empty() && param.identifier.name == typeVar)
+        if (typeVarEqual(typeVar, param))
         {
             std::stack<int> typeVarIndex;
             typeVarIndex.push(paramIndex);
@@ -249,16 +256,20 @@ type::Identifier getTypeByIndex(std::stack<int> index, const type::TypePtr& type
 
 type::Identifier findInstanceType(const ast::Class *classDecl, const ast::FunctionDeclaration* funDecl, const std::vector<type::TypePtr> & types)
 {
+    auto& typeVar = classDecl->typeVariable;
+
     int first = -1;
-    auto typeVariableIndex = findTypeVariableIndex(classDecl->typeVariable, funDecl->type);
-    if (typeVariableIndex.empty())
+    auto typeVariableIndex = findTypeVariableIndex(typeVar, funDecl->type);
+    if (typeVariableIndex.empty() && !typeVarEqual(typeVar, funDecl->type))
     {
         for (int paramIndex = 0; paramIndex < funDecl->parameters.size(); ++paramIndex)
         {
-            typeVariableIndex = findTypeVariableIndex(classDecl->typeVariable, funDecl->parameters[paramIndex]->type);
-            if (!typeVariableIndex.empty())
+            auto &paramTypeId = funDecl->parameters[paramIndex]->type;
+            typeVariableIndex = findTypeVariableIndex(typeVar, paramTypeId);
+            if (!typeVariableIndex.empty() || typeVarEqual(typeVar, paramTypeId))
             {
                 first = paramIndex + 1;
+                break;
             }
         }
     }

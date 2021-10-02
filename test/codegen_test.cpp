@@ -60,7 +60,7 @@ TEST(CodegenTest, Functions)
     EXPECT_NE(m->getFunction("m_y"), nullptr);
 
     // negative
-    //EXPECT_EQ(compileError(M"export i32 f() = x();"), "string(,): unknown function \"x\"\n");
+    EXPECT_EQ(compileError(M"export i32 f() = x();"), "string(2,18): undefined function \"x\"\n");
     EXPECT_EQ(compileError(M"export i32 f(i32 x, i32 x) = 1;"), "string(2,21): duplicate parameter \"x\"\n");
     EXPECT_EQ(compileError(M"f = 1;\nf = 2;"), "string(3,1): function already defined\n");
 }
@@ -156,6 +156,17 @@ TEST(CodegenTest, Modules)
     // duplicate module name
     // ambiguous function
     // ambiguous type
+}
+
+TEST(CodegenTest, TypeClass)
+{
+    auto C = compile(  // have a class, and an instance, and call the instance
+        M"class C a {a f(a);}\n"
+        "instance C i32 {i32 f(i32 x) = 1;}\n"
+        "export i32 foo() = f(2);");
+    ASSERT_NE(C, nullptr);
+
+    // test the nasty stuff, finding the type variable from nested type
 }
 
 TEST(CodegenTest, TypeCheck)

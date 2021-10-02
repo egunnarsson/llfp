@@ -138,9 +138,7 @@ Compiler::ErrorCode Compiler::compile(const std::vector<std::unique_ptr<lex::Inp
             return TypeOrCodeGenerationError;
         }
 
-        auto llvmModule = 
-
-        allModules.insert({sourceModule->name(), sourceModule.get()});
+        auto llvmModule = allModules.insert({sourceModule->name(), sourceModule.get()});
 
         compileModules.push_back(Unit{});
         auto& unit = compileModules.back();
@@ -196,7 +194,7 @@ Compiler::ErrorCode Compiler::compile(const std::vector<std::unique_ptr<lex::Inp
 FunAst Compiler::lookupInstance(const std::string& funIdentifier, const type::Identifier& typeIdentifier)
 {
     auto it = functionInstances.find(funIdentifier);
-    if (it == functionInstances.end())
+    if (it != functionInstances.end())
     {
         auto it2 = it->second.find(typeIdentifier);
         if (it2 != it->second.end())
