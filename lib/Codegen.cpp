@@ -313,7 +313,7 @@ Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::ve
         }
         return proto;
     }
-    Log({}, "unknown function: ", identifier.str());
+
     return nullptr;
 }
 
@@ -820,7 +820,7 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
     auto function = getFunction(exp.identifier, std::move(types)); // these types have to be concreate but they have only been infered, will a fix solve it?
     if (function == nullptr)
     {
-        Log(exp.location, "error calling: ", exp.identifier.str());
+        Log(exp.location, "undefined function \"", exp.identifier.str(), '"');
     }
     else
     {

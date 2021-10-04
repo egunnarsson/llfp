@@ -310,7 +310,7 @@ FunAst SourceModule::lookupFunction(const GlobalIdentifier& identifier)
             return ast != nullptr ? FunAst{ this, ast } : FunAst{};
         },
         [](ImportedModule* module, const std::string& id) { return module->getFunction(id); },
-        "undefined function ");
+        "");
 }
 
 DataAst SourceModule::lookupType(const GlobalIdentifier& identifier) const

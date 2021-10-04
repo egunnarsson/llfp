@@ -60,9 +60,9 @@ TEST(CodegenTest, Functions)
     EXPECT_NE(m->getFunction("m_y"), nullptr);
 
     // negative
-    EXPECT_EQ(compileError(M"export i32 f() = x();"), "string(2,18): undefined function \"x\"\n");
+    EXPECT_EQ(compileError(M"export i32 f() = x();"),           "string(2,18): undefined function \"x\"\n");
     EXPECT_EQ(compileError(M"export i32 f(i32 x, i32 x) = 1;"), "string(2,21): duplicate parameter \"x\"\n");
-    EXPECT_EQ(compileError(M"f = 1;\nf = 2;"), "string(3,1): function already defined\n");
+    EXPECT_EQ(compileError(M"f = 1;\nf = 2;"),                  "string(3,1): function already defined\n");
 }
 
 TEST(CodegenTest, DataDeclaration)
@@ -87,7 +87,7 @@ TEST(CodegenTest, DataDeclaration)
 
     // negative
     EXPECT_EQ(compileError(M"data foo { i32 x; i32 x; }\nexport i32 f(m:foo x) = 1;"), "string(2,19): duplicate field \"x\"\n");
-    EXPECT_EQ(compileError(M"data x{}\ndata x{}\nexport i32 f(m:x y) = 1;"), "string(3,1): data already defined\n");
+    EXPECT_EQ(compileError(M"data x{}\ndata x{}\nexport i32 f(m:x y) = 1;"),           "string(3,1): data already defined\n");
 }
 
 TEST(CodegenTest, DataConstructor)
@@ -160,13 +160,28 @@ TEST(CodegenTest, Modules)
 
 TEST(CodegenTest, TypeClass)
 {
-    auto C = compile(  // have a class, and an instance, and call the instance
+    // have a class, and an instance, and call the instance
+    auto C = compile(
         M"class C a {a f(a);}\n"
         "instance C i32 {i32 f(i32 x) = 1;}\n"
         "export i32 foo() = f(2);");
     ASSERT_NE(C, nullptr);
+    auto llvm = C->getLlvmModule(0);
+    auto func = llvm->getFunction("m:f$i32$i32");
+    ASSERT_NE(func, nullptr);
+    EXPECT_FALSE(empty(func));
 
-    // test the nasty stuff, finding the type variable from nested type
+    // Nested type variable
+    auto C2 = compile(
+        M"data D[a] {a x;}\n"
+        "class C a {i32 f(D[a]);}\n"
+        "instance C bool {i32 f(D[bool] d) = 1;}\n"
+        "export i32 foo() = f(D{true});");
+    ASSERT_NE(C2, nullptr);
+    auto llvm2 = C2->getLlvmModule(0);
+    auto func2 = llvm2->getFunction("m:f$i32$m:D[bool]");
+    ASSERT_NE(func2, nullptr);
+    EXPECT_FALSE(empty(func2));
 }
 
 TEST(CodegenTest, TypeCheck)
