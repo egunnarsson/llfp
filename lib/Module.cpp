@@ -51,6 +51,12 @@ std::unique_ptr<SourceModule> SourceModule::create(Compiler* parent, std::unique
     {
         for (auto& funDecl : classDecl->functions)
         {
+            if (sourceModule->functions.find(funDecl->name) != sourceModule->functions.end())
+            {
+                Log(funDecl->location, "function already defined");
+                return nullptr;
+            }
+
             auto it = sourceModule->functionDeclarations.insert(std::make_pair(funDecl->name, std::make_tuple(classDecl.get(), funDecl.get())));
             if (!it.second)
             {

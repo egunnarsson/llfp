@@ -182,6 +182,21 @@ TEST(CodegenTest, TypeClass)
     auto func2 = llvm2->getFunction("m:f$i32$m:D[bool]");
     ASSERT_NE(func2, nullptr);
     EXPECT_FALSE(empty(func2));
+
+    // TODO: a bit weird with the locations of these errors
+    EXPECT_EQ(compileError(
+        M"class C a {a f(a);}\n"
+        "instance C i32{i32 f(i32 x) = 1;}\n"
+        "i32 f(i32 x) = 2;\n"
+        "export i32 ff(i32 x) = f(x);"), "string(2,12): function already defined\n");
+    EXPECT_EQ(compileError(
+        M"class C a {a f(a);}\n"
+        "instance C i32{i32 f(i32 x) = 1;}\n"
+        "export i32 f(i32 x) = 2;\n"), "string(2,12): function already defined\n");
+    EXPECT_EQ(compileError(
+        M"class C a {i32 f(a);}\n"
+        "instance C i32 {i32 f(i32 x) = 1;}\n"
+        "export i32 foo() = f(true);"), "string(4,20): no instance of \"m:C bool\"\n");
 }
 
 TEST(CodegenTest, TypeCheck)

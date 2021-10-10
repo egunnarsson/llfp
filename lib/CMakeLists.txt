@@ -14,6 +14,7 @@ add_library(llfp_lib
 	include/Codegen.h
 	include/Common.h
 	include/Compiler.h
+	include/Error.h
 	include/HeaderWriter.h
 	include/IModule.h
 	include/Lexer.h

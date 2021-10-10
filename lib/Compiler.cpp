@@ -84,18 +84,29 @@ bool buildFunctionInstances(SourceModule *sourceModule, std::unordered_map<std::
     
     for (auto& instance : ast->classInstances)
     {
+        // check that instance->classIdentifier is visible from this module
+
         type::Identifier id;
         if (sourceModule->fullyQualifiedName(id, instance->typeArgument))
         {
             for (auto& function : instance->functions)
             {
-                auto& map = functionInstances[function->name];
-                auto it = map.insert({ std::move(id), FunAst{ sourceModule, function.get()} });
-                if (!it.second)
+                auto predicate = [&function](std::unique_ptr<ast::Function>& f) {return f->name == function->name; };
+                if (std::find_if(ast->functions.begin(), ast->functions.end(), predicate) != ast->functions.end())
                 {
-                    auto& typeKey = it.first->first;
-                    Log(function->location, "multiple instances of class for '", typeKey.str(), '\'');
+                    Log(function->location, "function already defined");
                     result = false;
+                }
+                else
+                {
+                    auto& map = functionInstances[function->name];
+                    auto it = map.insert({ std::move(id), FunAst{ sourceModule, function.get()} });
+                    if (!it.second)
+                    {
+                        auto& typeKey = it.first->first;
+                        Log(function->location, "multiple instances of class for '", typeKey.str(), '\'');
+                        result = false;
+                    }
                 }
             }
         }

@@ -13,6 +13,7 @@
 #pragma warning(pop)
 
 #include "Compiler.h"
+#include "Error.h"
 #include "Log.h"
 #include "Module.h"
 
@@ -290,31 +291,40 @@ type::Identifier findInstanceType(const ast::Class *classDecl, const ast::Functi
 
 Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::vector<type::TypePtr> types)
 {
-    FunAst ast;
-
+    auto ast = sourceModule->lookupFunction(identifier);
     auto astDecl = sourceModule->lookupFunctionDecl(identifier);
-    if (astDecl.function != nullptr)
-    {
-        type::Identifier instanceType = findInstanceType(astDecl.class_, astDecl.function, types);
-        // if (identifier.moduleName.empty()) ?
-        ast = sourceModule->getParent()->lookupInstance(identifier.name, instanceType);
-    }
-    else
-    {
-        ast = sourceModule->lookupFunction(identifier);
-    }
 
-    if (ast.function != nullptr)
+    if (!astDecl.empty())
     {
-        auto proto = generatePrototype(ast.importedModule, ast.function, std::move(types));
-        if (proto != nullptr)
+        if (!ast.empty())
         {
-            sourceModule->getParent()->requireFunctionInstance({ ast, &proto->types });
+            throw Error(std::string{ "reference to \"" } + identifier.str() + "\" is ambiguous");
         }
-        return proto;
+
+        type::Identifier instanceType = findInstanceType(astDecl.class_, astDecl.function, types);
+        assert(!instanceType.name.name.empty());
+
+        auto instanceAst = sourceModule->getParent()->lookupInstance(identifier.name, instanceType);
+        if (instanceAst.empty())
+        {
+            throw Error(std::string{ "no instance of \"" } + astDecl.importedModule->name() + ':' + astDecl.class_->name + ' ' + instanceType.str() + '"');
+        }
+
+        ast = instanceAst;
     }
 
-    return nullptr;
+    if (ast.function == nullptr)
+    {
+        throw Error(std::string{ "undefined function \"" } + identifier.str() +'"');
+    }
+    
+    auto proto = generatePrototype(ast.importedModule, ast.function, std::move(types));
+    if (proto != nullptr)
+    {
+        sourceModule->getParent()->requireFunctionInstance({ ast, &proto->types });
+    }
+    return proto;
+
 }
 
 ExpCodeGenerator::ExpCodeGenerator(const type::TypePtr &type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_) :
@@ -817,24 +827,31 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
         }
     }
 
-    auto function = getFunction(exp.identifier, std::move(types)); // these types have to be concreate but they have only been infered, will a fix solve it?
-    if (function == nullptr)
+    try
     {
-        Log(exp.location, "undefined function \"", exp.identifier.str(), '"');
-    }
-    else
-    {
-        std::vector<llvm::Value*> arguments;
-        for (size_t i = 0; i < exp.arguments.size(); ++i)
+        auto function = getFunction(exp.identifier, std::move(types)); // these types have to be concreate but they have only been infered, will a fix solve it?
+        if (function == nullptr)
         {
-            arguments.push_back(generate(*exp.arguments[i], function->types[i + 1], this));
-            if (arguments.back() == nullptr)
-            {
-                return;
-            }
+            return;
         }
+        else
+        {
+            std::vector<llvm::Value*> arguments;
+            for (size_t i = 0; i < exp.arguments.size(); ++i)
+            {
+                arguments.push_back(generate(*exp.arguments[i], function->types[i + 1], this));
+                if (arguments.back() == nullptr)
+                {
+                    return;
+                }
+            }
 
-        result = llvmBuilder().CreateCall(function->llvm, arguments, "call");
+            result = llvmBuilder().CreateCall(function->llvm, arguments, "call");
+        }
+    }
+    catch(const Error &e)
+    {
+        Log(exp.location, e.what());
     }
 }
 
