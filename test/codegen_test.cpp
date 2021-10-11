@@ -73,7 +73,7 @@ TEST(CodegenTest, DataDeclaration)
 
     auto llvm = C->getLlvmModule(0);
     auto func = llvm->getFunction("m_f");
-    auto type = llvm->getTypeByName("m_d");
+    auto type = llvm::StructType::getTypeByName(llvm->getContext(), "m_d");
 
     // test return of custom type
     // "export m:d foo()"
@@ -98,7 +98,7 @@ TEST(CodegenTest, DataConstructor)
 
         auto llvm = C->getLlvmModule(0);
         auto func = llvm->getFunction("m_f");
-        auto type = llvm->getTypeByName("m_d");
+        auto type = llvm::StructType::getTypeByName(llvm->getContext(), "m_d");
 
         ASSERT_NE(func, nullptr);
         EXPECT_FALSE(empty(func));
