@@ -9,7 +9,7 @@
 
 #pragma warning(pop)
 
-#include "Compiler.h"
+#include "GlobalContext.h"
 #include "Log.h"
 #include "Module.h"
 
@@ -524,9 +524,10 @@ const ast::Data* StructType::getAst() const
 #define ADD_TYPE(id, getF, sign) (*types.insert({ Identifier{{"",id.str()},{}}, std::make_shared<Type>(Identifier{{"",id.str()},{}}, llvm::Type::getF(llvmContext), sign) }).first).second
 #define ADD_TYPE_L(id, floating, sign) (*types.insert({ Identifier{{"",id.str()},{}}, std::make_shared<Type>(Identifier{{"",id.str()},{}}, floating, sign) }).first).second
 
-TypeContext::TypeContext(llvm::LLVMContext& llvmContext_, SourceModule* sourceModule_) :
+TypeContext::TypeContext(llvm::LLVMContext& llvmContext_, SourceModule* sourceModule_, GlobalContext* globalContext_) :
     llvmContext{ llvmContext_ },
-    sourceModule{ sourceModule_ }
+    sourceModule{ sourceModule_ },
+    globalContext{ globalContext_ }
 {
     boolType = ADD_TYPE(name::Bool, getInt1Ty, false);
 
@@ -587,7 +588,7 @@ TypePtr TypeContext::getType(const Identifier& identifier)
         }
     }
 
-    auto ast = sourceModule->getParent()->lookupTypeGlobal(identifier.name);
+    auto ast = globalContext->lookupTypeGlobal(identifier.name);
     if (ast.data != nullptr)
     {
         if (ast.data->typeVariables.size() != identifier.parameters.size())

@@ -33,6 +33,7 @@ namespace llfp
 
 class ImportedModule;
 class SourceModule;
+class GlobalContext;
 
 namespace type
 {
@@ -223,6 +224,7 @@ class TypeContext
 {
     llvm::LLVMContext& llvmContext; // to create types
     SourceModule*      sourceModule; // to do global lookups (actually need parent), qualify names for equals function
+    GlobalContext*     globalContext;
 
     std::unordered_map<Identifier, TypePtr, IdentifierHash> types;
 
@@ -254,7 +256,7 @@ class TypeContext
 
 public:
 
-    TypeContext(llvm::LLVMContext &llvmContext_, SourceModule *sourceModule_);
+    TypeContext(llvm::LLVMContext &llvmContext_, SourceModule *sourceModule_, GlobalContext* globalContext_);
 
     TypePtr getTypeFromAst(const ast::TypeIdentifier& identifier);
     TypePtr getTypeFromAst(const ast::TypeIdentifier& identifier, const ImportedModule* lookupModule);

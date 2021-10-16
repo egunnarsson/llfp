@@ -31,9 +31,6 @@ class CodeGenerator;
 // a module generted from source code
 class SourceModule : public ImportedModule
 {
-    // for global lookup? others to be able to call getParent... to act like context
-    Compiler* parent;
-
     std::unique_ptr<ast::Module> astModule;
 
     std::unordered_map<std::string, ast::Function*>  functions;
@@ -44,11 +41,8 @@ class SourceModule : public ImportedModule
 
 public:
 
-    SourceModule(Compiler* parent_);
-    ~SourceModule();
-
-    static std::unique_ptr<SourceModule> create(Compiler* parent, std::unique_ptr<ast::Module> astModule_);
-    bool addImportedModules(const std::unordered_map<std::string, ImportedModule*> &moduleList);
+    static std::unique_ptr<SourceModule> create(std::unique_ptr<ast::Module> astModule_);
+    bool addImportedModules(GlobalContext &globalContext);
 
     const std::string& name() const override;
 
@@ -61,7 +55,6 @@ public:
     std::string        getExportedName(const ast::Function *function) const override;
     bool               fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const override;
 
-    Compiler*          getParent();
     ast::Module*       getAST();
 
     // lookup local function or global from imported modules

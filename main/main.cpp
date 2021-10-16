@@ -15,9 +15,9 @@
 
 #pragma warning(pop)
 
-#include "Compiler.h"
 #include "HeaderWriter.h"
 #include "Lexer.h"
+#include "llfp.h"
 #include "Module.h"
 
 static llvm::cl::list<std::string>
@@ -39,7 +39,7 @@ std::unique_ptr<llfp::lex::Input> makeInput(const std::string &inputFilename)
 }
 
 template<class T>
-llfp::Compiler::ErrorCode write(llvm::SmallString<128> &output, llvm::StringRef extention, T writeFun)
+llfp::ReturnCode write(llvm::SmallString<128> &output, llvm::StringRef extention, T writeFun)
 {
     llvm::sys::path::replace_extension(output, extention);
     std::error_code ec;
@@ -47,28 +47,28 @@ llfp::Compiler::ErrorCode write(llvm::SmallString<128> &output, llvm::StringRef 
     if (ec)
     {
         llvm::errs() << ec.message() << '\n';
-        return llfp::Compiler::IOError;
+        return llfp::ReturnCode::IOError;
     }
     writeFun(os);
     if (os.has_error())
     {
         llvm::errs() << os.error().message() << '\n';
-        return llfp::Compiler::IOError;
+        return llfp::ReturnCode::IOError;
     }
-    return llfp::Compiler::NoError;
+    return llfp::ReturnCode::NoError;
 }
 
-llfp::Compiler::ErrorCode writeIR(llvm::Module *llvmModule, llvm::SmallString<128> &output)
+llfp::ReturnCode writeIR(llvm::Module *llvmModule, llvm::SmallString<128> &output)
 {
     return write(output, ".ll", [llvmModule](llvm::raw_fd_ostream &os) { os << (*llvmModule); });
 }
 
-llfp::Compiler::ErrorCode writeBitcode(llvm::Module *llvmModule, llvm::SmallString<128> &output)
+llfp::ReturnCode writeBitcode(llvm::Module *llvmModule, llvm::SmallString<128> &output)
 {
     return write(output, ".bc", [llvmModule](llvm::raw_fd_ostream &os) { llvm::WriteBitcodeToFile(*llvmModule, os); });
 }
 
-llfp::Compiler::ErrorCode writeDefFile(llfp::SourceModule *sourceModule, llvm::SmallString<128> &output)
+llfp::ReturnCode writeDefFile(llfp::SourceModule *sourceModule, llvm::SmallString<128> &output)
 {
     return write(output, ".def",
         [&sourceModule](llvm::raw_fd_ostream &os)
@@ -85,7 +85,7 @@ llfp::Compiler::ErrorCode writeDefFile(llfp::SourceModule *sourceModule, llvm::S
         });
 }
 
-llfp::Compiler::ErrorCode writeHeaderFile(llfp::SourceModule* module, llvm::SmallString<128> &output)
+llfp::ReturnCode writeHeaderFile(llfp::SourceModule* module, llvm::SmallString<128> &output)
 {
     return write(output, ".h", [&module](llvm::raw_fd_ostream &os) {
         llfp::HeaderWriter writer;
@@ -93,27 +93,28 @@ llfp::Compiler::ErrorCode writeHeaderFile(llfp::SourceModule* module, llvm::Smal
     });
 }
 
-llfp::Compiler::ErrorCode write(llfp::Compiler& c, size_t index, llvm::SmallString<128> &output)
+llfp::ReturnCode write(llfp::CompiledModule& compiledModule, llvm::SmallString<128> &output)
 {
-    auto srcModule = c.getModule(index);
-    auto llvmModule = c.getLlvmModule(index);
+    auto srcModule = compiledModule.sourceModule.get();
+    auto llvmModule = compiledModule.llvmModule.get();
 
-    llfp::Compiler::ErrorCode result = writeIR(llvmModule, output);
-    if (result) { return result; }
+    llfp::ReturnCode result = writeIR(llvmModule, output);
+    if (llfp::error(result)) { return result; }
+
     result = writeBitcode(llvmModule, output);
-    if (result) { return result; }
+    if (llfp::error(result)) { return result; }
+
     result = writeDefFile(srcModule, output);
-    if (result) { return result; }
-    result = writeHeaderFile(srcModule, output);
-    if (result) { return result; }
-    return llfp::Compiler::ErrorCode::NoError;
+    if (llfp::error(result)) { return result; }
+
+    return writeHeaderFile(srcModule, output);
 }
 
 int main(int argc, char *argv[])
 {
     if (!llvm::cl::ParseCommandLineOptions(argc, argv, "", &llvm::errs()))
     {
-        return llfp::Compiler::ErrorCode::CommandLineArgumentError;
+        return llfp::convert(llfp::ReturnCode::CommandLineArgumentError);
     }
 
     if (InputFilenames.empty())
@@ -124,7 +125,7 @@ int main(int argc, char *argv[])
     if (InputFilenames.size() > 1 && !OutputFilename.empty())
     {
         llvm::errs() << "multiple input files specified while also specifying an output file";
-        return llfp::Compiler::ErrorCode::CommandLineArgumentError;
+        return llfp::convert(llfp::ReturnCode::CommandLineArgumentError);
     }
 
     std::vector<std::unique_ptr<llfp::lex::Input>> inputFiles;
@@ -133,38 +134,39 @@ int main(int argc, char *argv[])
         inputFiles.push_back(makeInput(inputFile));
     }
 
-    llfp::Compiler c;
-    auto result = c.compile(inputFiles);
-    if (result != llfp::Compiler::ErrorCode::NoError)
+    try
     {
-        return result;
-    }
+        auto result = llfp::compile(inputFiles);
+        auto count = result.size();
 
-    llvm::SmallString<128> output;
-
-    const auto count = inputFiles.size();
-    if (count == 1)
-    {
-        output = OutputFilename.empty() ? InputFilenames.front() : OutputFilename;
-        if (output == "-")
+        llvm::SmallString<128> output;
+        if (count == 1)
         {
-            auto llvmModule = c.getLlvmModule(0);
-            llvm::outs() << (*llvmModule);
+            output = OutputFilename.empty() ? InputFilenames.front() : OutputFilename;
+            if (output == "-")
+            {
+                auto &llvmModule = *result[0].llvmModule;
+                llvm::outs() << llvmModule;
+            }
+            else
+            {
+                return llfp::convert(write(result[0], output));
+            }
         }
         else
         {
-            return write(c, 0, output);
+            for (size_t index = 0; index < count; ++index)
+            {
+                output = InputFilenames[index];
+                auto code = write(result[index], output);
+                if (llfp::error(code)) { return llfp::convert(code); }
+            }
         }
     }
-    else
+    catch (llfp::ReturnCode error)
     {
-        for (size_t index = 0; index < count; ++index)
-        {
-            output = InputFilenames[index];
-            result = write(c, index, output);
-            if (result != 0) { return result; }
-        }
+        return llfp::convert(error);
     }
 
-    return llfp::Compiler::ErrorCode::NoError;
+    return llfp::convert(llfp::ReturnCode::NoError);
 }

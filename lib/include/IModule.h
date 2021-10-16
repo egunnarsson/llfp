@@ -9,6 +9,8 @@
 namespace llfp
 {
 
+// Forward Declarations
+
 class ImportedModule;
 
 namespace type
@@ -20,6 +22,8 @@ typedef std::shared_ptr<Type> TypePtr;
 struct Identifier;
 
 }
+
+// Structs
 
 struct FunAst
 {
@@ -46,11 +50,7 @@ struct DataAst
     bool empty() const { return importedModule == nullptr && data == nullptr; }
 };
 
-/*struct FunctionIdentifier
-{
-    llvm::StringRef           name;
-    std::vector<type::TypePtr>* types;
-};*/
+// Module Interface
 
 class ImportedModule
 {
@@ -74,9 +74,6 @@ public:
     virtual FunAst      lookupFunction(const GlobalIdentifier& identifier) = 0;
     virtual FunDeclAst  lookupFunctionDecl(const GlobalIdentifier& identifier) = 0;
     virtual DataAst     lookupType(const GlobalIdentifier &) const = 0;
-
-    //virtual void        requireFunctionInstance(FunctionIdentifier function) = 0;
-    //virtual bool        generateFunction(const ast::Function *ast, std::vector<const type::Identifier*> types) = 0; 
 };
 
 } // llfp

@@ -12,7 +12,7 @@
 
 #pragma warning(pop)
 
-#include "Compiler.h"
+#include "GlobalContext.h"
 #include "Error.h"
 #include "Log.h"
 #include "Module.h"
@@ -27,12 +27,19 @@ namespace codegen
 
 const Value ExpCodeGenerator::EmptyValue{ nullptr, nullptr };
 
-CodeGenerator::CodeGenerator(SourceModule *sourceModule_, llvm::LLVMContext* llvmContext_, llvm::Module* llvmModule_) :
+CodeGenerator::CodeGenerator(
+    Driver* driver_,
+    GlobalContext *globalContext_,
+    SourceModule *sourceModule_,
+    llvm::LLVMContext* llvmContext_,
+    llvm::Module* llvmModule_) :
+    driver{ driver_ },
+    globalContext{ globalContext_ },
     sourceModule{ sourceModule_ },
     llvmContext{ llvmContext_ },
     llvmBuilder(*llvmContext),
     llvmModule{ llvmModule_ },
-    typeContext(*llvmContext, sourceModule)
+    typeContext(*llvmContext, sourceModule, globalContext_)
 {
 }
 
@@ -208,6 +215,9 @@ void CodeGenerator::AddDllMain()
     llvmBuilder.CreateRet(value);
 }
 
+namespace
+{
+
 bool typeVarEqual(const std::string& typeVar, const ast::TypeIdentifier& type)
 {
     return type.parameters.empty() &&
@@ -289,6 +299,8 @@ type::Identifier findInstanceType(const ast::Class *classDecl, const ast::Functi
     }
 }
 
+} // namespace
+
 Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::vector<type::TypePtr> types)
 {
     auto ast = sourceModule->lookupFunction(identifier);
@@ -304,7 +316,7 @@ Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::ve
         type::Identifier instanceType = findInstanceType(astDecl.class_, astDecl.function, types);
         assert(!instanceType.name.name.empty());
 
-        auto instanceAst = sourceModule->getParent()->lookupInstance(identifier.name, instanceType);
+        auto instanceAst = globalContext->lookupInstance(identifier.name, instanceType);
         if (instanceAst.empty())
         {
             throw Error(std::string{ "no instance of \"" } + astDecl.importedModule->name() + ':' + astDecl.class_->name + ' ' + instanceType.str() + '"');
@@ -317,14 +329,13 @@ Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::ve
     {
         throw Error(std::string{ "undefined function \"" } + identifier.str() +'"');
     }
-    
+
     auto proto = generatePrototype(ast.importedModule, ast.function, std::move(types));
     if (proto != nullptr)
     {
-        sourceModule->getParent()->requireFunctionInstance({ ast, &proto->types });
+        driver->push({ ast, &proto->types });
     }
     return proto;
-
 }
 
 ExpCodeGenerator::ExpCodeGenerator(const type::TypePtr &type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_) :
@@ -982,7 +993,7 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
                     Log(arg->location, index == type::Type::InvalidIndex
                         ? "unknown field name"
                         : "incorrect field position");
-                    break;
+                    fail = true;
                 }
             }
 

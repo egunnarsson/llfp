@@ -1,5 +1,6 @@
 
 #include "Codegen.h"
+#include "GlobalContext.h"
 #include "Log.h"
 
 #include "Module.h"
@@ -11,15 +12,9 @@ namespace llfp
 ImportedModule::~ImportedModule() {}
 
 
-SourceModule::SourceModule(Compiler* parent_) :
-    parent { parent_ }
-{}
-
-SourceModule::~SourceModule() {}
-
-std::unique_ptr<SourceModule> SourceModule::create(Compiler* parent, std::unique_ptr<ast::Module> astModule)
+std::unique_ptr<SourceModule> SourceModule::create(std::unique_ptr<ast::Module> astModule)
 {
-    std::unique_ptr<SourceModule> sourceModule = std::make_unique<SourceModule>(parent);
+    std::unique_ptr<SourceModule> sourceModule = std::make_unique<SourceModule>();
 
     for (auto &function : astModule->functions)
     {
@@ -93,19 +88,16 @@ std::unique_ptr<SourceModule> SourceModule::create(Compiler* parent, std::unique
     return sourceModule;
 }
 
-bool SourceModule::addImportedModules(const std::unordered_map<std::string, ImportedModule*> &modules)
+bool SourceModule::addImportedModules(GlobalContext &globalContext)
 {
     assert(astModule != nullptr);
     bool result = true;
 
     for (auto &importDecl : astModule->imports)
     {
-        //auto predicate = [&importDecl](ImportedModule *module) { return module->name() == importDecl.name; };
-        //auto it = std::find_if(moduleList.begin(), moduleList.end(), predicate);
-        auto it = modules.find(importDecl.name);
-        if (it != modules.end())
+        auto module = globalContext.getModule(importDecl.name);
+        if (module != nullptr)
         {
-            auto module = it->second;
             importedModules.insert(std::make_pair(module->name(), module));
         }
         else
@@ -209,11 +201,6 @@ bool SourceModule::fullyQualifiedName(type::Identifier& identifier, const ast::T
         }
     }
     return true;
-}
-
-Compiler* SourceModule::getParent()
-{
-    return parent;
 }
 
 ast::Module* SourceModule::getAST()

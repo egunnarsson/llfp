@@ -12,6 +12,7 @@
 #pragma warning(pop)
 
 #include "Ast.h"
+#include "Driver.h"
 #include "IModule.h"
 #include "Type.h"
 
@@ -41,7 +42,9 @@ struct Value
 
 class CodeGenerator
 {
-    SourceModule*      sourceModule; //lookup (local and global thru parent) 
+    Driver*            driver;
+    GlobalContext*     globalContext; // lookup (global)
+    SourceModule*      sourceModule; // lookup (local)
 
     llvm::LLVMContext* llvmContext; // one context per module, one module compiled per thread
     llvm::IRBuilder<>  llvmBuilder;
@@ -53,12 +56,16 @@ class CodeGenerator
 
 public:
 
-    CodeGenerator(SourceModule *sourceModule_, llvm::LLVMContext* llvmContext_, llvm::Module* llvmModule_);
+    CodeGenerator(
+        Driver* driver_,
+        GlobalContext* globalContext_,
+        SourceModule *sourceModule_,
+        llvm::LLVMContext* llvmContext_,
+        llvm::Module* llvmModule_);
 
     bool               generateFunction(const ast::Function*ast);
     bool               generateFunction(const ast::Function*ast, std::vector<type::TypePtr> types);
 
-    llvm::Module*      getLLVM() { return llvmModule; }
     type::TypeContext* getTypeContext() { return &typeContext; }
 
 private:

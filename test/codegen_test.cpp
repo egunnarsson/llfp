@@ -1,5 +1,5 @@
 
-#include "Compiler.h"
+#include "llfp.h"
 #include "Codegen.h"
 #include "Lexer.h"
 #include "Module.h"
@@ -7,24 +7,22 @@
 
 #include "gtest/gtest.h"
 
-std::unique_ptr<llfp::Compiler> compile(const char *string)
+std::vector<llfp::CompiledModule> compile(const char *string)
 {
     std::vector<std::unique_ptr<llfp::lex::Input>> input;
     input.push_back(std::make_unique<llfp::lex::StringInput>(string));
-    auto C = std::make_unique<llfp::Compiler>();
-    auto errorCode = C->compile(input);
-    return errorCode == llfp::Compiler::NoError ? std::move(C) : nullptr;
+    return llfp::compile(input);
 }
 
 std::string compileError(const char *string)
 {
     testing::internal::CaptureStderr();
-    compile(string);
+    EXPECT_THROW(compile(string), llfp::ReturnCode);
     return testing::internal::GetCapturedStderr();
 }
 
 template<size_t N>
-std::unique_ptr<llfp::Compiler> compile(std::array<const char*, N> source)
+std::vector<llfp::CompiledModule> compile(std::array<const char*, N> source)
 {
     std::vector<std::unique_ptr<llfp::lex::Input>> inputs;
     for (size_t i = 0; i < N; i++)
@@ -32,9 +30,7 @@ std::unique_ptr<llfp::Compiler> compile(std::array<const char*, N> source)
         inputs.push_back(std::make_unique<llfp::lex::StringInput>(source[i]));
     }
 
-    std::unique_ptr<llfp::Compiler> C = std::make_unique<llfp::Compiler>();
-    auto errorCode = C->compile(inputs);
-    return errorCode == llfp::Compiler::NoError ? std::move(C) : nullptr;
+    return llfp::compile(inputs);
 }
 
 bool empty(llvm::Function *f)
@@ -50,10 +46,10 @@ bool empty(llvm::Function *f)
 
 TEST(CodegenTest, Functions)
 {
-    auto C = compile(M"i32 x = 1; export i32 y = x;");
-    ASSERT_NE(C, nullptr);
+    auto result = compile(M"i32 x = 1; export i32 y = x;");
+    ASSERT_NE(result[0].llvmModule, nullptr);
 
-    auto m = C->getLlvmModule(0);
+    auto m = result[0].llvmModule.get();
 
     EXPECT_EQ(m->getName(), "m");
     EXPECT_NE(m->getFunction("m:x$i32"), nullptr);
@@ -68,10 +64,10 @@ TEST(CodegenTest, Functions)
 TEST(CodegenTest, DataDeclaration)
 {
     // test valid data with field and types
-    auto C = compile(M"data d { i32 x; float y; }\nexport i32 f(d x) = 1;");
-    ASSERT_NE(C, nullptr);
+    auto result = compile(M"data d { i32 x; float y; }\nexport i32 f(d x) = 1;");
+    ASSERT_NE(result[0].llvmModule, nullptr);
 
-    auto llvm = C->getLlvmModule(0);
+    auto llvm = result[0].llvmModule.get();
     auto func = llvm->getFunction("m_f");
     auto type = llvm::StructType::getTypeByName(llvm->getContext(), "m_d");
 
@@ -93,10 +89,10 @@ TEST(CodegenTest, DataDeclaration)
 TEST(CodegenTest, DataConstructor)
 {
     {
-        auto C = compile(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{z,z};");
-        ASSERT_NE(C, nullptr);
+        auto result = compile(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{z,z};");
+        ASSERT_NE(result[0].llvmModule, nullptr);
 
-        auto llvm = C->getLlvmModule(0);
+        auto llvm = result[0].llvmModule.get();
         auto func = llvm->getFunction("m_f");
         auto type = llvm::StructType::getTypeByName(llvm->getContext(), "m_d");
 
@@ -105,14 +101,14 @@ TEST(CodegenTest, DataConstructor)
         ASSERT_NE(type, nullptr);
     }
     {
-        auto C = compile(
+        auto result = compile(
            M"data d[a]   {a x; a y;}\n"
             "data d2[a,b]{a x; b y;}\n"
             "export i32 f1() = f2().x;\nf2() = d{1,1};\n"
             "export i32 f3() = d2{1,true}.x;");
-        ASSERT_NE(C, nullptr);
+        ASSERT_NE(result[0].llvmModule, nullptr);
 
-        auto llvm = C->getLlvmModule(0);
+        auto llvm = result[0].llvmModule.get();
         auto func_f1 = llvm->getFunction("m_f1");
         ASSERT_NE(func_f1, nullptr);
         EXPECT_FALSE(empty(func_f1));
@@ -126,23 +122,24 @@ TEST(CodegenTest, DataConstructor)
     //EXPECT_EQ(compileError(M"export d f(i32 x) = d{1,2};"), "string(3,1): \n");
     EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{z,z,z};"),   "string(3,21): incorrect number of arguments\n");
     EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{x=z,j=z};"), "string(3,27): unknown field name\n");
-    EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{y=z,x=z};"), "string(3,23): incorrect field position\n");
+    EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{y=z,y=z};"), "string(3,23): incorrect field position\n");
     EXPECT_EQ(compileError(M"data d[a]{a x; a y;}\nexport i32 f1() = d{1,true}.x;"),   "string(3,23): failed to unify types, '@IntegerLiteral' with 'bool'\n");
 }
 
 TEST(CodegenTest, Modules)
 {
     // call function
-    auto C = compile<2>({
+    auto result = compile<2>({
         "module m(foo); i32 foo = 1;",
         "module n; import m; export i32 bar = foo();" });
-    ASSERT_NE(C, nullptr);
+    ASSERT_NE(result[0].llvmModule, nullptr);
+    ASSERT_NE(result[1].llvmModule, nullptr);
 
-    EXPECT_EQ(C->getLlvmModule(0)->getName(), "m");
-    EXPECT_EQ(C->getLlvmModule(1)->getName(), "n");
-    EXPECT_NE(C->getLlvmModule(0)->getFunction("m:foo$i32"), nullptr);
-    EXPECT_NE(C->getLlvmModule(1)->getFunction("n_bar"), nullptr);
-    EXPECT_NE(C->getLlvmModule(1)->getFunction("m:foo$i32"), nullptr);
+    EXPECT_EQ(result[0].llvmModule->getName(), "m");
+    EXPECT_EQ(result[1].llvmModule->getName(), "n");
+    EXPECT_NE(result[0].llvmModule->getFunction("m:foo$i32"), nullptr);
+    EXPECT_NE(result[1].llvmModule->getFunction("n_bar"), nullptr);
+    EXPECT_NE(result[1].llvmModule->getFunction("m:foo$i32"), nullptr);
 
     // import type
 
@@ -161,24 +158,24 @@ TEST(CodegenTest, Modules)
 TEST(CodegenTest, TypeClass)
 {
     // have a class, and an instance, and call the instance
-    auto C = compile(
+    auto result = compile(
         M"class C a {a f(a);}\n"
         "instance C i32 {i32 f(i32 x) = 1;}\n"
         "export i32 foo() = f(2);");
-    ASSERT_NE(C, nullptr);
-    auto llvm = C->getLlvmModule(0);
+    ASSERT_NE(result[0].llvmModule, nullptr);
+    auto llvm = result[0].llvmModule.get();
     auto func = llvm->getFunction("m:f$i32$i32");
     ASSERT_NE(func, nullptr);
     EXPECT_FALSE(empty(func));
 
     // Nested type variable
-    auto C2 = compile(
+    auto result2 = compile(
         M"data D[a] {a x;}\n"
         "class C a {i32 f(D[a]);}\n"
         "instance C bool {i32 f(D[bool] d) = 1;}\n"
         "export i32 foo() = f(D{true});");
-    ASSERT_NE(C2, nullptr);
-    auto llvm2 = C2->getLlvmModule(0);
+    ASSERT_NE(result2[0].llvmModule, nullptr);
+    auto llvm2 = result2[0].llvmModule.get();
     auto func2 = llvm2->getFunction("m:f$i32$m:D[bool]");
     ASSERT_NE(func2, nullptr);
     EXPECT_FALSE(empty(func2));
