@@ -7,6 +7,7 @@ add_library(llfp_lib
 	Driver.cpp
 	GlobalContext.cpp
 	HeaderWriter.cpp
+	JIT.cpp
 	Lexer.cpp
 	llfp.cpp
 	Module.cpp
@@ -20,6 +21,7 @@ add_library(llfp_lib
 	include/GlobalContext.h
 	include/HeaderWriter.h
 	include/IModule.h
+	include/JIT.h
 	include/Lexer.h
 	include/llfp.h
 	include/Log.h
