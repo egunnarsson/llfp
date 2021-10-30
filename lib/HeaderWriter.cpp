@@ -54,14 +54,14 @@ std::string convertType(llfp::SourceModule &module, GlobalIdentifier& type)
         }
     }
 
-    //const ImportedModule *importedModule;
-    //const ast::Data *typeDeclaration;
     auto ast = module.lookupType(type);
     if (ast.importedModule != nullptr && ast.data != nullptr)
     {
         if (ast.data->typeVariables.empty())
         {
-            return ast.importedModule->getMangledName(ast.data, {});
+            auto typeName = ast.importedModule->getMangledName(ast.data, {});
+            typeName += '*'; // all user types passed by ptr
+            return typeName;
         }
         else
         {
@@ -77,7 +77,12 @@ std::string convertType(llfp::SourceModule &module, GlobalIdentifier& type)
 
 void writeParameter(llvm::raw_ostream &os, llfp::SourceModule &module, std::unique_ptr<ast::Parameter> &param)
 {
-    os << convertType(module, param->type.identifier) << ' ' << param->identifier;
+    auto type = convertType(module, param->type.identifier);
+    if (type.back() == '*')
+    {
+        os << "const ";
+    }
+    os << type << ' ' << param->identifier;
 }
 
 } // namespace
@@ -88,15 +93,16 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
     for (auto &c : headerGuard) c = llvm::toUpper(c);
     headerGuard += "_H";
 
-    os << "#ifndef " << headerGuard << '\n';
-    os << "#define " << headerGuard << "\n\n";
+    os <<
+        "#ifndef " << headerGuard << "\n"
+        "#define " << headerGuard << "\n\n"
 
-    os << "#include <stdint.h>\n";
-    os << "#include <stdbool.h>\n\n";
+        "#include <stdint.h>\n"
+        "#include <stdbool.h>\n\n"
 
-    os << "#ifdef __cplusplus\n";
-    os << "extern \"C\" {\n";
-    os << "#endif\n\n";
+        "#ifdef __cplusplus\n"
+        "extern \"C\" {\n"
+        "#endif\n\n";
 
     // for data used from other modules we need to #include ""
 
@@ -128,9 +134,24 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
     {
         if (!f->exported) { continue; }
 
-        os << convertType(module, f->type.identifier) << ' ' << module.getExportedName(f.get()) << '(';
+        auto retType = convertType(module, f->type.identifier);
+        const bool retUserType = retType.back() == '*';
+        llvm::StringRef funRetType = retUserType ? llvm::StringLiteral("void") : llvm::StringRef(retType);
+
+        os << funRetType << ' ' << module.getExportedName(f.get()) << '(';
+
+        if (retUserType)
+        {
+            os << retType << " result";
+        }
+
         if (f->parameters.size() >= 1)
         {
+            if (retUserType)
+            {
+                os << ", ";
+            }
+
             writeParameter(os, module, f->parameters.front());
             if (f->parameters.size() >= 2)
             {
@@ -145,11 +166,12 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
         os << ");\n";
     }
 
-    os << "\n#ifdef __cplusplus\n";
-    os << "}\n";
-    os << "#endif\n\n";
+    os <<
+        "\n#ifdef __cplusplus\n"
+        "}\n"
+        "#endif\n\n"
 
-    os << "#endif\n";
+        "#endif\n";
 }
 
 } // llfp

@@ -126,21 +126,48 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
     auto funIt = functions.find(name);
     if (funIt == functions.end())
     {
-        auto returnType = types.front()->llvmType();
-
+        llvm::Type* returnType = nullptr;
         std::vector<llvm::Type*> parameterTypes;
+
+        const bool ptrReturn = types.front()->isStructType();
+
+        if (ptrReturn)
+        {
+            returnType = llvm::Type::getVoidTy(*llvmContext);
+            parameterTypes.push_back(llvm::PointerType::get(types.front()->llvmType(), 0));
+        }
+        else
+        {
+            returnType = types.front()->llvmType();
+        }
+
         for (auto typeIt = types.begin() + 1; typeIt != types.end(); ++typeIt)
         {
-            parameterTypes.push_back((*typeIt)->llvmType());
+            if ((*typeIt)->isStructType())
+            {
+                parameterTypes.push_back(llvm::PointerType::get((*typeIt)->llvmType(), 0));
+            }
+            else
+            {
+                parameterTypes.push_back((*typeIt)->llvmType());
+            }
         }
 
         auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
         auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
 
-        size_t i = 0;
-        for (auto &p : llvmFunction->args())
+        auto argRange = llvmFunction->args();
+        if (ptrReturn)
         {
-            p.setName(ast->parameters[i++]->identifier);
+            argRange.begin()->addAttr(llvm::Attribute::NoAlias);
+            argRange.begin()->addAttr(llvm::Attribute::get(*llvmContext, llvm::Attribute::Alignment, 8));
+            argRange = { argRange.begin() + 1, argRange.end() };
+        }
+
+        size_t i = 0;
+        for (auto &arg : argRange)
+        {
+            arg.setName(ast->parameters[i++]->identifier);
         }
 
         Function fun{ ast, llvmFunction, std::move(types) };
@@ -155,8 +182,13 @@ bool CodeGenerator::generateFunctionBody(Function *function)
     auto ast = function->ast;
     auto& types = function->types;
 
+    llvmFunction->addAttribute(0, llvm::Attribute::get(*llvmContext, "frame-pointer", "all"));
+
     auto bb = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
     llvmBuilder.SetInsertPoint(bb);
+
+    // if return type is user type it is returned in first argument
+    size_t argOffset = types[0]->isStructType() ? 1 : 0;
 
     std::map<std::string, Value> namedValues;
     for (size_t i = 0; i < ast->parameters.size(); ++i)
@@ -177,8 +209,12 @@ bool CodeGenerator::generateFunctionBody(Function *function)
             }
         }
 
-        auto& llvmArg = *(llvmFunction->arg_begin() + i);
-        namedValues[param->identifier] = { types[i + 1], &llvmArg };
+        llvm::Value* llvmArg = (llvmFunction->arg_begin() + argOffset + i);
+        if (types[i + 1]->isStructType())
+        {
+            llvmArg = llvmBuilder.CreateLoad(types[i + 1]->llvmType(), llvmArg);
+        }
+        namedValues[param->identifier] = { types[i + 1], llvmArg };
     }
 
     // type check return
@@ -193,9 +229,26 @@ bool CodeGenerator::generateFunctionBody(Function *function)
 
     ExpCodeGenerator expGenerator(types[0], this, std::move(namedValues));
     ast->functionBody->accept(&expGenerator);
-    llvmBuilder.CreateRet(expGenerator.getResult());
 
-    return expGenerator.getResult() != nullptr;
+    if (expGenerator.getResult() != nullptr)
+    {
+        if (types[0]->isStructType())
+        {
+            auto store = llvmBuilder.CreateStore(expGenerator.getResult(), llvmFunction->arg_begin());
+            store->setAlignment(llvm::Align(8));
+            llvmBuilder.CreateRetVoid();
+        }
+        else
+        {
+            llvmBuilder.CreateRet(expGenerator.getResult());
+        }
+
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 // TODO: only once per dll
@@ -848,16 +901,45 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
         else
         {
             std::vector<llvm::Value*> arguments;
+
+            // Returning user type it is done on the stack, function will return void
+            llvm::Value* retValue = nullptr;
+            if (expectedType->isStructType())
+            {
+                retValue = llvmBuilder().CreateAlloca(expectedType->llvmType());
+                arguments.push_back(retValue);
+            }
+
             for (size_t i = 0; i < exp.arguments.size(); ++i)
             {
-                arguments.push_back(generate(*exp.arguments[i], function->types[i + 1], this));
-                if (arguments.back() == nullptr)
+                auto argValue = generate(*exp.arguments[i], function->types[i + 1], this);
+                
+                if (argValue == nullptr)
                 {
                     return;
                 }
+
+                // if arg is user type, alloca and store
+                if (argValue->getType()->isStructTy())
+                {
+                    auto allocaValue = llvmBuilder().CreateAlloca(argValue->getType());
+                    llvmBuilder().CreateStore(argValue, allocaValue);
+                    argValue = allocaValue;
+                }
+
+                arguments.push_back(argValue);
             }
 
-            result = llvmBuilder().CreateCall(function->llvm, arguments, "call");
+            // if return user type, result = load(first arg)
+            if (expectedType->isStructType())
+            {
+                llvmBuilder().CreateCall(function->llvm, arguments);
+                result = llvmBuilder().CreateLoad(expectedType->llvmType(), retValue);
+            }
+            else
+            {
+                result = llvmBuilder().CreateCall(function->llvm, arguments, "call");
+            }
         }
     }
     catch(const Error &e)
