@@ -33,11 +33,6 @@ constexpr bool error(ReturnCode c)
     return c != ReturnCode::NoError;
 }
 
-constexpr int convert(ReturnCode c)
-{
-    return static_cast<int>(c);
-}
-
 struct CompiledModule
 {
     std::unique_ptr<llvm::LLVMContext>      llvmContext;

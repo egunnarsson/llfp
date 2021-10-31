@@ -1,6 +1,8 @@
 
 // https://rosettacode.org/wiki/Compiler/lexical_analyzer
 
+#include "Error.h"
+
 #include "Lexer.h"
 
 
@@ -33,6 +35,10 @@ FileInput::FileInput(const char* fileName) :
     Input(fileName)
 {
     file = fopen(fileName, "r");
+    if (file == nullptr)
+    {
+        throw llfp::Error(std::string{ std::strerror(errno) } + " (" + fileName + ')' );
+    }
 }
 
 FileInput::~FileInput()

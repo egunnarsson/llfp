@@ -15,6 +15,7 @@
 
 #pragma warning(pop)
 
+#include "Error.h"
 #include "HeaderWriter.h"
 #include "Lexer.h"
 #include "llfp.h"
@@ -110,11 +111,11 @@ llfp::ReturnCode write(llfp::CompiledModule& compiledModule, llvm::SmallString<1
     return writeHeaderFile(srcModule, output);
 }
 
-int main(int argc, char *argv[])
+llfp::ReturnCode llfp_main(int argc, char *argv[])
 {
     if (!llvm::cl::ParseCommandLineOptions(argc, argv, "", &llvm::errs()))
     {
-        return llfp::convert(llfp::ReturnCode::CommandLineArgumentError);
+        return llfp::ReturnCode::CommandLineArgumentError;
     }
 
     if (InputFilenames.empty())
@@ -124,14 +125,27 @@ int main(int argc, char *argv[])
 
     if (InputFilenames.size() > 1 && !OutputFilename.empty())
     {
-        llvm::errs() << "multiple input files specified while also specifying an output file";
-        return llfp::convert(llfp::ReturnCode::CommandLineArgumentError);
+        llvm::errs() << "multiple input files specified while also specifying an output file\n";
+        return llfp::ReturnCode::CommandLineArgumentError;
     }
 
+    llfp::ReturnCode returnCode = llfp::ReturnCode::NoError;
     std::vector<std::unique_ptr<llfp::lex::Input>> inputFiles;
     for (auto &inputFile : InputFilenames)
     {
-        inputFiles.push_back(makeInput(inputFile));
+        try
+        {
+            inputFiles.push_back(makeInput(inputFile));
+        }
+        catch (const llfp::Error &e)
+        {
+            llvm::errs() << e.what() << '\n';
+            returnCode = llfp::ReturnCode::CommandLineArgumentError;
+        }
+    }
+    if (returnCode != llfp::ReturnCode::NoError)
+    {
+        return returnCode;
     }
 
     try
@@ -150,7 +164,7 @@ int main(int argc, char *argv[])
             }
             else
             {
-                return llfp::convert(write(result[0], output));
+                return write(result[0], output);
             }
         }
         else
@@ -159,14 +173,19 @@ int main(int argc, char *argv[])
             {
                 output = InputFilenames[index];
                 auto code = write(result[index], output);
-                if (llfp::error(code)) { return llfp::convert(code); }
+                if (llfp::error(code)) { return code; }
             }
         }
     }
-    catch (llfp::ReturnCode error)
+    catch (const llfp::ReturnCode &error)
     {
-        return llfp::convert(error);
+        return error;
     }
 
-    return llfp::convert(llfp::ReturnCode::NoError);
+    return llfp::ReturnCode::NoError;
+}
+
+int main(int argc, char* argv[])
+{
+    return static_cast<int>(llfp_main(argc, argv));
 }
