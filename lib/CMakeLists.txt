@@ -13,6 +13,7 @@ add_library(llfp_lib
 	Module.cpp
 	Parser.cpp
 	Type.cpp
+	Type/Type2.cpp
 	include/Ast.h
 	include/Codegen.h
 	include/Common.h
@@ -28,6 +29,7 @@ add_library(llfp_lib
 	include/Module.h
 	include/Parser.h
 	include/Type.h
+	include/Type/Type2.h
 )
 
 if (MSVC)

@@ -571,7 +571,7 @@ void ExpCodeGenerator::visit(ast::BinaryExp &exp)
     else if (exp.op == "/") // Division
     {
         generateBinary(exp, checkNum,
-            [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFMul(v1, v2, "fmul"); },
+            [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFDiv(v1, v2, "fdiv"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateSDiv(v1, v2, "sdiv", false); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateUDiv(v1, v2, "udiv", false); });
     }
