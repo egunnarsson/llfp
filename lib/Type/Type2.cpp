@@ -290,7 +290,11 @@ void TypeAnnotation::print()
 
 // ----------------------------------------------------------------------------
 
-Constraint::Constraint(TypePtr left_, TypePtr right_) :left(std::move(left_)), right(std::move(right_)) {}
+Constraint::Constraint(SourceLocation location_, TypePtr left_, TypePtr right_) :
+    location(location_),
+    left(std::move(left_)),
+    right(std::move(right_))
+{}
 
 std::string Constraint::str()
 {
@@ -308,6 +312,8 @@ std::vector<Substitution> Constraint::solve()
     return TypeUnifier::unify(left, right);
 }
 
+// ----------------------------------------------------------------------------
+
 void Annotator::operator()(ast::Function& fun)
 {
     current     = 0;
@@ -315,30 +321,44 @@ void Annotator::operator()(ast::Function& fun)
     result      = std::map<ast::Node*, TypePtr>{};
     constraints = std::vector<Constraint>{};
 
+    // TODO: should also do module:name since that's also valid
+    // foo(x,y) = if ... else m:foo(x,y)
     auto& funTV = vars[fun.name] = makeVar();
 
     fun.functionBody->accept(this);
+    auto bodyTV = tv(fun.functionBody);
 
     std::vector<TypePtr> args;
-    args.push_back(tv(fun.functionBody));
+    args.push_back(bodyTV);
     for (auto& arg : fun.parameters)
     {
         auto it = vars.find(arg->identifier);
         if (it == vars.end())
         {
-            auto& argTV = vars[arg->identifier] = makeVar();
-            args.push_back(argTV);
+            auto argTV = arg->type.empty() ? makeVar() : makeConst(arg->type.str());
+            vars[arg->identifier] = argTV;
+            args.push_back(std::move(argTV));
         }
         else
         {
             args.push_back(it->second);
+            if (!arg->type.empty())
+            {
+                add({ arg->location, it->second, makeConst(arg->type.str()) });
+            }
         }
     }
-    add({ funTV, makeFunction(args) });
+    add({ fun.location, funTV, makeFunction(args) });
+    if (!fun.type.empty())
+    {
+        add({ fun.location, bodyTV, makeConst(fun.type.str())});
+    }
 }
 
 void Annotator::visit(ast::LetExp& exp)
 {
+    // push scope
+
     for (auto& let : exp.letStatments)
     {
         let->functionBody->accept(this);
@@ -348,8 +368,9 @@ void Annotator::visit(ast::LetExp& exp)
             auto it = vars.find(let->name);
             if (it == vars.end())
             {
-                auto &letTV = vars[let->name] = makeVar();
-                add({ letTV, tv(let->functionBody) });
+                TypePtr letTV = let->type.empty() ? makeVar() : makeConst(let->type.str());
+                vars[let->name] = letTV;
+                add({ let->location, letTV, tv(let->functionBody) });
             }
             else
             {
@@ -366,6 +387,8 @@ void Annotator::visit(ast::LetExp& exp)
 
     exp.exp->accept(this);
     result[&exp] = tv(exp.exp);
+
+    // pop scope
 }
 
 void Annotator::visit(ast::IfExp& exp)
@@ -375,9 +398,9 @@ void Annotator::visit(ast::IfExp& exp)
     exp.elseExp->accept(this);
 
     auto &expTV = result[&exp] = makeVar();
-    add({ (tv(exp.condition)), makeConst("bool") });
-    add({ expTV, (tv(exp.thenExp)) });
-    add({ expTV, (tv(exp.elseExp)) });
+    add({ exp.condition->location, (tv(exp.condition)), makeConst("bool") });
+    add({ exp.thenExp->location, expTV, (tv(exp.thenExp)) });
+    add({ exp.elseExp->location, expTV, (tv(exp.elseExp)) });
 }
 
 void Annotator::visit(ast::CaseExp& exp)
@@ -413,8 +436,8 @@ void Annotator::visit(ast::BinaryExp& exp)
     // else {}
 
     result[&exp] = expTV;
-    add({ expTV, (tv(exp.lhs)) });
-    add({ expTV, (tv(exp.rhs)) });
+    add({ exp.lhs->location, expTV, (tv(exp.lhs)) });
+    add({ exp.rhs->location, expTV, (tv(exp.rhs)) });
 }
 
 void Annotator::visit(ast::UnaryExp& exp)
@@ -427,7 +450,7 @@ void Annotator::visit(ast::UnaryExp& exp)
     else if (exp.op == "~") { expTV = makeClass("Integer"); }
 
     result[&exp] = expTV;
-    add({ expTV , (tv(exp.operand)) });
+    add({ exp.location, expTV, (tv(exp.operand)) });
 }
 
 void Annotator::visit(ast::LiteralExp& exp)
@@ -470,27 +493,29 @@ void Annotator::visit(ast::CallExp& exp)
     auto funType = makeFunction(args);
 
     //TODO: can do lower_bound and hint
-    auto it = vars.find(exp.identifier.name);
+    auto funName = exp.identifier.str();
+    auto it = vars.find(funName);
     if (it == vars.end())
     {
-        vars[exp.identifier.name] = funType;
+        vars[std::move(funName)] = funType;
     }
     else
     {
-        add({ funType , it->second });
+        add({ exp.location, funType, it->second });
     }
 }
 
 void Annotator::visit(ast::VariableExp& exp)
 {
     //TODO: can do lower_bound and hint
-    auto it = vars.find(exp.identifier.name);
+    auto varName = exp.identifier.str();
+    auto it = vars.find(varName);
     if (it == vars.end())
     {
         // external var... treat differently? treat as if it can be anything?
         auto ptr = makeVar();
         result[&exp] = ptr;
-        vars[exp.identifier.name] = ptr;
+        vars[std::move(varName)] = ptr;
     }
     else
     {
@@ -507,7 +532,7 @@ void Annotator::visit(ast::FieldExp& exp)
 
     auto t = std::make_shared<TypeVar>(current++);
     t->fields.insert(std::make_pair(exp.fieldIdentifier, expTV));
-    add({ tv(exp.lhs), t });
+    add({ exp.location, tv(exp.lhs), t });
 }
 
 void Annotator::visit(ast::ConstructorExp& exp)
@@ -578,16 +603,24 @@ std::string test(ast::Function& fun)
 
     for (size_t i = 0; i < constraints.size(); ++i)
     {
-        auto subs = constraints[i].solve();
-        for (auto& sub : subs)
+        try
         {
-            std::cout << "sub "<< sub.id << " = " << sub.type->str() <<'\n';
-
-            annotation.substitute(sub);
-            for (size_t j = i + 1; j < constraints.size(); ++j)
+            auto subs = constraints[i].solve();
+            for (auto& sub : subs)
             {
-                constraints[j].substitute(sub);
+                std::cout << "sub " << sub.id << " = " << sub.type->str() << '\n';
+
+                annotation.substitute(sub);
+                for (size_t j = i + 1; j < constraints.size(); ++j)
+                {
+                    constraints[j].substitute(sub);
+                }
             }
+        }
+        catch (const Error& error)
+        {
+            std::cout << error.what() << '\n';
+            return "";
         }
     }
 

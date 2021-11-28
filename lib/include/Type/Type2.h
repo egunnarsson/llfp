@@ -189,10 +189,12 @@ public:
 class Constraint
 {
 public:
-    TypePtr left;
-    TypePtr right;
+    SourceLocation location;
+    //const char* explanation?
+    TypePtr        left;
+    TypePtr        right;
 
-    Constraint(TypePtr left_, TypePtr right_);
+    Constraint(SourceLocation location_, TypePtr left_, TypePtr right_);
 
     std::string               str();
     void                      substitute(Substitution s);

@@ -21,6 +21,7 @@ struct TypeIdentifier
     std::vector<TypeIdentifier> parameters;
 
     std::string str() const;
+    bool        empty() const;
 };
 
 class LetExp;

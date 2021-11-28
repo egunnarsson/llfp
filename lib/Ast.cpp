@@ -25,6 +25,11 @@ std::string TypeIdentifier::str() const
     return result;
 }
 
+bool TypeIdentifier::empty() const
+{
+    return identifier.moduleName.empty() && identifier.name.empty() && parameters.empty();
+}
+
 
 Node::Node(SourceLocation location_) :
     location{ location_ }
