@@ -72,7 +72,7 @@ FunAst GlobalContext::lookupInstance(const std::string& funIdentifier, const typ
 
 DataAst GlobalContext::lookupTypeGlobal(const GlobalIdentifier& identifier) const
 {
-    assert(!identifier.moduleName.empty());
+    // assert(!identifier.moduleName.empty());
     assert(!identifier.name.empty());
 
     auto it = allModules.find(identifier.moduleName);

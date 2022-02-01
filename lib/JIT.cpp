@@ -23,6 +23,7 @@ JIT::JIT(std::unique_ptr<llvm::orc::ExecutionSession> ES, llvm::orc::JITTargetMa
 {
     MainJD.addGenerator(llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(DL.getGlobalPrefix())));
     ObjectLayer.setOverrideObjectFlagsWithResponsibilityFlags(true);
+    ObjectLayer.setAutoClaimResponsibilityForObjectSymbols(true); // ? https://stackoverflow.com/questions/57733912/llvm-asserts-resolving-symbol-outside-this-responsibility-set
 }
 
 JIT::~JIT()

@@ -1,5 +1,18 @@
 #pragma once
 
+/*
+genPrototype(infered, wanted)
+    actual = unify(infered, wanted)
+// for proto, store new TypeAnnotation with actual?
+
+genLetExp( // in context where infered for fun has been unified with actual?
+genCompare // same
+call( we want to call getFunction(id, types) // get wanted, and genPrototype(infered, newWanted)
+fieldLHS()
+constructor? possible typevars?
+
+*/
+
 #include <map>
 #include <memory>
 #include <set>
@@ -55,6 +68,8 @@ public:
 
     virtual void        accept(TypeVisitor* visitor) = 0;
 
+    virtual TypePtr     copy() const = 0;
+
 protected:
 
     static std::vector<Substitution> unify(TypeVar& a, SimpleType& b, const TypePtr& ptrB);
@@ -74,6 +89,10 @@ public:
     std::vector<Substitution> addConstraints(const SimpleType& other);
     std::string               printConstraints(std::string base) const;
     void                      apply(Substitution s) override;
+
+protected:
+
+    void                      copy(SimpleType* newObj) const;
 };
 
 
@@ -96,6 +115,8 @@ public:
     void                             apply(Substitution s) override;
 
     void                             accept(TypeVisitor* visitor) override;
+
+    TypePtr                          copy() const override;
 };
 
 
@@ -114,6 +135,8 @@ public:
     static std::vector<Substitution> unify(TypeConstant& a, FunctionType& b, const TypePtr& ptrA, const TypePtr& ptrB);
 
     void                             accept(TypeVisitor* visitor) override;
+
+    TypePtr                          copy() const override;
 };
 
 
@@ -134,6 +157,8 @@ public:
     void                             apply(Substitution s) override;
 
     void                             accept(TypeVisitor* visitor) override;
+
+    TypePtr                          copy() const override;
 };
 
 
@@ -141,6 +166,7 @@ template<class T>
 class TypeUnifierT : public TypeVisitor
 {
 public:
+
     T&                        self;
     const TypePtr&            a;
     const TypePtr&            b;
@@ -189,6 +215,7 @@ public:
 class Constraint
 {
 public:
+
     SourceLocation location;
     //const char* explanation?
     TypePtr        left;
@@ -204,32 +231,39 @@ public:
 
 class TypeAnnotation
 {
-    std::map<ast::Node*, TypePtr>  ast;
-    std::map<std::string, TypePtr> vars; // things required, like abs(float) and abs(int);
+    std::map<const ast::Node*, TypePtr> ast;
+    std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
+    TypeVarId                           nextFreeVariable = 0;
 
 public:
 
-    TypeAnnotation(std::map<ast::Node*, TypePtr> ast_, std::map<std::string, TypePtr> vars_);
+    TypeAnnotation() = default;
+    TypeAnnotation(std::map<const ast::Node*, TypePtr> ast_, std::map<std::string, TypePtr> vars_, TypeVarId nextFreeVariable_);
+    TypeAnnotation(const TypeAnnotation& other);
+    TypeAnnotation& operator=(const TypeAnnotation& other);
 
-    TypePtr get(ast::Node* n);
-    TypePtr get(const std::string& id);
+    TypePtr get(const ast::Node* n) const;
+    TypePtr get(const std::string& id) const;
 
     void    substitute(Substitution sub);
     void    print();
+
+    void    add(const std::string& var, const TypePtr& type);
 };
 
 
 class Annotator : public ast::ExpVisitor
 {
-    TypeVarId current = 0;
+    std::map<std::string, TypePtr>      typeConstants;
 
 public:
 
-    std::map<std::string, TypePtr> vars;
-    std::map<ast::Node*, TypePtr>  result;
-    std::vector<Constraint>        constraints;
+    TypeVarId                           current = 0;
+    std::map<std::string, TypePtr>      vars;
+    std::map<const ast::Node*, TypePtr> result;
+    std::vector<Constraint>             constraints;
 
-    void operator()(ast::Function& fun);
+    void operator()(const ast::Function& fun);
 
     void visit(ast::LetExp& exp) override;
     void visit(ast::IfExp& exp) override;
@@ -263,7 +297,7 @@ private:
 
 std::string test(ast::Function& fun);
 
-TypeAnnotation inferType(ast::Function& fun);
+TypeAnnotation inferType(const ast::Function& fun);
 
 } // namespace hm
 } // namespace llfp

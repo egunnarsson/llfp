@@ -45,7 +45,7 @@ CodeGenerator::CodeGenerator(
 
 bool CodeGenerator::generateFunction(const ast::Function*ast)
 {
-    std::vector<type::TypePtr> types;
+    std::vector<type::TypeInstPtr> types;
 
     if (ast->type.identifier.name.empty())
     {
@@ -84,7 +84,7 @@ bool CodeGenerator::generateFunction(const ast::Function*ast)
     return true;
 }
 
-bool CodeGenerator::generateFunction(const ast::Function*ast, std::vector<type::TypePtr> types)
+bool CodeGenerator::generateFunction(const ast::Function*ast, std::vector<const type::TypeInstance*> types)
 {
     auto f = generatePrototype(sourceModule, ast, std::move(types));
     if (f != nullptr && f->llvm->empty())
@@ -94,7 +94,7 @@ bool CodeGenerator::generateFunction(const ast::Function*ast, std::vector<type::
     return f != nullptr;
 }
 
-Function* CodeGenerator::generatePrototype(const ImportedModule* module, const ast::Function* ast, std::vector<type::TypePtr> types)
+Function* CodeGenerator::generatePrototype(const ImportedModule* module, const ast::Function* ast, std::vector<const type::TypeInstance*> types)
 {
     if (types.empty())
     {
@@ -107,17 +107,21 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
         return nullptr;
     }
 
-    // unify types / type check / remove literals (requires the value...)
-
-    types[0] = typeContext.unify(types[0], typeContext.getTypeFromAst(ast->type));
-    for (size_t i = 1; i < types.size(); ++i)
+    hm::TypeAnnotation typeAnnotation;
+    try
     {
-        types[i] = typeContext.unify(types[i], typeContext.getTypeFromAst(ast->parameters[i - 1]->type));
+        typeAnnotation = typeContext.getAnnotation(module, ast);
+        typeContext.check(typeAnnotation, types[0], typeAnnotation.get(ast->functionBody.get()));
+
+        size_t i = 1;
+        for (auto &arg : ast->parameters)
+        {
+            typeContext.check(typeAnnotation, types[i], typeAnnotation.get(arg->identifier));
+        }
     }
-
-    if (std::any_of(types.begin(), types.end(), [](auto x) { return x == nullptr; }))
+    catch (const Error& error)
     {
-        Log(ast->location, "failed to unify function types");
+        Log(ast->location, error.what());
         return nullptr;
     }
 
@@ -170,7 +174,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
             arg.setName(ast->parameters[i++]->identifier);
         }
 
-        Function fun{ ast, llvmFunction, std::move(types) };
+        Function fun{ ast, std::move(typeAnnotation), llvmFunction, std::move(types) };
         funIt = functions.insert(std::make_pair(std::move(name), std::move(fun))).first;
     }
     return &funIt->second;
@@ -227,7 +231,7 @@ bool CodeGenerator::generateFunctionBody(Function *function)
         }
     }
 
-    ExpCodeGenerator expGenerator(types[0], this, std::move(namedValues));
+    ExpCodeGenerator expGenerator(types[0], this, std::move(namedValues), &function->typeAnnotation);
     ast->functionBody->accept(&expGenerator);
 
     if (expGenerator.getResult() != nullptr)
@@ -304,21 +308,21 @@ std::stack<int> findTypeVariableIndex(const std::string &typeVar, const ast::Typ
     return {};
 }
 
-type::Identifier getTypeByIndex(std::stack<int> index, const type::TypePtr& type)
+type::Identifier getTypeByIndex(std::stack<int> index, const type::TypeInstance& type)
 {
     if (index.empty())
     {
-        return type->identifier();
+        return type.identifier();
     }
     else
     {
         auto currentIndex = index.top();
         index.pop();
-        return getTypeByIndex(std::move(index), type->getTypeParameter(currentIndex));
+        return getTypeByIndex(std::move(index), *type.getTypeParameter(currentIndex));
     }
 }
 
-type::Identifier findInstanceType(const ast::Class *classDecl, const ast::FunctionDeclaration* funDecl, const std::vector<type::TypePtr> & types)
+type::Identifier findInstanceType(const ast::Class *classDecl, const ast::FunctionDeclaration* funDecl, const std::vector<const type::TypeInstance*> & types)
 {
     auto& typeVar = classDecl->typeVariable;
 
@@ -348,13 +352,14 @@ type::Identifier findInstanceType(const ast::Class *classDecl, const ast::Functi
     }
     else
     {
-        return getTypeByIndex(std::move(typeVariableIndex), types[first]);
+        //TODO: if this type is not concrete we should try and find another index
+        return getTypeByIndex(std::move(typeVariableIndex), *types[first]);
     }
 }
 
 } // namespace
 
-Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::vector<type::TypePtr> types)
+Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::vector<type::TypeInstPtr> types)
 {
     auto ast = sourceModule->lookupFunction(identifier);
     auto astDecl = sourceModule->lookupFunctionDecl(identifier);
@@ -391,26 +396,28 @@ Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::ve
     return proto;
 }
 
-ExpCodeGenerator::ExpCodeGenerator(const type::TypePtr &type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_) :
+ExpCodeGenerator::ExpCodeGenerator(type::TypeInstPtr type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_, hm::TypeAnnotation* typeAnnotation_) :
     parent{ nullptr },
     generator{ generator_ },
     expectedType{ type_ },
     values{ std::move(parameters_) },
-    result{ nullptr }
+    result{ nullptr },
+    typeAnnotation{ typeAnnotation_ }
 {
     assert(expectedType->llvmType() != nullptr);
 }
 
-ExpCodeGenerator::ExpCodeGenerator(const type::TypePtr &type_, ExpCodeGenerator *parent_) :
+ExpCodeGenerator::ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGenerator *parent_) :
     parent{ parent_ },
     generator{ parent_->generator },
     expectedType{ type_ },
-    result{ nullptr }
+    result{ nullptr },
+    typeAnnotation{ parent_->typeAnnotation }
 {
     assert(expectedType->llvmType() != nullptr);
 }
 
-llvm::Value* ExpCodeGenerator::generate(ast::Exp &exp, const type::TypePtr &type, ExpCodeGenerator *parent)
+llvm::Value* ExpCodeGenerator::generate(ast::Exp &exp, type::TypeInstPtr type, ExpCodeGenerator *parent)
 {
     if (type == nullptr) // or not?
     {
@@ -419,6 +426,16 @@ llvm::Value* ExpCodeGenerator::generate(ast::Exp &exp, const type::TypePtr &type
     ExpCodeGenerator generator(type, parent);
     exp.accept(&generator);
     return generator.result;
+}
+
+Function* ExpCodeGenerator::getFunction(const GlobalIdentifier& identifier, std::vector<type::TypeInstPtr> types)
+{
+    return generator->getFunction(identifier, types);
+}
+
+type::TypeContext* ExpCodeGenerator::getTypeContext()
+{
+    return generator->getTypeContext();
 }
 
 void ExpCodeGenerator::visit(ast::LetExp &exp)
@@ -431,19 +448,9 @@ void ExpCodeGenerator::visit(ast::LetExp &exp)
             return;
         }
 
-        type::TypePtr varType;
-        if (var->type.identifier.name.empty())
-        {
-            varType = type::TypeInferer::infer(*var->functionBody, this);
-        }
-        else
-        {
-            varType = getTypeContext()->getTypeFromAst(var->type);
-        }
-        if (varType == nullptr)
-        {
-            return;
-        }
+        type::TypeInstPtr varType = var->type.identifier.name.empty() ?
+            getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, exp) :
+            getTypeContext()->getTypeFromAst(var->type);
 
         auto value = ExpCodeGenerator::generate(*var->functionBody, varType, this);
 
@@ -522,12 +529,12 @@ void ExpCodeGenerator::visit(ast::CaseExp &exp)
 namespace
 {
 
-void typeError(ast::Exp &exp, const type::TypePtr &expected, llvm::StringRef actual)
+void typeError(ast::Exp &exp, type::TypeInstPtr expected, llvm::StringRef actual)
 {
     Log(exp.location, "type mismatch, expected '", expected->identifier().str(), "' actual '", actual, '\'');
 }
 
-bool checkNum(ast::Exp &exp, const type::TypePtr &type)
+bool checkNum(ast::Exp &exp, type::TypeInstPtr type)
 {
     if (!type->isNum())
     {
@@ -537,7 +544,7 @@ bool checkNum(ast::Exp &exp, const type::TypePtr &type)
     return true;
 }
 
-bool checkInteger(ast::Exp &exp, const type::TypePtr&type)
+bool checkInteger(ast::Exp &exp, type::TypeInstPtr type)
 {
     if (!type->isInteger())
     {
@@ -547,7 +554,7 @@ bool checkInteger(ast::Exp &exp, const type::TypePtr&type)
     return true;
 }
 
-bool checkBool(ast::Exp &exp, const type::TypePtr&type)
+bool checkBool(ast::Exp &exp, type::TypeInstPtr type)
 {
     if (!type->isBool())
     {
@@ -692,17 +699,11 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
     }
     else
     {
-        auto lhsT = type::TypeInferer::infer(*exp.lhs, this);
-        auto rhsT = type::TypeInferer::infer(*exp.rhs, this);
-
-        if (lhsT == nullptr || rhsT == nullptr)
+        try
         {
-            return;
-        }
+            auto type = getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, *exp.lhs);
+            getTypeContext()->check(*typeAnnotation, type, typeAnnotation->get(exp.rhs.get()));
 
-        auto type = getTypeContext()->unify(lhsT, rhsT);
-        if (type != nullptr)
-        {
             auto args = generateBinary(type, exp);
             auto arg1 = std::get<0>(args), arg2 = std::get<1>(args);
             if (arg1 == nullptr || arg2 == nullptr)
@@ -722,9 +723,9 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
                 result = llvmBuilder().CreateICmp(predicate, arg1, arg2, "icmp");
             }
         }
-        else
+        catch (const Error& error)
         {
-            Log(exp.location, "failed to unify types, '", lhsT->identifier().str(), "' and '", rhsT->identifier().str(), '\'');
+            Log(exp.location, error.what());
         }
     }
 }
@@ -876,24 +877,28 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
 void ExpCodeGenerator::visit(ast::CallExp &exp)
 {
-    std::vector<type::TypePtr> types;
-    types.push_back(expectedType);
-    for (auto &arg : exp.arguments)
+    const auto funAst = generator->sourceModule->lookupFunction(exp.identifier);
+    if (funAst.empty())
     {
-        auto type = type::TypeInferer::infer(*arg, this);
-        if (type == nullptr)
-        {
-            return;
-        }
-        else
-        {
-            types.push_back(type);
-        }
+        Log(exp.location, "undefined function \"", exp.identifier.str(), '"');
+        return;
     }
 
     try
     {
-        auto function = getFunction(exp.identifier, std::move(types)); // these types have to be concreate but they have only been infered, will a fix solve it?
+        const auto& funAnnotation = generator->typeContext.getAnnotation(funAst.importedModule, funAst.function);
+        const auto funType = funAnnotation.get(exp.identifier.name);
+        typeAnnotation->add(exp.identifier.name, funType);
+
+        std::vector<type::TypeInstPtr> types;
+        types.push_back(expectedType);
+        for (auto& arg : exp.arguments)
+        {
+            auto type = getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, *arg);
+            types.push_back(type);
+        }
+
+        auto function = getFunction(exp.identifier, std::move(types));
         if (function == nullptr)
         {
             return;
@@ -942,7 +947,7 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
             }
         }
     }
-    catch(const Error &e)
+    catch (const Error &e)
     {
         Log(exp.location, e.what());
     }
@@ -966,7 +971,7 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
         }
     }
 
-    std::vector<type::TypePtr> types;
+    std::vector<type::TypeInstPtr> types;
     types.push_back(expectedType);
 
     auto y = getFunction(exp.identifier, std::move(types));
@@ -996,64 +1001,49 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
 
 void ExpCodeGenerator::visit(ast::FieldExp &exp)
 {
-    auto lhsType = type::TypeInferer::infer(*exp.lhs, this);
-    if (lhsType == nullptr)
+    try
     {
-        return;
-    }
+        auto lhsType = getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, *exp.lhs);
 
-    auto index = lhsType->getFieldIndex(exp.fieldIdentifier);
-    if (index == type::Type::InvalidIndex)
-    {
-        Log(exp.location, "unknown field: ", exp.fieldIdentifier);
-        return;
-    }
+        auto index = lhsType->getFieldIndex(exp.fieldIdentifier);
+        if (index == type::TypeInstance::InvalidIndex)
+        {
+            Log(exp.location, "unknown field: ", exp.fieldIdentifier);
+            return;
+        }
 
-    // type check
-    auto inferedFieldType = lhsType->getFieldType(index);
-    auto fieldType = getTypeContext()->fixify(expectedType, inferedFieldType);
-    if (fieldType == nullptr)
-    {
-        Log(exp.location, "failed to unify types, '", expectedType->identifier().str(), "' and '", inferedFieldType->identifier().str(), '\'');
-        return;
-    }
-    if (fieldType != inferedFieldType) // the fieldType could be a literal for example
-    {
-        // lhsType = updateField(lhsType, index, fieldType);
-        auto lhsId = lhsType->identifier();
-        assert(lhsId.parameters.size() > index);
-        lhsId.parameters[index] = fieldType->identifier();
-        lhsType = getTypeContext()->getType(lhsId); // does this guarantee concrete? then we dont have to fix
-    }
-    lhsType = getTypeContext()->fix(lhsType);
-    if (lhsType == nullptr)
-    {
-        Log({}, "failed to fix lhs of field expression");
-        return;
-    }
+        // type check
+        auto fieldType = lhsType->getFieldType(index);
+        if (fieldType != expectedType)
+        {
+            Log(exp.location, "Failed to unify types ", fieldType->identifier().str(), " and ", expectedType->identifier().str());
+            return;
+        }
+        // I think we need both since check might do subs
+        // 22-01-31 except constructTypeUsingAnnotationStuff already checks?
+        getTypeContext()->check(*typeAnnotation, expectedType, typeAnnotation->get(&exp));
 
-    // NOTE: Generating a struct where only one fieldType is guaranteed to be concreate
-    auto structValue = ExpCodeGenerator::generate(*exp.lhs, lhsType, this);
-    if (structValue == nullptr)
-    {
-        return;
-    }
+        auto structValue = ExpCodeGenerator::generate(*exp.lhs, lhsType, this);
+        if (structValue == nullptr)
+        {
+            return;
+        }
 
-    // TODO: do we need to return fieldType for something?
-    // we have infered it and the caller doesn't know about it
-    result = llvmBuilder().CreateExtractValue(structValue, { index });
+        result = llvmBuilder().CreateExtractValue(structValue, { index });
+    }
+    catch (const Error& error)
+    {
+        Log(exp.location, error.what());
+    }
 }
 
 void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
 {
-    auto inferedType = type::TypeInferer::infer(exp, this);
-    if (inferedType == nullptr) { return; }
-
-    auto type = getTypeContext()->unify(expectedType, inferedType);
-    if (type != nullptr)
+    try
     {
-        const auto size = type->getFieldCount();
+        getTypeContext()->check(*typeAnnotation, expectedType, typeAnnotation->get(&exp));
 
+        const auto size = expectedType->getFieldCount();
         if (size != exp.arguments.size())
         {
             Log(exp.location, "incorrect number of arguments");
@@ -1061,25 +1051,25 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
         }
 
         bool fail = false;
-        llvm::Value *value = llvm::UndefValue::get(type->llvmType());
+        llvm::Value* value = llvm::UndefValue::get(expectedType->llvmType());
         for (unsigned int i = 0; i < size; ++i)
         {
-            auto &arg = exp.arguments[i];
+            auto& arg = exp.arguments[i];
 
             // at the moment name is only used to check correctness
             if (!arg->name.empty())
             {
-                auto index = type->getFieldIndex(arg->name);
+                auto index = expectedType->getFieldIndex(arg->name);
                 if (index != i)
                 {
-                    Log(arg->location, index == type::Type::InvalidIndex
+                    Log(arg->location, index == type::TypeInstance::InvalidIndex
                         ? "unknown field name"
                         : "incorrect field position");
                     fail = true;
                 }
             }
 
-            auto argValue = ExpCodeGenerator::generate(*arg->exp, type->getFieldType(i), this);
+            auto argValue = ExpCodeGenerator::generate(*arg->exp, expectedType->getFieldType(i), this);
             if (argValue != nullptr)
             {
                 value = llvmBuilder().CreateInsertValue(value, argValue, { i });
@@ -1094,6 +1084,11 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
         {
             result = value;
         }
+
+    }
+    catch (const Error& error)
+    {
+        Log(exp.location, error.what());
     }
 }
 
@@ -1112,32 +1107,6 @@ const Value& ExpCodeGenerator::getNamedValue(const std::string &name)
         }
     }
     return it->second;
-}
-
-type::TypePtr ExpCodeGenerator::getVariableType(const std::string& variable)
-{
-    return getNamedValue(variable).type;
-}
-
-Function* ExpCodeGenerator::getFunction(const GlobalIdentifier& identifier, std::vector<type::TypePtr> types)
-{
-    // TODO: add local functions
-    return generator->getFunction(identifier, std::move(types));
-}
-
-FunAst ExpCodeGenerator::getFunctionAST(const GlobalIdentifier& identifier)
-{
-    return generator->sourceModule->lookupFunction(identifier);
-}
-
-FunDeclAst ExpCodeGenerator::getFunctionDeclarationAST(const GlobalIdentifier& identifier)
-{
-    return generator->sourceModule->lookupFunctionDecl(identifier);
-}
-
-DataAst ExpCodeGenerator::getDataAST(const GlobalIdentifier& identifier)
-{
-    return generator->sourceModule->lookupType(identifier);
 }
 
 llvm::Value* ExpCodeGenerator::getResult()

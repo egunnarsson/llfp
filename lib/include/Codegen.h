@@ -15,6 +15,7 @@
 #include "Driver.h"
 #include "IModule.h"
 #include "Type.h"
+#include "Type/Type2.h"
 
 
 namespace llfp
@@ -29,14 +30,15 @@ class ExpCodeGenerator;
 
 struct Function
 {
-    const ast::Function*       ast;
-    llvm::Function*            llvm;
-    std::vector<type::TypePtr> types;
+    const ast::Function*           ast;
+    hm::TypeAnnotation             typeAnnotation;
+    llvm::Function*                llvm;
+    std::vector<type::TypeInstPtr> types;
 };
 
 struct Value
 {
-    type::TypePtr type;
+    const type::TypeInstance* type;
     llvm::Value*  value;
 };
 
@@ -51,7 +53,7 @@ class CodeGenerator
     llvm::Module*      llvmModule;
 
     // mangled name as id
-    std::unordered_map<std::string, Function> functions;
+    std::unordered_map<std::string, Function> functions; // unique_ptr<Function>?
     type::TypeContext  typeContext; // move to source module (if it should create types it needs the llvmContext)
 
 public:
@@ -64,52 +66,47 @@ public:
         llvm::Module* llvmModule_);
 
     bool               generateFunction(const ast::Function*ast);
-    bool               generateFunction(const ast::Function*ast, std::vector<type::TypePtr> types);
+    bool               generateFunction(const ast::Function*ast, std::vector<const type::TypeInstance*> types);
 
     type::TypeContext* getTypeContext() { return &typeContext; }
 
 private:
 
-    Function*          generatePrototype(const ImportedModule* module, const ast::Function*ast, std::vector<type::TypePtr> types);
+    Function*          generatePrototype(const ImportedModule* module, const ast::Function*ast, std::vector<const type::TypeInstance*> types);
     bool               generateFunctionBody(Function *function);
 
     void               AddDllMain(); // should be done on dll not on one module
 
     // lookup, global functions, generate llvmFunction if first external reference
-    Function*          getFunction(const GlobalIdentifier& identifier, std::vector<type::TypePtr> types);
+    Function*          getFunction(const GlobalIdentifier& identifier, std::vector<const type::TypeInstance*> types);
 
     friend ExpCodeGenerator;
 };
 
-class ExpCodeGenerator : public ast::ExpVisitor, public type::TypeScope
+class ExpCodeGenerator : public ast::ExpVisitor
 {
     static const Value EmptyValue;
 
     ExpCodeGenerator* const      parent;
     CodeGenerator* const         generator;
-    const type::TypePtr          expectedType;
+    const type::TypeInstance*    expectedType;
     std::map<std::string, Value> values;
     //std::map<string, .> letExpFunctions; localFunction
     llvm::Value*                 result;
+    hm::TypeAnnotation*          typeAnnotation;
 
 public:
 
-    ExpCodeGenerator(const type::TypePtr &type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_);
-    ExpCodeGenerator(const type::TypePtr &type_, ExpCodeGenerator *parent_);
+    ExpCodeGenerator(type::TypeInstPtr type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_, hm::TypeAnnotation* typeAnnotation_);
+    ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGenerator *parent_);
     virtual ~ExpCodeGenerator() {}
 
-    static llvm::Value*  generate(ast::Exp &exp, const type::TypePtr &type, ExpCodeGenerator *parent);
+    static llvm::Value* generate(ast::Exp &exp, type::TypeInstPtr type, ExpCodeGenerator *parent);
 
     // lookup, local functions, global functions,
-    Function*            getFunction(const GlobalIdentifier& identifier, std::vector<type::TypePtr> types);
-
-    type::TypeContext*   getTypeContext() override { return generator->getTypeContext(); }
-    type::TypePtr        getVariableType(const std::string& variable) override;
-    FunAst               getFunctionAST(const GlobalIdentifier& identifier) override;
-    FunDeclAst           getFunctionDeclarationAST(const GlobalIdentifier& identifier) override;
-    DataAst              getDataAST(const GlobalIdentifier& identifier) override;
-
-    llvm::Value*         getResult();
+    Function*           getFunction(const GlobalIdentifier& identifier, std::vector<type::TypeInstPtr> types);
+    type::TypeContext*  getTypeContext();
+    llvm::Value*        getResult();
 
     void visit(ast::LetExp &exp) override;
     void visit(ast::IfExp &exp) override;
@@ -129,14 +126,14 @@ private:
     auto& llvmContext() { return *generator->llvmContext; }
     auto& llvmBuilder() { return generator->llvmBuilder; }
 
-    auto generateBinary(const type::TypePtr &type, ast::BinaryExp &exp)
+    auto generateBinary(type::TypeInstPtr type, ast::BinaryExp &exp)
     {
         return std::make_tuple(
             ExpCodeGenerator::generate(*exp.lhs, type, this),
             ExpCodeGenerator::generate(*exp.rhs, type, this));
     }
 
-    typedef bool(*TypeCheckFunction)(ast::Exp &exp, const type::TypePtr&);
+    typedef bool(*TypeCheckFunction)(ast::Exp &exp, type::TypeInstPtr);
 
     template<class T>
     void generateBinary(ast::BinaryExp &exp, TypeCheckFunction tcf, T create)

@@ -136,7 +136,7 @@ DataAst SourceModule::getType(const std::string &name) const
 }
 
 // [%@][-a-zA-Z$._][-a-zA-Z$._0-9]*
-std::string SourceModule::getMangledName(const ast::Function*function, const std::vector<type::TypePtr> &types) const
+std::string SourceModule::getMangledName(const ast::Function*function, const std::vector<const type::TypeInstance*> &types) const
 {
     assert(!types.empty());
     if (function->exported)
@@ -150,18 +150,13 @@ std::string SourceModule::getMangledName(const ast::Function*function, const std
     result += function->name;
     for (auto type : types)
     {
-        if (!type->isConcreteType())
-        {
-            Log({}, "trying to mangle with abstract type");
-            return "";
-        }
         result += '$';
         result += type->identifier().str();
     }
     return result;
 }
 
-std::string SourceModule::getMangledName(const ast::Data *data, const std::vector<type::TypePtr>& types) const
+std::string SourceModule::getMangledName(const ast::Data *data, const std::vector<const type::TypeInstance*>& types) const
 {
     return name() + '_' + data->name;
 }

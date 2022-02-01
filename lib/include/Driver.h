@@ -12,7 +12,7 @@ namespace llfp
 struct FunctionIdentifier
 {
     FunAst ast;
-    std::vector<type::TypePtr>* types;
+    std::vector<type::TypeInstPtr>* types;
 };
 
 class Driver

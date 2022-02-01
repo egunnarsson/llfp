@@ -99,6 +99,15 @@ void SimpleType::apply(Substitution s)
     }
 }
 
+void SimpleType::copy(SimpleType* newObj) const
+{
+    newObj->typeClasses = typeClasses;
+    for (const auto& [name, type] : fields)
+    {
+        newObj->fields.insert({name, type->copy()});
+    }
+}
+
 // ----------------------------------------------------------------------------
 
 TypeVar::TypeVar(TypeVarId id_): id(id_)
@@ -140,6 +149,13 @@ void TypeVar::accept(TypeVisitor* visitor)
     visitor->visit(*this);
 }
 
+TypePtr TypeVar::copy() const
+{
+    auto newObj = std::make_shared<TypeVar>(id);
+    SimpleType::copy(newObj.get());
+    return newObj;
+}
+
 // ----------------------------------------------------------------------------
 
 TypeConstant::TypeConstant(std::string id_) : id{std::move(id_)}
@@ -173,6 +189,14 @@ std::vector<Substitution> TypeConstant::unify(TypeConstant& a, FunctionType& b, 
 }
 
 void TypeConstant::accept(TypeVisitor* visitor) { visitor->visit(*this); }
+
+
+TypePtr TypeConstant::copy() const
+{
+    auto newObj = std::make_shared<TypeConstant>(id);
+    SimpleType::copy(newObj.get());
+    return newObj;
+}
 
 // ----------------------------------------------------------------------------
 
@@ -213,6 +237,8 @@ std::vector<Substitution> FunctionType::unify(FunctionType& a, FunctionType& b, 
         {
             auto subs2 = TypeUnifier::unify(a.types[i], b.types[i]);
             subs.insert(std::end(subs), std::begin(subs2), std::end(subs2));
+            // apply subs to tail of list?
+            // "compose" the new subsitions?
         }
         return subs;
     }
@@ -235,6 +261,17 @@ void FunctionType::accept(TypeVisitor* visitor)
     visitor->visit(*this);
 }
 
+TypePtr FunctionType::copy() const
+{
+    std::vector<TypePtr> typesCopy;
+    for (const auto& t : types)
+    {
+        typesCopy.push_back(t->copy());
+    }
+    return std::make_shared<FunctionType>(std::move(typesCopy));
+}
+
+
 // ----------------------------------------------------------------------------
 
 TypeUnifier::TypeUnifier(const TypePtr& a_, const TypePtr& b_) : a(a_), b(b_)
@@ -253,17 +290,49 @@ void TypeUnifier::visit(FunctionType& self) { visit_(self); }
 
 // ----------------------------------------------------------------------------
 
-TypeAnnotation::TypeAnnotation(std::map<ast::Node*, TypePtr> ast_, std::map<std::string, TypePtr> vars_) :
+TypeAnnotation::TypeAnnotation(std::map<const ast::Node*, TypePtr> ast_, std::map<std::string, TypePtr> vars_, TypeVarId nextFreeVariable_) :
     ast(std::move(ast_)),
-    vars(std::move(vars_))
+    vars(std::move(vars_)),
+    nextFreeVariable{ nextFreeVariable_ }
 {}
 
-TypePtr TypeAnnotation::get(ast::Node* n)
+TypeAnnotation::TypeAnnotation(const TypeAnnotation& other)
+{
+    nextFreeVariable = other.nextFreeVariable;
+    for (const auto& [node, type] : other.ast)
+    {
+        ast[node] = type->copy();
+    }
+    for (const auto& [name, type] : other.vars)
+    {
+        vars[name] = type->copy();
+    }
+}
+
+TypeAnnotation& TypeAnnotation::operator=(const TypeAnnotation& other)
+{
+    ast.clear();
+    vars.clear();
+
+    nextFreeVariable = other.nextFreeVariable;
+    for (const auto& [node, type] : other.ast)
+    {
+        ast[node] = type->copy();
+    }
+    for (const auto& [name, type] : other.vars)
+    {
+        vars[name] = type->copy();
+    }
+
+    return *this;
+}
+
+TypePtr TypeAnnotation::get(const ast::Node* n) const
 {
     return ast.at(n);
 }
 
-TypePtr TypeAnnotation::get(const std::string& id)
+TypePtr TypeAnnotation::get(const std::string& id) const
 {
     return vars.at(id);
 }
@@ -285,6 +354,69 @@ void TypeAnnotation::print()
     for (auto var : vars)
     {
         std::cout << var.first << " = " << var.second->str() << '\n';
+    }
+}
+
+namespace {
+
+class TypeIdConverter : public TypeVisitor
+{
+    std::map<TypeVarId, TypeVarId> conversion;
+    TypeVarId&                     nextFreeVariable;
+
+public:
+
+    TypeIdConverter(TypeVarId & nextFreeVariable_) : nextFreeVariable{ nextFreeVariable_ } {}
+
+    virtual void visit(TypeVar& t)
+    {
+        auto it = conversion.find(t.id);
+        if (it != conversion.end())
+        {
+            t.id = it->second;
+        }
+        else
+        {
+            conversion.insert({ t.id, nextFreeVariable });
+            t.id = nextFreeVariable++;
+        }
+    }
+
+    virtual void visit(TypeConstant& typeConstant)
+    {
+        for (const auto& [n,t] : typeConstant.fields)
+        {
+            t->accept(this);
+        }
+    }
+
+    virtual void visit(FunctionType& funType)
+    {
+        for (const auto& t : funType.types)
+        {
+            t->accept(this);
+        }
+    }
+};
+
+}
+
+// rename addConstraint?
+void TypeAnnotation::add(const std::string& var, const TypePtr& inType)
+{
+    // moves type ids into this TypeAnnotation
+    auto type = inType->copy();
+    TypeIdConverter converter{nextFreeVariable};
+    type->accept(&converter);
+
+    auto subs = hm::TypeUnifier::unify(get(var), type);
+    for (size_t i = 0; i < subs.size(); ++i)
+    {
+        substitute(subs[i]);
+        for (size_t j = i + 1; j < subs.size(); ++j)
+        {
+            Type::apply(subs[j].type, subs[i]);
+        }
     }
 }
 
@@ -314,11 +446,11 @@ std::vector<Substitution> Constraint::solve()
 
 // ----------------------------------------------------------------------------
 
-void Annotator::operator()(ast::Function& fun)
+void Annotator::operator()(const ast::Function& fun)
 {
     current     = 0;
     vars        = std::map<std::string, TypePtr>{};
-    result      = std::map<ast::Node*, TypePtr>{};
+    result      = std::map<const ast::Node*, TypePtr>{};
     constraints = std::vector<Constraint>{};
 
     // TODO: should also do module:name since that's also valid
@@ -335,7 +467,7 @@ void Annotator::operator()(ast::Function& fun)
         auto it = vars.find(arg->identifier);
         if (it == vars.end())
         {
-            auto argTV = arg->type.empty() ? makeVar() : makeConst(arg->type.str());
+            auto argTV = arg->type.empty() ? makeVar() : makeConst(arg->type.str()); // Maybe[int], Maybe[bool]... Maybe[a]?
             vars[arg->identifier] = argTV;
             args.push_back(std::move(argTV));
         }
@@ -415,7 +547,7 @@ void Annotator::visit(ast::BinaryExp& exp)
 
     TypePtr expTV;
     if (exp.op == "*") { expTV = makeClass("Num"); }
-    else if (exp.op == "/") { expTV, makeClass("Num"); }
+    else if (exp.op == "/") { expTV = makeClass("Num"); }
     else if (exp.op == "%") { expTV = makeClass("Num"); }
     else if (exp.op == "+") { expTV = makeClass("Num"); }
     else if (exp.op == "-") { expTV = makeClass("Num"); }
@@ -433,7 +565,7 @@ void Annotator::visit(ast::BinaryExp& exp)
     else if (exp.op == "^") { expTV = makeClass("Integer"); }
     else if (exp.op == "&&") { expTV = makeConst("bool"); }
     else if (exp.op == "||") { expTV = makeConst("bool"); }
-    // else {}
+    else { assert(false); }
 
     result[&exp] = expTV;
     add({ exp.lhs->location, expTV, (tv(exp.lhs)) });
@@ -545,6 +677,7 @@ void Annotator::visit(ast::ConstructorExp& exp)
 
     // is user type?
     // application, treat as functions?
+    // no, constructor tells me something about the type constant for this exp
     auto it = vars.find(exp.identifier.name); // ?
 }
 
@@ -555,7 +688,17 @@ TypePtr Annotator::makeVar()
 
 TypePtr Annotator::makeConst(std::string s)
 {
-    return std::make_shared<TypeConstant>(std::move(s));
+    auto it = typeConstants.find(s);
+    if (it == typeConstants.end())
+    {
+        auto &constant = typeConstants[s];
+        constant = std::make_shared<TypeConstant>(std::move(s));
+        return constant;
+    }
+    else
+    {
+        return it->second;
+    }
 }
 
 TypePtr Annotator::makeClass(std::string s)
@@ -592,7 +735,7 @@ std::string test(ast::Function& fun)
     Annotator annotator{};
     annotator(fun);
 
-    TypeAnnotation annotation{ std::move(annotator.result), std::move(annotator.vars) };
+    TypeAnnotation annotation{ std::move(annotator.result), std::move(annotator.vars), annotator.current };
     std::vector<Constraint> constraints{ std::move(annotator.constraints) };
 
     annotation.print();
@@ -632,6 +775,32 @@ std::string test(ast::Function& fun)
         std::cout << c.str() << '\n';
     }
     return annotation.get(fun.name)->str();
+}
+
+TypeAnnotation inferType(const ast::Function& fun)
+{
+    Annotator annotator{};
+    annotator(fun);
+
+    TypeAnnotation annotation{ std::move(annotator.result), std::move(annotator.vars), annotator.current };
+    std::vector<Constraint> constraints{ std::move(annotator.constraints) };
+
+    for (size_t i = 0; i < constraints.size(); ++i)
+    {
+        // try{} to catch and add source location?
+
+        auto subs = constraints[i].solve();
+        for (auto& sub : subs)
+        {
+            annotation.substitute(sub);
+            for (size_t j = i + 1; j < constraints.size(); ++j)
+            {
+                constraints[j].substitute(sub);
+            }
+        }
+    }
+
+    return annotation;
 }
 
 } // namespace hm

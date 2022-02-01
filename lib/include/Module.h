@@ -19,15 +19,6 @@
 namespace llfp
 {
 
-class Compiler;
-
-namespace codegen
-{
-
-class CodeGenerator;
-
-} // codegen
-
 // a module generted from source code
 class SourceModule : public ImportedModule
 {
@@ -50,8 +41,8 @@ public:
     FunDeclAst         getFunctionDecl(const std::string &name) override;
     DataAst            getType(const std::string &name) const override;
 
-    std::string        getMangledName(const ast::Function *function, const std::vector<type::TypePtr> &types) const override;
-    std::string        getMangledName(const ast::Data *data, const std::vector<type::TypePtr>& types) const override;
+    std::string        getMangledName(const ast::Function *function, const std::vector<const type::TypeInstance*> &types) const override;
+    std::string        getMangledName(const ast::Data *data, const std::vector<const type::TypeInstance*>& types) const override;
     std::string        getExportedName(const ast::Function *function) const override;
     bool               fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const override;
 
@@ -78,7 +69,8 @@ public:
     FunAst             getFunction(const std::string &name) override;
     FunDeclAst         getFunctionDecl(const std::string &name) override;
 
-    std::string        getMangledName(const ast::Function*function, const std::vector<type::TypePtr> &types) const override;
+    std::string        getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const override;
+    std::string        getMangledName(const ast::Data* data, const std::vector<const type::TypeInstance*>& types) const override;
     std::string        getExportedName(const ast::Function*function) const override;
 };
 

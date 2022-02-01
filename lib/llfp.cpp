@@ -89,7 +89,7 @@ bool generateNextFunction(std::vector<CompiledModule> &result, FunctionIdentifie
     }
     auto codeGenerator = it->codeGenerator.get();
 
-    std::vector<type::TypePtr> types;
+    std::vector<type::TypeInstPtr> types;
     for (auto t : *functionId.types)
     {
         //TODO: Now we try to find type in this module with its imports
@@ -167,6 +167,8 @@ std::vector<CompiledModule> compile(const std::vector<std::unique_ptr<lex::Input
             throw ReturnCode::TypeOrCodeGenerationError;
         }
     }
+
+    // Fix AST. Resolve identifiers.
 
     // Genereate exported functions
     Driver driver;
