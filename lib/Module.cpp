@@ -1,5 +1,6 @@
 
 #include "Codegen.h"
+#include "Common/Algorithm.h"
 #include "GlobalContext.h"
 #include "Log.h"
 

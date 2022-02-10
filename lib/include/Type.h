@@ -26,7 +26,7 @@ is it ok to fix the type in these cases?
 
 #include "Ast.h"
 #include "IModule.h"
-#include "Common.h"
+#include "Common/GlobalIdentifier.h"
 #include "Type/Type2.h"
 
 

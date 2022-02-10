@@ -17,7 +17,9 @@ add_library(llfp_lib
 	Type/Type2.cpp
 	include/Ast.h
 	include/Codegen.h
-	include/Common.h
+	include/Common/Algorithm.h
+	include/Common/GlobalIdentifier.h
+	include/Common/SourceLocation.h
 	include/Driver.h
 	include/Error.h
 	include/GlobalContext.h

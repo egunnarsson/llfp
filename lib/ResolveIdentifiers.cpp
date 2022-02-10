@@ -4,7 +4,8 @@
 #include <string>
 
 #include "Ast.h"
-#include "Common.h"
+#include "Common/Algorithm.h"
+#include "Common/SourceLocation.h"
 #include "Log.h"
 #include "Module.h"
 #include "Type.h"

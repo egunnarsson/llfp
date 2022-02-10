@@ -4,7 +4,8 @@
 #include <string>
 #include <vector>
 
-#include "Common.h"
+#include "Common/GlobalIdentifier.h"
+#include "Common/SourceLocation.h"
 #include "Lexer.h"
 
 

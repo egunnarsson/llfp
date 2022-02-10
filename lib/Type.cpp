@@ -9,6 +9,7 @@
 
 #pragma warning(pop)
 
+#include "Common/Algorithm.h"
 #include "Error.h"
 #include "GlobalContext.h"
 #include "Log.h"

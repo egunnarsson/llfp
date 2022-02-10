@@ -290,13 +290,13 @@ TEST(ParserTest, DataDeclarations)
     // to allow data a = a1{} | a2{}; in the future
 
     EXPECT_EQ(Parse(M"data a{}"), ModulePtr().datas({ MakeDataDecl({ 0,0 }, Local, "a", {}) }));
-    EXPECT_EQ(Parse(M"data a{t x;}"), ModulePtr().datas({ MakeDataDecl({ 0,0 }, Local, "a", { Field({ 0,0 }, {"", "t"}, "x") }) }));
-    EXPECT_EQ(Parse(M"data a{m2:t x;}"), ModulePtr().datas({ MakeDataDecl({ 0,0 }, Local, "a",{ Field({ 0,0 }, { "m2", "t" }, "x") }) }));
+    EXPECT_EQ(Parse(M"data a{t x;}"), ModulePtr().datas({ MakeDataDecl({ 0,0 }, Local, "a", { Field({ 0,0 }, {{"", "t"}, {}}, "x") }) }));
+    EXPECT_EQ(Parse(M"data a{m2:t x;}"), ModulePtr().datas({ MakeDataDecl({ 0,0 }, Local, "a",{ Field({ 0,0 }, {{ "m2", "t" }, {}}, "x") }) }));
     EXPECT_EQ(Parse(M"data a{t1 x; t2 y;}"),
         ModulePtr().datas({
             MakeDataDecl({ 0,0 }, Local, "a", {
-                Field({ 0,0 }, {"", "t1"}, "x"),
-                Field({ 0,0 }, {"", "t2"}, "y") }) }));
+                Field({ 0,0 }, {{"", "t1"},{}}, "x"),
+                Field({ 0,0 }, {{"", "t2"},{}}, "y") }) }));
     EXPECT_EQ(Parse(M"export data a{}"), ModulePtr().datas({ MakeDataDecl({ 0,0 }, Exported, "a",{}) }));
 
     // negative
