@@ -13,6 +13,7 @@
 #include "Driver.h"
 #include "GlobalContext.h"
 #include "Parser.h"
+#include "ResolveIdentifiers.h"
 
 #include "llfp.h"
 
@@ -168,9 +169,16 @@ std::vector<CompiledModule> compile(const std::vector<std::unique_ptr<lex::Input
         }
     }
 
-    // Fix AST. Resolve identifiers.
+    // Resolve identifiers
+    for (auto& unit : result)
+    {
+        if (!resolveIdentifiers(*unit.sourceModule))
+        {
+            throw ReturnCode::TypeOrCodeGenerationError;
+        }
+    }
 
-    // Genereate exported functions
+    // Generate exported functions
     Driver driver;
     for (auto& unit : result)
     {

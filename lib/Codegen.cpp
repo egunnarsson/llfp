@@ -77,11 +77,11 @@ bool CodeGenerator::generateFunction(const ast::Function*ast)
     }
 
     auto f = generatePrototype(sourceModule, ast, std::move(types));
-    if (f->llvm->empty())
+    if (f != nullptr && f->llvm->empty())
     {
         return generateFunctionBody(f);
     }
-    return true;
+    return f != nullptr;
 }
 
 bool CodeGenerator::generateFunction(const ast::Function*ast, std::vector<const type::TypeInstance*> types)
@@ -111,13 +111,31 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
     try
     {
         typeAnnotation = typeContext.getAnnotation(module, ast);
+
+        for (const auto& [funName, varTypePtr] : typeAnnotation.getFunctions())
+        {
+            auto funAst = sourceModule->lookupFunction(GlobalIdentifier::split(funName));
+            if (funAst.empty())
+            {
+                continue; // could be typeclass and we dont know the type instance yet
+            }
+            const auto& funAnnotation = typeContext.getAnnotation(funAst.importedModule, funAst.function);
+            const auto funType = funAnnotation.getFun(funName);
+            typeAnnotation.add(funName, funType);
+        }
+
         typeContext.check(typeAnnotation, types[0], typeAnnotation.get(ast->functionBody.get()));
 
         size_t i = 1;
         for (auto &arg : ast->parameters)
         {
-            typeContext.check(typeAnnotation, types[i], typeAnnotation.get(arg->identifier));
+            typeContext.check(typeAnnotation, types[i], typeAnnotation.getVar(arg->identifier));
         }
+    }
+    catch (const ErrorLocation& error)
+    {
+        Log(error.location(), error.what());
+        return nullptr;
     }
     catch (const Error& error)
     {
@@ -322,7 +340,7 @@ type::Identifier getTypeByIndex(std::stack<int> index, const type::TypeInstance&
     }
 }
 
-type::Identifier findInstanceType(const ast::Class *classDecl, const ast::FunctionDeclaration* funDecl, const std::vector<const type::TypeInstance*> & types)
+type::Identifier findInstanceType(const ast::Class* classDecl, const ast::FunctionDeclaration* funDecl, const std::vector<const type::TypeInstance*>& types)
 {
     auto& typeVar = classDecl->typeVariable;
 
@@ -332,7 +350,7 @@ type::Identifier findInstanceType(const ast::Class *classDecl, const ast::Functi
     {
         for (int paramIndex = 0; paramIndex < funDecl->parameters.size(); ++paramIndex)
         {
-            auto &paramTypeId = funDecl->parameters[paramIndex]->type;
+            auto& paramTypeId = funDecl->parameters[paramIndex]->type;
             typeVariableIndex = findTypeVariableIndex(typeVar, paramTypeId);
             if (!typeVariableIndex.empty() || typeVarEqual(typeVar, paramTypeId))
             {
@@ -886,10 +904,6 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
 
     try
     {
-        const auto& funAnnotation = generator->typeContext.getAnnotation(funAst.importedModule, funAst.function);
-        const auto funType = funAnnotation.get(exp.identifier.name);
-        typeAnnotation->add(exp.identifier.name, funType);
-
         std::vector<type::TypeInstPtr> types;
         types.push_back(expectedType);
         for (auto& arg : exp.arguments)
@@ -918,7 +932,7 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
             for (size_t i = 0; i < exp.arguments.size(); ++i)
             {
                 auto argValue = generate(*exp.arguments[i], function->types[i + 1], this);
-                
+
                 if (argValue == nullptr)
                 {
                     return;

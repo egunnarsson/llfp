@@ -12,6 +12,7 @@ add_library(llfp_lib
 	llfp.cpp
 	Module.cpp
 	Parser.cpp
+	ResolveIdentifiers.cpp
 	Type.cpp
 	Type/Type2.cpp
 	include/Ast.h
@@ -28,6 +29,7 @@ add_library(llfp_lib
 	include/Log.h
 	include/Module.h
 	include/Parser.h
+	include/ResolveIdentifiers.h
 	include/Type.h
 	include/Type/Type2.h
 )

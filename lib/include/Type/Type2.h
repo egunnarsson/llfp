@@ -36,6 +36,7 @@ class TypeConstant;
 class FunctionType;
 
 typedef std::shared_ptr<Type> TypePtr;
+typedef std::shared_ptr<FunctionType> FunTypePtr;
 
 
 struct Substitution
@@ -159,6 +160,7 @@ public:
     void                             accept(TypeVisitor* visitor) override;
 
     TypePtr                          copy() const override;
+    FunTypePtr                       copyFun() const;
 };
 
 
@@ -232,23 +234,33 @@ public:
 class TypeAnnotation
 {
     std::map<const ast::Node*, TypePtr> ast;
-    std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
+    //std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
+    std::map<std::string, TypePtr>      variables;
+    std::map<std::string, FunTypePtr>   functions;
     TypeVarId                           nextFreeVariable = 0;
 
 public:
 
     TypeAnnotation() = default;
-    TypeAnnotation(std::map<const ast::Node*, TypePtr> ast_, std::map<std::string, TypePtr> vars_, TypeVarId nextFreeVariable_);
+    TypeAnnotation(
+        std::map<const ast::Node*, TypePtr> ast_,
+        std::map<std::string, TypePtr> vars_,
+        std::map<std::string, FunTypePtr> functions_,
+        TypeVarId nextFreeVariable_);
     TypeAnnotation(const TypeAnnotation& other);
     TypeAnnotation& operator=(const TypeAnnotation& other);
 
-    TypePtr get(const ast::Node* n) const;
-    TypePtr get(const std::string& id) const;
+    TypePtr     get(const ast::Node* n) const;
+    TypePtr     getVar(const std::string& id) const;
+    FunTypePtr  getFun(const std::string& id) const;
 
-    void    substitute(Substitution sub);
-    void    print();
+    const auto& getFunctions() { return functions; }
+    void        substitute(Substitution sub);
+    // more like update
+    void        add(const std::string& var, const TypePtr& type);
 
-    void    add(const std::string& var, const TypePtr& type);
+    void        print();
+
 };
 
 
@@ -259,11 +271,13 @@ class Annotator : public ast::ExpVisitor
 public:
 
     TypeVarId                           current = 0;
-    std::map<std::string, TypePtr>      vars;
+    //std::map<std::string, TypePtr>      vars;
+    std::map<std::string, TypePtr>      variables;
+    std::map<std::string, FunTypePtr>   functions;
     std::map<const ast::Node*, TypePtr> result;
     std::vector<Constraint>             constraints;
 
-    void operator()(const ast::Function& fun);
+    void operator()(const std::string& moduleName, const ast::Function& fun);
 
     void visit(ast::LetExp& exp) override;
     void visit(ast::IfExp& exp) override;
@@ -278,26 +292,26 @@ public:
 
 private:
 
-    TypePtr makeVar();
-    TypePtr makeConst(std::string s);
-    TypePtr makeClass(std::string s);
-    TypePtr makeFunction(std::vector<TypePtr> types);
+    TypePtr    makeVar();
+    TypePtr    makeConst(std::string s);
+    TypePtr    makeClass(std::string s);
+    FunTypePtr makeFunction(std::vector<TypePtr> types);
 
-    TypePtr tv(const std::string& name);
-    TypePtr tv(ast::Node& ast);
+    TypePtr    tv(const std::string& name);
+    TypePtr    tv(ast::Node& ast);
     template<class T>
-    TypePtr tv(const std::unique_ptr<T>& ast)
+    TypePtr    tv(const std::unique_ptr<T>& ast)
     {
         return result.at(ast.get());
     }
 
-    void    add(Constraint c);
+    void       add(Constraint c);
 };
 
 
-std::string test(ast::Function& fun);
+std::string test(const std::string& moduleName, ast::Function& fun);
 
-TypeAnnotation inferType(const ast::Function& fun);
+TypeAnnotation inferType(const std::string& moduleName, const ast::Function& fun);
 
 } // namespace hm
 } // namespace llfp

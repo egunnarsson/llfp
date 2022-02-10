@@ -25,6 +25,20 @@ struct GlobalIdentifier
     std::string moduleName;
     std::string name;
 
+    GlobalIdentifier() = default;
+    GlobalIdentifier(std::string moduleName_, std::string name_) :
+        moduleName{ std::move(moduleName_) },
+        name{ std::move(name_) }
+    {}
+
+    static GlobalIdentifier split(const std::string& fullName)
+    {
+        auto split = llvm::StringRef{ fullName }.split(':');
+        return split.second.empty() ?
+            GlobalIdentifier{ "", fullName }:
+            GlobalIdentifier{ split.first.str(), split.second.str() };
+    }
+
     std::string str() const
     {
         return moduleName.empty() ? name : moduleName + ':' + name;

@@ -42,6 +42,8 @@ public:
 
     void visit(hm::TypeVar& t) override
     {
+        //assert(t.fields.empty());
+
         if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == "Floating"; }))
         {
             result = context->getDouble();
@@ -56,21 +58,11 @@ public:
         }
     }
 
-    // build TypeIdentifier?
     void visit(hm::TypeConstant& t) override
     {
-        // special case where we cant have user types
-        if (t.fields.empty()) {
-            // assumes basic type, otherwise we have to do a lookup to get global name
-            result = context->getType(type::Identifier{ {"", t.id}, {} });
-        }
-        // else
-        /*
-
-            sourceModule->lookupType();
-            globalContext->lookupTypeGlobal();
-
-        */
+        auto id = GlobalIdentifier::split(t.id);
+        assert(!id.moduleName.empty() || t.fields.empty());
+        result = context->getType(type::Identifier{ std::move(id), {} });
     }
 
     void visit(hm::FunctionType&) override
@@ -80,11 +72,27 @@ public:
 
 } // namespace
 
+
+bool isPrimitive(const ast::TypeIdentifier& id)
+{
+    if (id.parameters.empty() && id.identifier.moduleName.empty())
+    {
+        for (auto& type : name::AllTypes)
+        {
+            if (type == id.identifier.name)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool isPrimitive(const Identifier &id)
 {
     if (id.parameters.empty() && id.name.moduleName.empty())
     {
-        for (auto &type : name::AllTypes)
+        for (auto& type : name::AllTypes)
         {
             if (type == id.name.name)
             {
@@ -124,7 +132,7 @@ TypeInstance::TypeInstance(Identifier identifier, std::vector<std::string> typeC
 // Creates a new hm type
 std::shared_ptr<hm::TypeConstant> TypeInstance::getType() const
 {
-    std::shared_ptr<hm::TypeConstant> type = std::make_shared<hm::TypeConstant>(identifier_.name.name);
+    std::shared_ptr<hm::TypeConstant> type = std::make_shared<hm::TypeConstant>(identifier_.name.str());
     for (auto& typeClass : typeClasses)
     {
         type->typeClasses.insert(typeClass);
@@ -347,7 +355,7 @@ const hm::TypeAnnotation& TypeContext::getAnnotation(const ImportedModule* modul
     auto it = annotations.find(ast);
     if (it == annotations.end())
     {
-        auto ptr = std::make_unique<hm::TypeAnnotation>(llfp::hm::inferType(*ast));
+        auto ptr = std::make_unique<hm::TypeAnnotation>(llfp::hm::inferType(module->name(), *ast));
         auto it2 = annotations.insert({ ast, std::move(ptr) });
         return *it2.first->second;
     }
@@ -374,6 +382,11 @@ TypeInstPtr TypeContext::constructTypeUsingAnnotationStuff(hm::TypeAnnotation& c
 
     NaiveTypeConstructor visitor{ this };
     type->accept(&visitor);
+
+    if (visitor.result == nullptr)
+    {
+        throw Error("NaiveTypeConstructor is bad");
+    }
 
     check(context, visitor.result, type);
 

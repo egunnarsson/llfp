@@ -121,7 +121,8 @@ constexpr llvm::StringLiteral AllTypes[] {
 
 } // namespace name
 
-bool isPrimitive(const Identifier &id);
+bool isPrimitive(const ast::TypeIdentifier& id);
+bool isPrimitive(const Identifier& id);
 
 /*
 namespace typeclass
