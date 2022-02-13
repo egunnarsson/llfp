@@ -628,7 +628,7 @@ void ExpCodeGenerator::visit(ast::BinaryExp &exp)
     }
     else if (exp.op == ">>") // Signed shift
     {
-        generateBinary(exp, checkInteger,
+        generateBinary(exp, checkInteger, // check Signed?
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAShr(v1, v2, "ashr", false); });
     }
     else if (exp.op == ">>>") // Logical shift

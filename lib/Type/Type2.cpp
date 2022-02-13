@@ -568,31 +568,45 @@ void Annotator::visit(ast::BinaryExp& exp)
     exp.lhs->accept(this);
     exp.rhs->accept(this);
 
-    TypePtr expTV;
-    if (exp.op == "*") { expTV = makeClass("Num"); }
-    else if (exp.op == "/") { expTV = makeClass("Num"); }
-    else if (exp.op == "%") { expTV = makeClass("Num"); }
-    else if (exp.op == "+") { expTV = makeClass("Num"); }
-    else if (exp.op == "-") { expTV = makeClass("Num"); }
-    else if (exp.op == "<<") { expTV = makeClass("Integer"); }
-    else if (exp.op == ">>") { expTV = makeClass("Integer"); }
-    else if (exp.op == ">>>") { expTV = makeClass("Integer"); }
-    else if (exp.op == ">") { expTV = makeClass("Ord"); }
-    else if (exp.op == ">=") { expTV = makeClass("Ord"); }
-    else if (exp.op == "<") { expTV = makeClass("Ord"); }
-    else if (exp.op == "<=") { expTV = makeClass("Ord"); }
-    else if (exp.op == "==") { expTV = makeClass("Eq"); }
-    else if (exp.op == "!=") { expTV = makeClass("Eq"); }
-    else if (exp.op == "&") { expTV = makeClass("Integer"); }
-    else if (exp.op == "|") { expTV = makeClass("Integer"); }
-    else if (exp.op == "^") { expTV = makeClass("Integer"); }
-    else if (exp.op == "&&") { expTV = makeConst("bool"); }
-    else if (exp.op == "||") { expTV = makeConst("bool"); }
-    else { assert(false); }
+    if (exp.op == ">"  ||
+        exp.op == ">=" ||
+        exp.op == "<"  ||
+        exp.op == "<=")
+    {
+        result[&exp] = makeConst("bool");
+        add({ exp.location, makeClass("Ord"), tv(exp.lhs) });
+        add({ exp.location, makeClass("Ord"), tv(exp.rhs) });
+        add({ exp.location, tv(exp.lhs), tv(exp.rhs) });
+    }
+    else if (exp.op == "==" || exp.op == "!=")
+    {
+        result[&exp] = makeConst("bool");
+        add({ exp.location, makeClass("Eq"), tv(exp.lhs) });
+        add({ exp.location, makeClass("Eq"), tv(exp.rhs) });
+        add({ exp.location, tv(exp.lhs), tv(exp.rhs) });
+    }
+    else
+    {
+        TypePtr expTV;
+        if (exp.op == "*") { expTV = makeClass("Num"); }
+        else if (exp.op == "/") { expTV = makeClass("Num"); }
+        else if (exp.op == "%") { expTV = makeClass("Num"); }
+        else if (exp.op == "+") { expTV = makeClass("Num"); }
+        else if (exp.op == "-") { expTV = makeClass("Num"); }
+        else if (exp.op == "<<") { expTV = makeClass("Integer"); }
+        else if (exp.op == ">>") { expTV = makeClass("Integer"); }
+        else if (exp.op == ">>>") { expTV = makeClass("Integer"); }
+        else if (exp.op == "&") { expTV = makeClass("Integer"); }
+        else if (exp.op == "|") { expTV = makeClass("Integer"); }
+        else if (exp.op == "^") { expTV = makeClass("Integer"); }
+        else if (exp.op == "&&") { expTV = makeConst("bool"); }
+        else if (exp.op == "||") { expTV = makeConst("bool"); }
+        else { assert(false); }
 
-    result[&exp] = expTV;
-    add({ exp.lhs->location, expTV, (tv(exp.lhs)) });
-    add({ exp.rhs->location, expTV, (tv(exp.rhs)) });
+        result[&exp] = expTV;
+        add({ exp.lhs->location, expTV, (tv(exp.lhs)) });
+        add({ exp.rhs->location, expTV, (tv(exp.rhs)) });
+    }
 }
 
 void Annotator::visit(ast::UnaryExp& exp)

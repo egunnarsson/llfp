@@ -7,6 +7,9 @@
 
 #include "gtest/gtest.h"
 
+#include "JIT.h"
+#include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
+
 std::vector<llfp::CompiledModule> compile(const char *string)
 {
     std::vector<std::unique_ptr<llfp::lex::Input>> input;
@@ -41,6 +44,16 @@ bool empty(llvm::Function *f)
     ss << *f->getBasicBlockList().begin()->getInstList().begin();
     return str.find("ret void") != std::string::npos;
 }
+
+template<class Result, class ... Types>
+Result call(const std::unique_ptr<llfp::JIT>& jit, llvm::StringRef name, Types ... args)
+{
+    llvm::ExitOnError check;
+    auto Sym = check(jit->lookup(name));
+    auto* FP = (Result(*)(Types ...))(intptr_t)Sym.getAddress();
+    return FP(args...);
+}
+
 
 #define M "module m;\n"
 
@@ -124,6 +137,109 @@ TEST(CodegenTest, DataConstructor)
     EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{x=z,j=z};"), "string(3,27): unknown field name\n");
     EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{y=z,y=z};"), "string(3,23): incorrect field position\n");
     EXPECT_EQ(compileError(M"data d[a]{a x; a y;}\nexport i32 f1() = d{1,true}.x;"),   "string(3,23): failed to unify types, '@IntegerLiteral' with 'bool'\n");
+}
+
+TEST(CodegenTest, Arithmetic)
+{
+    LLVMInitializeNativeAsmPrinter();
+    LLVMInitializeNativeAsmParser();
+
+    llvm::ExitOnError check;
+    std::unique_ptr<llfp::JIT> jit = check(llfp::JIT::Create());
+
+    {
+        auto m = compile(M
+            "calc(x,y,z,w,k)      = x + y - z * w / k;\n"
+            "export float calcf() = calc(1.0, 2.0, 3.0, 4.0, 5.0);\n"
+            "export i32 calci()   = calc(1, 2, 3, -4, 5);\n"
+            "export u32 calcu()   = calc(1, 2, 3, 4, 5);\n"
+            "export float frem(float x, float y) = x % y;\n"
+            "export i32 irem(i32 x, i32 y)       = x % y;\n"
+            "export u32 urem(u32 x, u32 y)       = x % y;\n"
+            "export u8 shl (u8 x, u8 y)          = x << y;\n"
+            "export u8 ashr(u8 x, u8 y)          = x >> y;\n"
+            "export u8 lshr(u8 x, u8 y)          = x >>> y;\n"
+            "export bool gt(float x, float y)    = x > y;\n"
+            "export bool ge(i32 x, i32 y)        = x >= y;\n"
+            "export bool lt(u32 x, u32 y)        = x < y;\n"
+            "export bool le(float x, float y)    = x <= y;\n"
+            "export bool eq(i32 x, i32 y)        = x == y;\n"
+            "export bool ne(u32 x, u32 y)        = x != y;\n"
+            "export u32 band(u32 x, u32 y)       = x & y;\n"
+            "export u32 bor (u32 x, u32 y)       = x | y;\n"
+            "export u32 bxor(u32 x, u32 y)       = x ^ y;\n"
+            "export bool and(bool x, bool y)     = x && y;\n"
+            "export bool or (bool x, bool y)     = x || y;\n"
+        );
+
+        for (auto& name : {
+                "m_calci", "m_calcu", "m_calcf",
+                "m_frem", "m_irem", "m_urem",
+                "m_shl", "m_ashr", "m_lshr",
+                "m_gt", "m_ge", "m_lt", "m_le", "m_eq", "m_ne",
+                "m_band", "m_bor", "m_bxor",
+                "m_and", "m_or"})
+        {
+            ASSERT_NE(m[0].llvmModule->getFunction(name), nullptr);
+        }
+
+        m[0].llvmModule->setDataLayout(jit->getDataLayout());
+        auto RT = jit->getMainJITDylib().createResourceTracker();
+        auto TSM = llvm::orc::ThreadSafeModule(std::move(m[0].llvmModule), std::move(m[0].llvmContext));
+        check(jit->addModule(std::move(TSM), RT));
+
+        // add sub mul div
+        EXPECT_EQ(call<int32_t>(jit, "m_calci"), 1 + 2 - 3 * -4 / 5);
+        EXPECT_EQ(call<uint32_t>(jit, "m_calcu"), (uint32_t)(1 + 2 - 3 * 4 / 5));
+        EXPECT_EQ(call<float>(jit, "m_calcf"), 1.0f + 2.0f - 3.0f * 4.0f / 5.0f);
+
+        // remainder
+        EXPECT_EQ((call<float, float, float>(jit, "m_frem", 5.1f, 3.0f)), 2.1f);
+        EXPECT_EQ((call<int32_t, int32_t, int32_t>(jit, "m_irem", -5, 3)), -2);
+        EXPECT_EQ((call<uint32_t, uint32_t, uint32_t>(jit, "m_urem", 5, 3)), (uint32_t)2);
+
+        // shift
+        EXPECT_EQ((call<uint8_t, uint8_t, uint8_t>(jit, "m_shl", 0b1, 2)), (uint8_t)0b100);
+        EXPECT_EQ((call<uint8_t, uint8_t, uint8_t>(jit, "m_ashr", 0b01000001, 1)), (uint8_t)0b00100000);
+        EXPECT_EQ((call<uint8_t, uint8_t, uint8_t>(jit, "m_ashr", 0b10000001, 1)), (uint8_t)0b11000000);
+        EXPECT_EQ((call<uint8_t, uint8_t, uint8_t>(jit, "m_lshr", 0b10000001, 1)), (uint8_t)0b01000000);
+
+        // comparison
+        EXPECT_EQ((call<bool, float, float>(jit, "m_gt", -1.0f, 1.0f)), false);
+        EXPECT_EQ((call<bool, int32_t, int32_t>(jit, "m_ge", 2, 1)), true);
+        EXPECT_EQ((call<bool, uint32_t, uint32_t>(jit, "m_lt", 1, 4)), true);
+        EXPECT_EQ((call<bool, float, float>(jit, "m_le", 0.3f, 0.3f)), true);
+        EXPECT_EQ((call<bool, int32_t, int32_t>(jit, "m_eq", -1, 1)), false);
+        EXPECT_EQ((call<bool, uint32_t, uint32_t>(jit, "m_ne", 1, 1)), false);
+
+        // bitwise and/or/xor
+        EXPECT_EQ((call<uint32_t, uint32_t, uint32_t>(jit, "m_band", 0b1100, 0b1010)), (uint32_t)0b1000);
+        EXPECT_EQ((call<uint32_t, uint32_t, uint32_t>(jit, "m_bor", 0b1100, 0b1010)), (uint32_t)0b1110);
+        EXPECT_EQ((call<uint32_t, uint32_t, uint32_t>(jit, "m_bxor", 0b1100, 0b1010)), (uint32_t)0b0110);
+
+        // logical and/or
+        EXPECT_EQ((call<bool, bool, bool>(jit, "m_and", false, false)), false);
+        EXPECT_EQ((call<bool, bool, bool>(jit, "m_and", true, false)), false);
+        EXPECT_EQ((call<bool, bool, bool>(jit, "m_and", false, true)), false);
+        EXPECT_EQ((call<bool, bool, bool>(jit, "m_and", true, true)), true);
+        EXPECT_EQ((call<bool, bool, bool>(jit, "m_or", false, false)), false);
+        EXPECT_EQ((call<bool, bool, bool>(jit, "m_or", true, false)), true);
+        EXPECT_EQ((call<bool, bool, bool>(jit, "m_or", false, true)), true);
+        EXPECT_EQ((call<bool, bool, bool>(jit, "m_or", true, true)), true);
+    }
+
+    // unary - ! ~
+}
+
+TEST(CodegenTest, Logic)
+{
+    // if
+
+    // let
+
+    // case
+
+    // field (part of data?)
 }
 
 TEST(CodegenTest, Modules)
