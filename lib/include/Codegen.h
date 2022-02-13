@@ -14,8 +14,8 @@
 #include "Ast.h"
 #include "Driver.h"
 #include "IModule.h"
-#include "Type.h"
-#include "Type/Type2.h"
+#include "Type/TypeContext.h"
+#include "Type/TypeInference.h"
 
 
 namespace llfp

@@ -8,7 +8,7 @@
 #include "Common/SourceLocation.h"
 #include "Log.h"
 #include "Module.h"
-#include "Type.h"
+#include "Type/TypeContext.h"
 
 #include "ResolveIdentifiers.h"
 

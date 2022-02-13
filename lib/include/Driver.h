@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "IModule.h"
-#include "Type.h"
+#include "Type/TypeInstance.h"
 
 
 namespace llfp

@@ -13,8 +13,9 @@ add_library(llfp_lib
 	Module.cpp
 	Parser.cpp
 	ResolveIdentifiers.cpp
-	Type.cpp
-	Type/Type2.cpp
+	Type/TypeContext.cpp
+	Type/TypeInference.cpp
+	Type/TypeInstance.cpp
 	include/Ast.h
 	include/Codegen.h
 	include/Common/Algorithm.h
@@ -32,8 +33,9 @@ add_library(llfp_lib
 	include/Module.h
 	include/Parser.h
 	include/ResolveIdentifiers.h
-	include/Type.h
-	include/Type/Type2.h
+	include/Type/TypeContext.h
+	include/Type/TypeInference.h
+	include/Type/TypeInstance.h
 )
 
 if (MSVC)

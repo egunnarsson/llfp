@@ -1,7 +1,7 @@
 
 #include "Error.h"
 
-#include "Type/Type2.h"
+#include "Type/TypeInference.h"
 
 #include <iostream> //TODO: remove only for debug
 

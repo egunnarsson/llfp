@@ -13,7 +13,8 @@
 
 #include "Ast.h"
 #include "IModule.h"
-#include "Type.h"
+#include "GlobalContext.h"
+#include "Type/TypeInstance.h"
 
 
 namespace llfp

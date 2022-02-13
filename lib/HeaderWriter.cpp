@@ -9,7 +9,7 @@
 
 #pragma warning(pop)
 
-#include "Type.h"
+#include "Type/TypeContext.h"
 
 #include "HeaderWriter.h"
 
