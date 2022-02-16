@@ -53,7 +53,8 @@ std::unique_ptr<SourceModule> SourceModule::create(std::unique_ptr<ast::Module> 
                 return nullptr;
             }
 
-            auto it = sourceModule->functionDeclarations.insert(std::make_pair(funDecl->name, std::make_tuple(classDecl.get(), funDecl.get())));
+            FunDeclAst funAst{ sourceModule.get(), classDecl.get(), funDecl.get() };
+            auto it = sourceModule->functionDeclarations.insert(std::make_pair(funDecl->name, funAst));
             if (!it.second)
             {
                 Log(funDecl->location, "function declaration already defined");
@@ -124,10 +125,7 @@ FunAst SourceModule::getFunction(const std::string &name)
 
 FunDeclAst SourceModule::getFunctionDecl(const std::string& name)
 {
-    ast::Class* c;
-    ast::FunctionDeclaration* f;
-    std::tie(c, f) = find(functionDeclarations, name, { nullptr, nullptr });
-    return f != nullptr ? FunDeclAst{ this, c, f } : FunDeclAst{};
+    return find(functionDeclarations, name, { nullptr, nullptr, nullptr });
 }
 
 DataAst SourceModule::getType(const std::string &name) const

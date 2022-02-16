@@ -506,8 +506,12 @@ void Annotator::operator()(const std::string& moduleName, const ast::Function& f
 
     functions.insert({ std::move(moduleName + ':' + fun.name), makeFunction(std::move(args)) });
 
-    fun.functionBody->accept(this);
-    add({fun.location, bodyType, result[fun.functionBody.get()]});
+    // standard module may not have implementation
+    if (fun.functionBody != nullptr)
+    {
+        fun.functionBody->accept(this);
+        add({fun.location, bodyType, result[fun.functionBody.get()]});
+    }
 }
 
 void Annotator::visit(ast::LetExp& exp)

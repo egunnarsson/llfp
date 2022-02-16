@@ -114,7 +114,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
 
         for (const auto& [funName, varTypePtr] : typeAnnotation.getFunctions())
         {
-            auto funAst = sourceModule->lookupFunction(GlobalIdentifier::split(funName));
+            auto funAst = sourceModule->lookupFunction(GlobalIdentifier::split(funName)); // module? not sourceModule?
             if (funAst.empty())
             {
                 continue; // could be typeclass and we dont know the type instance yet
@@ -124,7 +124,11 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
             typeAnnotation.add(funName, funType);
         }
 
-        typeContext.check(typeAnnotation, types[0], typeAnnotation.get(ast->functionBody.get()));
+        // standard module may not have implementation
+        if (ast->functionBody != nullptr)
+        {
+            typeContext.check(typeAnnotation, types[0], typeAnnotation.get(ast->functionBody.get()));
+        }
 
         size_t i = 1;
         for (auto &arg : ast->parameters)
@@ -448,7 +452,7 @@ llvm::Value* ExpCodeGenerator::generate(ast::Exp &exp, type::TypeInstPtr type, E
 
 Function* ExpCodeGenerator::getFunction(const GlobalIdentifier& identifier, std::vector<type::TypeInstPtr> types)
 {
-    return generator->getFunction(identifier, types);
+    return generator->getFunction(identifier, std::move(types));
 }
 
 type::TypeContext* ExpCodeGenerator::getTypeContext()
@@ -895,13 +899,6 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
 void ExpCodeGenerator::visit(ast::CallExp &exp)
 {
-    const auto funAst = generator->sourceModule->lookupFunction(exp.identifier);
-    if (funAst.empty())
-    {
-        Log(exp.location, "undefined function \"", exp.identifier.str(), '"');
-        return;
-    }
-
     try
     {
         std::vector<type::TypeInstPtr> types;

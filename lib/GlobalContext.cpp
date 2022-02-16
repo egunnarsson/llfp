@@ -7,7 +7,7 @@
 namespace llfp
 {
 
-void GlobalContext::addModule(SourceModule* srcModule)
+void GlobalContext::addModule(ImportedModule* srcModule)
 {
     allModules.insert(std::make_pair(srcModule->name(), srcModule));
 }
@@ -56,7 +56,14 @@ bool GlobalContext::buildFunctionInstances(SourceModule* sourceModule)
     return result;
 }
 
-FunAst GlobalContext::lookupInstance(const std::string& funIdentifier, const type::Identifier& typeIdentifier)
+void GlobalContext::addFunctionInstance(const std::string& name, type::Identifier type, FunAst fun)
+{
+    auto& map = functionInstances[name];
+    auto it = map.insert({ std::move(type), fun });
+    assert(it.second);
+}
+
+FunAst GlobalContext::lookupInstance(const std::string& funIdentifier, const type::Identifier& typeIdentifier) const
 {
     auto it = functionInstances.find(funIdentifier);
     if (it != functionInstances.end())
@@ -88,7 +95,7 @@ DataAst GlobalContext::lookupTypeGlobal(const GlobalIdentifier& identifier) cons
     return { nullptr, nullptr };
 }
 
-ImportedModule* GlobalContext::getModule(const std::string &name)
+ImportedModule* GlobalContext::getModule(const std::string &name) const
 {
     return allModules.at(name);
 }

@@ -10,6 +10,7 @@ add_library(llfp_lib
 	JIT.cpp
 	Lexer.cpp
 	llfp.cpp
+	MathModule.cpp
 	Module.cpp
 	Parser.cpp
 	ResolveIdentifiers.cpp
@@ -29,6 +30,7 @@ add_library(llfp_lib
 	include/JIT.h
 	include/Lexer.h
 	include/llfp.h
+	include/MathModule.h
 	include/Log.h
 	include/Module.h
 	include/Parser.h

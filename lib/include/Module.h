@@ -27,7 +27,7 @@ class SourceModule : public ImportedModule
 
     std::unordered_map<std::string, ast::Function*>  functions;
     std::unordered_map<std::string, ast::Function*>  publicFunctions;
-    std::unordered_map<std::string, std::tuple<ast::Class*, ast::FunctionDeclaration*>> functionDeclarations;
+    std::unordered_map<std::string, FunDeclAst>      functionDeclarations;
     std::unordered_map<std::string, ast::Data*>      dataDeclarations;
     std::unordered_map<std::string, ImportedModule*> importedModules;
 

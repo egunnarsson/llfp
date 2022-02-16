@@ -12,6 +12,7 @@
 
 #include "Driver.h"
 #include "GlobalContext.h"
+#include "MathModule.h"
 #include "Parser.h"
 #include "ResolveIdentifiers.h"
 
@@ -85,8 +86,8 @@ bool generateNextFunction(std::vector<CompiledModule> &result, FunctionIdentifie
     auto it = std::find_if(result.begin(), result.end(), predicate);
     if (it == result.end())
     {
-        // standard module?
-        return false;
+        // standard module
+        return functionId.ast.function->functionBody == nullptr;
     }
     auto codeGenerator = it->codeGenerator.get();
 
@@ -121,6 +122,9 @@ std::vector<CompiledModule> compile(const std::vector<std::unique_ptr<lex::Input
 
     GlobalContext globalContext;
     std::vector<CompiledModule> result;
+
+    MathModule mathModule;
+    mathModule.addToGlobalContext(globalContext);
 
     // Lex & Parse Input
     for (auto& input : sourceFiles)

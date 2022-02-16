@@ -18,12 +18,13 @@ class GlobalContext
 
 public:
 
-    void            addModule(SourceModule *srcModule);
-    ImportedModule* getModule(const std::string& name);
+    void            addModule(ImportedModule*srcModule);
+    ImportedModule* getModule(const std::string& name) const;
 
     bool            buildFunctionInstances(SourceModule* sourceModule);
+    void            addFunctionInstance(const std::string& name, type::Identifier type, FunAst fun);
 
-    FunAst          lookupInstance(const std::string& funIdentifier, const type::Identifier& typeIdentifier);
+    FunAst          lookupInstance(const std::string& funIdentifier, const type::Identifier& typeIdentifier) const;
     DataAst         lookupTypeGlobal(const GlobalIdentifier& identifier) const;
 };
 
