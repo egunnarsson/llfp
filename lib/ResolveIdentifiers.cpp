@@ -180,7 +180,7 @@ public:
 
         for (auto& arg : exp.arguments)
         {
-            arg->exp->accept(this);
+            arg.exp->accept(this);
         }
     }
 };

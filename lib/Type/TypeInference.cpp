@@ -715,7 +715,7 @@ void Annotator::visit(ast::ConstructorExp& exp)
 {
     for (auto& arg : exp.arguments)
     {
-        arg->exp->accept(this);
+        arg.exp->accept(this);
     }
     result[&exp] = makeConst(exp.identifier.str());
 

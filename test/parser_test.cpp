@@ -169,9 +169,9 @@ std::unique_ptr<Exp> MakeIf(llfp::SourceLocation location, std::unique_ptr<Exp> 
     return std::make_unique<IfExp>(location, std::move(condition), std::move(thenExp), std::move(elseExp));
 }
 
-std::unique_ptr<Exp> MakeCase()
+std::unique_ptr<Exp> MakeCase(llfp::SourceLocation location, std::unique_ptr<Exp> caseExp, std::initializer_list<movable_il<Clause>> clauses)
 {
-    return nullptr; //std::make_unique<CaseExp>();
+    return std::make_unique<CaseExp>(location, std::move(caseExp), vector_from_il(clauses));
 }
 
 std::unique_ptr<Exp> MakeBinary(llfp::SourceLocation location, std::string op, std::unique_ptr<Exp> lhs, std::unique_ptr<Exp> rhs)
@@ -203,14 +203,9 @@ std::unique_ptr<Exp> MakeField(llfp::SourceLocation location, std::unique_ptr<Ex
     return std::make_unique<FieldExp>(location, std::move(lhs), std::move(fieldName));
 }
 
-std::unique_ptr<Exp> MakeConstructor(llfp::SourceLocation location, llfp::GlobalIdentifier name, std::initializer_list<movable_il<std::unique_ptr<NamedArgument>>> args)
+std::unique_ptr<Exp> MakeConstructor(llfp::SourceLocation location, llfp::GlobalIdentifier name, std::initializer_list<movable_il<NamedArgument>> args)
 {
     return std::make_unique<ConstructorExp>(location, std::move(name), vector_from_il(args));
-}
-
-std::unique_ptr<NamedArgument> MakeNamedArg(llfp::SourceLocation location, std::string name, std::unique_ptr<Exp> exp)
-{
-    return std::make_unique<NamedArgument>(location, std::move(name), std::move(exp));
 }
 
 std::unique_ptr<Class> MakeClass(llfp::SourceLocation location, std::string name, std::string typeVar, std::initializer_list<movable_il<std::unique_ptr<FunctionDeclaration>>> funs)
@@ -228,6 +223,40 @@ std::unique_ptr<FunctionDeclaration> MakeFunctionDecl(llfp::SourceLocation locat
     return std::make_unique<FunctionDeclaration>(location, std::move(name), std::move(type), vector_from_il(params));
 }
 
+std::unique_ptr<BoolPattern> MakeBoolPattern(llfp::SourceLocation location, bool value)
+{
+    return std::make_unique<BoolPattern>(location, value);
+}
+
+std::unique_ptr<IdentifierPattern> MakeIdentifierPattern(llfp::SourceLocation location, std::string value)
+{
+    return std::make_unique<IdentifierPattern>(location, value);
+}
+
+std::unique_ptr<IntegerPattern> MakeIntegerPattern(llfp::SourceLocation location, std::string value)
+{
+    return std::make_unique<IntegerPattern>(location, value);
+}
+
+std::unique_ptr<FloatPattern> MakeFloatPattern(llfp::SourceLocation location, std::string value)
+{
+    return std::make_unique<FloatPattern>(location, value);
+}
+
+std::unique_ptr<CharPattern> MakeCharPattern(llfp::SourceLocation location, std::string value)
+{
+    return std::make_unique<CharPattern>(location, value);
+}
+
+std::unique_ptr<StringPattern> MakeStringPattern(llfp::SourceLocation location, std::string value)
+{
+    return std::make_unique<StringPattern>(location, value);
+}
+
+std::unique_ptr<ConstructorPattern> MakeConstructorPattern(llfp::SourceLocation location, llfp::GlobalIdentifier gid, std::initializer_list<movable_il< NamedArgumentPattern>> args)
+{
+    return std::make_unique<ConstructorPattern>(location, std::move(gid), vector_from_il(args));
+}
 
 namespace {
 constexpr bool Local = false;
@@ -311,23 +340,23 @@ TEST(ParserTest, DataDeclarations)
 TEST(ParserTest, DataConstructor)
 {
     EXPECT_EQ(Parse(M"f = a{};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, {})));
-    EXPECT_EQ(Parse(M"f = a{1};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({0,0}, "", MakeInteger({0,0}, "1")) })));
-    EXPECT_EQ(Parse(M"f = a{x};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({0,0}, "", MakeVariable({0,0}, "", "x")) })));
-    EXPECT_EQ(Parse(M"f = a{x:y};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({ 0,0 }, "", MakeVariable({ 0,0 }, "x", "y")) })));
-    EXPECT_EQ(Parse(M"f = a{x = y};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({ 0,0 }, "x", MakeVariable({ 0,0 }, "", "y")) })));
-    EXPECT_EQ(Parse(M"f = a{x()};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({ 0,0 }, "", MakeCall({0,0},"", "x", {})) })));
+    EXPECT_EQ(Parse(M"f = a{1};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({0,0}, "", MakeInteger({0,0}, "1")) })));
+    EXPECT_EQ(Parse(M"f = a{x};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({0,0}, "", MakeVariable({0,0}, "", "x")) })));
+    EXPECT_EQ(Parse(M"f = a{x:y};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({ 0,0 }, "", MakeVariable({ 0,0 }, "x", "y")) })));
+    EXPECT_EQ(Parse(M"f = a{x = y};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({ 0,0 }, "x", MakeVariable({ 0,0 }, "", "y")) })));
+    EXPECT_EQ(Parse(M"f = a{x()};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({ 0,0 }, "", MakeCall({0,0},"", "x", {})) })));
     EXPECT_EQ(Parse(M"f = a{x + 1};"), MakeMF(
-        MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({ 0,0 }, "",
+        MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({ 0,0 }, "",
             MakeBinary({ 0,0 }, "+",
                 MakeVariable({ 0,0 }, "", "x"),
                 MakeInteger({ 0,0 }, "1"))) })));
     EXPECT_EQ(Parse(M"f = a{1, x};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, {
-        MakeNamedArg({ 0,0 }, "", MakeInteger({ 0,0 }, "1")),
-        MakeNamedArg({ 0,0 }, "", MakeVariable({ 0,0 }, "", "x")) })));
-    EXPECT_EQ(Parse(M"f = a:b{1};"), MakeMF(MakeConstructor({ 0,0 }, { "a", "b" }, { MakeNamedArg({ 0,0 }, "",  MakeInteger({ 0,0 }, "1")) })));
+        NamedArgument({ 0,0 }, "", MakeInteger({ 0,0 }, "1")),
+        NamedArgument({ 0,0 }, "", MakeVariable({ 0,0 }, "", "x")) })));
+    EXPECT_EQ(Parse(M"f = a:b{1};"), MakeMF(MakeConstructor({ 0,0 }, { "a", "b" }, { NamedArgument({ 0,0 }, "",  MakeInteger({ 0,0 }, "1")) })));
     EXPECT_EQ(Parse(M"f = a{b{1}};"), MakeMF(
-        MakeConstructor({ 0,0 }, { "", "a" }, { MakeNamedArg({ 0,0 }, "",
-            MakeConstructor({ 0,0 }, { "", "b" }, { MakeNamedArg({ 0,0 }, "",
+        MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({ 0,0 }, "",
+            MakeConstructor({ 0,0 }, { "", "b" }, { NamedArgument({ 0,0 }, "",
                 MakeInteger({ 0,0 }, "1")) })) })));
 
     // negative
@@ -486,6 +515,27 @@ TEST(ParserTest, IfExp)
 
 TEST(ParserTest, CaseExp)
 {
+    EXPECT_EQ(Parse(
+       M"f() = case 0 of\n"
+        "   true  -> 1,\n"
+        "   id    -> 2,\n"
+        "   11    -> 3,\n"
+        "   1.1   -> 4,\n"
+        "   'a'   -> 5,\n"
+        "   \"s\" -> 6,\n"
+        "   c{9}  -> 7;\n"),
+        ModulePtr().functions({
+            MakeFunction({0,0}, Local, "f", "", {},
+                MakeCase({0,0}, MakeInteger({0,0}, "0"),
+                    {
+                        Clause{MakeBoolPattern({0,0},true),       MakeInteger({0,0}, "1")},
+                        Clause{MakeIdentifierPattern({0,0},"id"), MakeInteger({0,0}, "2")},
+                        Clause{MakeIntegerPattern({0,0}, "11"),   MakeInteger({0,0}, "3")},
+                        Clause{MakeFloatPattern({0,0}, "1.1"),    MakeInteger({0,0}, "4")},
+                        Clause{MakeCharPattern({0,0}, "a"),       MakeInteger({0,0}, "5")},
+                        Clause{MakeStringPattern({0,0}, "s"),     MakeInteger({0,0}, "6")},
+                        Clause{MakeConstructorPattern({0,0}, {"","c"}, { NamedArgumentPattern({0,0}, "", MakeIntegerPattern({0,0}, "9")) }), MakeInteger({0,0}, "7")}
+                    })) }) );
 }
 
 TEST(ParserTest, BinaryExp)

@@ -7,6 +7,17 @@ namespace llfp::ast
 
 bool operator==(const TypeIdentifier& t1, const TypeIdentifier& t2);
 
+bool operator==(const Clause& c1, const Clause& c2);
+bool operator==(Pattern& p1, Pattern& p2);
+bool operator==(const BoolPattern& p1, const BoolPattern& p2);
+bool operator==(const IdentifierPattern& p1, const IdentifierPattern& p2);
+bool operator==(const IntegerPattern& p1, const IntegerPattern& p2);
+bool operator==(const FloatPattern& p1, const FloatPattern& p2);
+bool operator==(const CharPattern& p1, const CharPattern& p2);
+bool operator==(const StringPattern& p1, const StringPattern& p2);
+bool operator==(const NamedArgumentPattern& p1, const NamedArgumentPattern& p2);
+bool operator==(const ConstructorPattern& p1, const ConstructorPattern& p2);
+
 bool operator==(Exp &e1, Exp &e2);
 bool operator==(const LetExp &e1, const LetExp &e2);
 bool operator==(const IfExp &e1, const IfExp &e2);

@@ -23,6 +23,10 @@ std::ostream& operator<<(std::ostream& os, const llfp::ast::Import& i);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Module &m);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::NamedArgument& i);
 
+std::ostream& operator<<(std::ostream& os, llfp::ast::Pattern& p);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::Clause& c);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::NamedArgumentPattern& n);
+
 // maybe rename this to avoid operators for std types in global namespace?
 template<class T>
 std::ostream& operator<<(std::ostream &os, const std::unique_ptr<T> &ptr)

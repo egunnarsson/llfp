@@ -249,6 +249,10 @@ Token Lexer::parseIdentifier()
         return Token::Let;
     if (tokenString == "in")
         return Token::In;
+    if (tokenString == "case")
+        return Token::Case;
+    if (tokenString == "of")
+        return Token::Of;
     if (tokenString == "true" || tokenString == "false")
         return Token::Bool;
 

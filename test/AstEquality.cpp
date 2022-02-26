@@ -79,7 +79,7 @@ struct CompareExp<T, U, true>
 #define VISIT(type) void visit(type &exp) override { visit_(exp); }
 
 template<class T>
-class ExpEqT : public ExpVisitor
+class ExpEqT : public ExpVisitor, public PatternVisitor
 {
 public:
     T*   exp_;
@@ -95,7 +95,7 @@ public:
         // probably an easier way, enable_if ?
         result = CompareExp<T, U, std::is_same<T, U>::value>::compare(*exp_, exp);
     }
-    
+
     VISIT(LetExp)
     VISIT(IfExp)
     VISIT(CaseExp)
@@ -106,6 +106,14 @@ public:
     VISIT(VariableExp)
     VISIT(FieldExp)
     VISIT(ConstructorExp)
+
+    VISIT(BoolPattern)
+    VISIT(IdentifierPattern)
+    VISIT(IntegerPattern)
+    VISIT(FloatPattern)
+    VISIT(CharPattern)
+    VISIT(StringPattern)
+    VISIT(ConstructorPattern)
 };
 
 class ExpEq : public ExpVisitor
@@ -161,6 +169,56 @@ public:
     VISIT(ConstructorExp)
 };
 
+class PatternEq : public PatternVisitor
+{
+public:
+    Pattern* pattern_;
+    bool result = false;
+
+    PatternEq(Pattern* pattern) :
+        pattern_(pattern)
+    {}
+
+    static bool check(Pattern* p1, Pattern* p2)
+    {
+        if (p1 == nullptr)
+        {
+            return p2 == nullptr;
+        }
+        if (p2 != nullptr)
+        {
+            PatternEq eq(p1);
+            p2->accept(&eq);
+            return eq.result;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    static bool check(const std::unique_ptr<Pattern>& p1, const std::unique_ptr<Pattern>& p2)
+    {
+        return check(p1.get(), p2.get());
+    }
+
+    template<class T>
+    void visit_(T& pattern)
+    {
+        ExpEqT<T> eq(&pattern);
+        pattern_->accept(&eq);
+        result = eq.result;
+    }
+
+    VISIT(BoolPattern)
+    VISIT(IdentifierPattern)
+    VISIT(IntegerPattern)
+    VISIT(FloatPattern)
+    VISIT(CharPattern)
+    VISIT(StringPattern)
+    VISIT(ConstructorPattern)
+};
+
 #undef VISIT
 
 }
@@ -171,6 +229,56 @@ namespace llfp::ast
 bool operator==(const TypeIdentifier& t1, const TypeIdentifier& t2)
 {
     return t1.identifier == t2.identifier && EqV(t1.parameters, t2.parameters);
+}
+
+bool operator==(const Clause& c1, const Clause& c2)
+{
+    return (c1.pattern, c2.pattern) && ExpEq::check(c1.exp, c2.exp);
+}
+
+bool operator==(Pattern& p1, Pattern& p2)
+{
+    return PatternEq::check(&p1, &p2);
+}
+
+bool operator==(const BoolPattern& p1, const BoolPattern& p2)
+{
+    return p1.value == p2.value;
+}
+
+bool operator==(const IdentifierPattern& p1, const IdentifierPattern& p2)
+{
+    return p1.value == p2.value;
+}
+
+bool operator==(const IntegerPattern& p1, const IntegerPattern& p2)
+{
+    return p1.value == p2.value;
+}
+
+bool operator==(const FloatPattern& p1, const FloatPattern& p2)
+{
+    return p1.value == p2.value;
+}
+
+bool operator==(const CharPattern& p1, const CharPattern& p2)
+{
+    return p1.value == p2.value;
+}
+
+bool operator==(const StringPattern& p1, const StringPattern& p2)
+{
+    return p1.value == p2.value;
+}
+
+bool operator==(const NamedArgumentPattern& p1, const NamedArgumentPattern& p2)
+{
+    return p1.name == p2.name && PatternEq::check(p1.pattern, p2.pattern);
+}
+
+bool operator==(const ConstructorPattern& p1, const ConstructorPattern& p2)
+{
+    return p1.identifier == p2.identifier&& EqV(p1.arguments, p2.arguments);
 }
 
 bool operator==(Exp &e1, Exp &e2)
@@ -191,9 +299,9 @@ bool operator==(const IfExp &e1, const IfExp &e2)
            ExpEq::check(e1.thenExp, e2.thenExp);
 }
 
-bool operator==(const CaseExp &, const CaseExp &)
+bool operator==(const CaseExp &e1, const CaseExp &e2)
 {
-    return false;
+    return ExpEq::check(e1.caseExp, e2.caseExp) && EqV(e1.clauses, e2.clauses);
 }
 
 bool operator==(const BinaryExp &e1, const BinaryExp &e2)
@@ -228,7 +336,7 @@ bool operator==(const VariableExp &e1, const VariableExp &e2)
 
 bool operator==(const ConstructorExp &e1, const ConstructorExp &e2)
 {
-    return e1.identifier == e2.identifier && EqPtrV(e1.arguments, e2.arguments);
+    return e1.identifier == e2.identifier && EqV(e1.arguments, e2.arguments);
 }
 
 bool operator==(const FieldExp &e1, const FieldExp &e2)

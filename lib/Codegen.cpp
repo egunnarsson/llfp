@@ -1068,19 +1068,19 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
             auto& arg = exp.arguments[i];
 
             // at the moment name is only used to check correctness
-            if (!arg->name.empty())
+            if (!arg.name.empty())
             {
-                auto index = expectedType->getFieldIndex(arg->name);
+                auto index = expectedType->getFieldIndex(arg.name);
                 if (index != i)
                 {
-                    Log(arg->location, index == type::TypeInstance::InvalidIndex
+                    Log(arg.location, index == type::TypeInstance::InvalidIndex
                         ? "unknown field name"
                         : "incorrect field position");
                     fail = true;
                 }
             }
 
-            auto argValue = ExpCodeGenerator::generate(*arg->exp, expectedType->getFieldType(i), this);
+            auto argValue = ExpCodeGenerator::generate(*arg.exp, expectedType->getFieldType(i), this);
             if (argValue != nullptr)
             {
                 value = llvmBuilder().CreateInsertValue(value, argValue, { i });

@@ -191,9 +191,104 @@ IfExp::~IfExp() {}
 void IfExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
 
 
+Pattern::Pattern(SourceLocation location_) : Node(location_) {}
+
+Pattern::~Pattern() {}
+
+
+BoolPattern::BoolPattern(SourceLocation location_, bool value_) :
+    Pattern(location_),
+    value{ std::move(value_) }
+{}
+
+BoolPattern::~BoolPattern() {}
+
+void BoolPattern::accept(PatternVisitor* visitor) { visitor->visit(*this); }
+
+
+IdentifierPattern::IdentifierPattern(SourceLocation location_, std::string value_) :
+    Pattern(location_),
+    value{ std::move(value_) }
+{}
+
+IdentifierPattern::~IdentifierPattern() {}
+
+void IdentifierPattern::accept(PatternVisitor* visitor) { visitor->visit(*this); }
+
+
+IntegerPattern::IntegerPattern(SourceLocation location_, std::string value_) :
+    Pattern(location_),
+    value{ std::move(value_) }
+{}
+
+IntegerPattern::~IntegerPattern() {}
+
+void IntegerPattern::accept(PatternVisitor* visitor) { visitor->visit(*this); }
+
+
+FloatPattern::FloatPattern(SourceLocation location_, std::string value_) :
+    Pattern(location_),
+    value{ std::move(value_) }
+{}
+
+FloatPattern::~FloatPattern() {}
+
+void FloatPattern::accept(PatternVisitor* visitor) { visitor->visit(*this); }
+
+
+CharPattern::CharPattern(SourceLocation location_, std::string value_) :
+    Pattern(location_),
+    value{ std::move(value_) }
+{}
+
+CharPattern::~CharPattern() {}
+
+void CharPattern::accept(PatternVisitor* visitor) { visitor->visit(*this); }
+
+
+StringPattern::StringPattern(SourceLocation location_, std::string value_) :
+    Pattern(location_),
+    value{ std::move(value_) }
+{}
+
+StringPattern::~StringPattern() {}
+
+void StringPattern::accept(PatternVisitor* visitor) { visitor->visit(*this); }
+
+
+NamedArgumentPattern::NamedArgumentPattern(SourceLocation location_, std::string name_, std::unique_ptr<Pattern> pattern_) :
+    Node(location_),
+    name{ std::move(name_) },
+    pattern{ std::move(pattern_) }
+{}
+
+NamedArgumentPattern::~NamedArgumentPattern() {}
+
+
+ConstructorPattern::ConstructorPattern(
+    SourceLocation location_,
+    GlobalIdentifier identifier_,
+    std::vector<NamedArgumentPattern> arguments_) :
+
+    Pattern(location_),
+    identifier{ std::move(identifier_) },
+    arguments{ std::move(arguments_) }
+{}
+
+ConstructorPattern::~ConstructorPattern() {}
+
+void ConstructorPattern::accept(PatternVisitor* visitor) { visitor->visit(*this); }
+
+
+CaseExp::CaseExp(SourceLocation location_, std::unique_ptr<Exp> caseExp_, std::vector<Clause> clauses_) :
+    Exp(location_),
+    caseExp{ std::move(caseExp_) },
+    clauses{ std::move(clauses_) }
+{}
+
 CaseExp::~CaseExp() {}
 
-void CaseExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
+void CaseExp::accept(ExpVisitor* visitor) { visitor->visit(*this); }
 
 
 BinaryExp::BinaryExp(SourceLocation location_, std::string op_, std::unique_ptr<Exp> lhs_, std::unique_ptr<Exp> rhs_) :
@@ -268,14 +363,14 @@ void FieldExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
 
 NamedArgument::NamedArgument(SourceLocation location_, std::string name_, std::unique_ptr<Exp> exp_) :
     Node(location_),
-    name(std::move(name_)),
-    exp(std::move(exp_))
+    name{ std::move(name_) },
+    exp{ std::move(exp_) }
 {}
 
 NamedArgument::~NamedArgument() {}
 
 
-ConstructorExp::ConstructorExp(SourceLocation location_, GlobalIdentifier identifier_, std::vector<std::unique_ptr<NamedArgument>> arguments_) :
+ConstructorExp::ConstructorExp(SourceLocation location_, GlobalIdentifier identifier_, std::vector<NamedArgument> arguments_) :
     Exp(location_),
     identifier(std::move(identifier_)),
     arguments(std::move(arguments_))

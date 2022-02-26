@@ -124,6 +124,8 @@ TEST(LexerTest, Tokens)
     PARSE_TOKEN("else", Token::Else, "else");
     PARSE_TOKEN("let", Token::Let, "let");
     PARSE_TOKEN("in", Token::In, "in");
+    PARSE_TOKEN("case", Token::Case, "case");
+    PARSE_TOKEN("of", Token::Of, "of");
     
     PARSE_TOKEN("=", Token::Equal, "=");
     

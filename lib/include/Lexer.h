@@ -43,6 +43,8 @@ enum class Token
     Else,
     Let,
     In,
+    Case,
+    Of,
 
     Operator,
     Colon,

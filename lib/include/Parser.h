@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 #pragma warning(push, 0)
 
@@ -54,12 +55,17 @@ private:
     std::unique_ptr<ast::Exp> parseCallExp(SourceLocation location, GlobalIdentifier identifier);
     std::unique_ptr<ast::Exp> parseIfExp();
     std::unique_ptr<ast::Exp> parseLetExp();
+    std::unique_ptr<ast::Exp> parseCaseExp();
     std::unique_ptr<ast::Exp> parsePrimaryExp(); // What is this? more like Term
     std::unique_ptr<ast::Exp> parseUnaryExp();
     std::unique_ptr<ast::Exp> parseBinaryExp(int exprPrec, std::unique_ptr<ast::Exp> LHS);
     std::unique_ptr<ast::Exp> parseExp();
 
-    std::unique_ptr<ast::NamedArgument> parseNamedArgument();
+    std::optional<ast::NamedArgument>         parseNamedArgument();
+
+    std::unique_ptr<ast::Pattern>             parsePattern();
+    std::optional<ast::NamedArgumentPattern>  parseNamedArgumentPattern();
+    std::unique_ptr<ast::ConstructorPattern>  parseConstructorPattern(GlobalIdentifier gid);
 
     bool                      parseGlobalIdentifier(GlobalIdentifier&);
     bool                      parseType(ast::TypeIdentifier&);
