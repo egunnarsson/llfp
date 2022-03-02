@@ -69,13 +69,13 @@ class PatternVisitor
 {
 public:
 
-    virtual void visit(BoolPattern& exp) = 0;
-    virtual void visit(IdentifierPattern& exp) = 0;
-    virtual void visit(IntegerPattern& exp) = 0;
-    virtual void visit(FloatPattern& exp) = 0;
-    virtual void visit(CharPattern& exp) = 0;
-    virtual void visit(StringPattern& exp) = 0;
-    virtual void visit(ConstructorPattern& exp) = 0;
+    virtual void visit(BoolPattern& pattern) = 0;
+    virtual void visit(IdentifierPattern& pattern) = 0;
+    virtual void visit(IntegerPattern& pattern) = 0;
+    virtual void visit(FloatPattern& pattern) = 0;
+    virtual void visit(CharPattern& pattern) = 0;
+    virtual void visit(StringPattern& pattern) = 0;
+    virtual void visit(ConstructorPattern& pattern) = 0;
 
 protected:
 

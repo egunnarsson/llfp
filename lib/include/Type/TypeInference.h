@@ -263,6 +263,7 @@ public:
 
 };
 
+class PatternTypeVisitor;
 
 class Annotator : public ast::ExpVisitor
 {
@@ -306,6 +307,28 @@ private:
     }
 
     void       add(Constraint c);
+
+    friend PatternTypeVisitor;
+};
+
+
+class PatternTypeVisitor : public ast::PatternVisitor
+{
+public:
+    TypePtr    result;
+    Annotator& annotator;
+
+    PatternTypeVisitor(Annotator& annotator_);
+
+    static TypePtr makeType(Annotator& annotator, ast::Pattern& pattern);
+
+    void visit(ast::BoolPattern& pattern) override;
+    void visit(ast::IdentifierPattern& pattern) override;
+    void visit(ast::IntegerPattern& pattern) override;
+    void visit(ast::FloatPattern& pattern) override;
+    void visit(ast::CharPattern& pattern) override;
+    void visit(ast::StringPattern& pattern) override;
+    void visit(ast::ConstructorPattern& pattern) override;
 };
 
 

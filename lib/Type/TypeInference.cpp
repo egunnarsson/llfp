@@ -562,9 +562,43 @@ void Annotator::visit(ast::IfExp& exp)
     add({ exp.elseExp->location, expTV, (tv(exp.elseExp)) });
 }
 
+
+PatternTypeVisitor::PatternTypeVisitor(Annotator& annotator_) :
+    annotator{ annotator_ }
+{}
+
+TypePtr PatternTypeVisitor::makeType(Annotator& annotator, ast::Pattern& pattern)
+{
+    PatternTypeVisitor visitor{ annotator };
+    pattern.accept(&visitor);
+    return visitor.result;
+}
+
+void PatternTypeVisitor::visit(ast::BoolPattern&)       { result = annotator.makeConst("bool"); }
+void PatternTypeVisitor::visit(ast::IdentifierPattern&) { result = annotator.makeVar(); }
+void PatternTypeVisitor::visit(ast::IntegerPattern&)    { result = annotator.makeClass("Num"); }
+void PatternTypeVisitor::visit(ast::FloatPattern&)      { result = annotator.makeClass("Floating"); }
+void PatternTypeVisitor::visit(ast::CharPattern&)       { result = annotator.makeConst("char"); }
+void PatternTypeVisitor::visit(ast::StringPattern&)     { result = annotator.makeConst("string"); }
+void PatternTypeVisitor::visit(ast::ConstructorPattern& pattern)
+{
+    result = annotator.makeConst(pattern.identifier.str());
+    // TODO: process arguments
+}
+
+
 void Annotator::visit(ast::CaseExp& exp)
 {
-    assert(false); //TODO: implement
+    exp.caseExp->accept(this);
+    auto caseExpTV = tv(exp.caseExp);
+    auto& expTV = result[&exp] = makeVar();
+
+    for (auto& c : exp.clauses)
+    {
+        c.exp->accept(this);
+        add({ c.exp->location, expTV, tv(c.exp) });
+        add({ c.pattern->location, caseExpTV, PatternTypeVisitor::makeType(*this, *c.pattern) });
+    }
 }
 
 void Annotator::visit(ast::BinaryExp& exp)

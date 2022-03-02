@@ -61,6 +61,7 @@ public:
 
 // foward declare for circular dependency
 void resolveLetExp(Context& srcModule, const ast::LetExp& letExp, const Scope* parentScope);
+void resolveClause(Context& srcModule, const ast::Clause& clause, const Scope* parentScope);
 
 
 class BaseExpVisitor : public ast::ExpVisitor, public Scope
@@ -136,9 +137,14 @@ public:
         exp.elseExp->accept(this);
     }
 
-    void visit(ast::CaseExp&) override
+    void visit(ast::CaseExp& exp) override
     {
-        assert(false);
+        exp.caseExp->accept(this);
+
+        for (auto& clause : exp.clauses)
+        {
+            resolveClause(context, clause, this);
+        }
     }
 
     void visit(ast::BinaryExp& exp) override
@@ -183,6 +189,11 @@ public:
             arg.exp->accept(this);
         }
     }
+
+    bool isLocal(const std::string& id) const override
+    {
+        return parentScope != nullptr ? parentScope->isLocal(id) : false;
+    }
 };
 
 
@@ -204,7 +215,7 @@ public:
         {
             return true;
         }
-        return parentScope != nullptr ? parentScope->isLocal(id) : false;
+        return BaseExpVisitor::isLocal(id);
     }
 };
 
@@ -244,7 +255,62 @@ public:
                 return true;
             }
         }
-        return parentScope != nullptr ? parentScope->isLocal(id) : false;
+        return BaseExpVisitor::isLocal(id);
+    }
+};
+
+
+class ClauseExpVisitor final : public BaseExpVisitor
+{
+    class IdentifierLookupVisitor final : public ast::PatternVisitor
+    {
+    public:
+
+        const std::string& identifier;
+        bool               found = false;
+
+        IdentifierLookupVisitor(const std::string& identifier_) : identifier{ identifier_ } {}
+
+        void visit(ast::BoolPattern&) override {}
+        void visit(ast::IdentifierPattern& exp) override { found = exp.value == identifier; }
+        void visit(ast::IntegerPattern&) override {}
+        void visit(ast::FloatPattern&) override {}
+        void visit(ast::CharPattern&) override {}
+        void visit(ast::StringPattern&) override {}
+        void visit(ast::ConstructorPattern& exp) override
+        {
+            for (auto& arg : exp.arguments)
+            {
+                arg.pattern->accept(this);
+                if (found) { break; }
+            }
+        }
+    };
+
+    const ast::Clause& clause;
+
+public:
+
+    ClauseExpVisitor(Context& srcModule_, const ast::Clause& clause_, const Scope* parentScope_):
+        BaseExpVisitor(srcModule_, parentScope_),
+        clause{ clause_ }
+    {}
+
+    static void resolve(Context& srcModule, const ast::Clause& clause, const Scope* parentScope)
+    {
+        ClauseExpVisitor visitor{ srcModule , clause , parentScope };
+        clause.exp->accept(&visitor);
+    }
+
+    virtual bool isLocal(const std::string& id) const
+    {
+        IdentifierLookupVisitor visitor{ id };
+        clause.pattern->accept(&visitor);
+        if (visitor.found)
+        {
+            return true;
+        }
+        return BaseExpVisitor::isLocal(id);
     }
 };
 
@@ -252,6 +318,11 @@ public:
 void resolveLetExp(Context& context, const ast::LetExp& letExp, const Scope* parentScope)
 {
     LetExpVisitor::resolve(context, letExp, parentScope);
+}
+
+void resolveClause(Context& srcModule, const ast::Clause& clause, const Scope* parentScope)
+{
+    ClauseExpVisitor::resolve(srcModule, clause, parentScope);
 }
 
 void resolveFunction(Context& context, ast::Function& function)
