@@ -58,24 +58,6 @@ bool EqV(const std::vector<T> &v1, const std::vector<T> &v2)
     return true;
 }
 
-template<class T, class U, bool Same>
-struct CompareExp
-{
-    static bool compare(const T&, const U&)
-    {
-        return false;
-    }
-};
-
-template<class T, class U>
-struct CompareExp<T, U, true>
-{
-    static bool compare(const T &exp1, const U &exp2)
-    {
-        return exp1 == exp2;
-    }
-};
-
 #define VISIT(type) void visit(type &exp) override { visit_(exp); }
 
 template<class T>
@@ -88,12 +70,18 @@ public:
     ExpEqT(T *exp):
         exp_(exp)
     {}
-    
+
     template<class U>
     void visit_(U &exp)
     {
-        // probably an easier way, enable_if ?
-        result = CompareExp<T, U, std::is_same<T, U>::value>::compare(*exp_, exp);
+        if constexpr (std::is_same<T, U>::value)
+        {
+            result = *exp_ == exp;
+        }
+        else
+        {
+            result = false;
+        }
     }
 
     VISIT(LetExp)
