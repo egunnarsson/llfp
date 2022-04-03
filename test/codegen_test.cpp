@@ -320,6 +320,18 @@ TEST(CodegenTest, TypeCheck)
     // assign with wrong return type, let i32 x = funcReturnBool()
 }
 
+TEST(CodegenTest, Scope)
+{
+    EXPECT_EQ(compileError(M
+        "export i32 foo(i32 x) =\n"
+        "   if (x < 0) then\n"
+        "       let y = x + 1;\n"
+        "       in y\n"
+        "   else\n"
+        "       y + 1;"),
+        "string(7,8): undefined function \"y\"\n");
+}
+
 /*
 
 T[A] {A,A} ... T{true, 1} should fail
