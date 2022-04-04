@@ -125,9 +125,9 @@ bool TypeContext::check(hm::TypeAnnotation& context, TypeInstPtr typeInstance, c
     return true;
 }
 
-TypeInstPtr TypeContext::constructTypeUsingAnnotationStuff(hm::TypeAnnotation& context, const ast::Exp& exp)
+TypeInstPtr TypeContext::constructTypeUsingAnnotationStuff(hm::TypeAnnotation& context, const ast::Node& node)
 {
-    auto type = context.get(&exp);
+    auto type = context.get(&node);
 
     NaiveTypeConstructor visitor{ this };
     type->accept(&visitor);

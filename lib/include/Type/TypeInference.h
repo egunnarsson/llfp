@@ -268,11 +268,11 @@ class PatternTypeVisitor;
 class Annotator : public ast::ExpVisitor
 {
     std::map<std::string, TypePtr>      typeConstants;
+    //std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
 
 public:
 
     TypeVarId                           current = 0;
-    //std::map<std::string, TypePtr>      vars;
     std::map<std::string, TypePtr>      variables;
     std::map<std::string, FunTypePtr>   functions;
     std::map<const ast::Node*, TypePtr> result;
@@ -315,12 +315,14 @@ private:
 class PatternTypeVisitor : public ast::PatternVisitor
 {
 public:
-    TypePtr    result;
+
+    //std::map<std::string, > variables;
+
     Annotator& annotator;
 
     PatternTypeVisitor(Annotator& annotator_);
 
-    static TypePtr makeType(Annotator& annotator, ast::Pattern& pattern);
+    static void visit(Annotator& annotator, ast::Pattern& pattern);
 
     void visit(ast::BoolPattern& pattern) override;
     void visit(ast::IdentifierPattern& pattern) override;
@@ -329,6 +331,10 @@ public:
     void visit(ast::CharPattern& pattern) override;
     void visit(ast::StringPattern& pattern) override;
     void visit(ast::ConstructorPattern& pattern) override;
+
+private:
+
+    void add(ast::Pattern& pattern, TypePtr type);
 };
 
 

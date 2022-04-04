@@ -567,25 +567,39 @@ PatternTypeVisitor::PatternTypeVisitor(Annotator& annotator_) :
     annotator{ annotator_ }
 {}
 
-TypePtr PatternTypeVisitor::makeType(Annotator& annotator, ast::Pattern& pattern)
+void PatternTypeVisitor::visit(Annotator& annotator, ast::Pattern& pattern)
 {
     PatternTypeVisitor visitor{ annotator };
     pattern.accept(&visitor);
-    return visitor.result;
 }
 
-void PatternTypeVisitor::visit(ast::BoolPattern&)       { result = annotator.makeConst("bool"); }
-void PatternTypeVisitor::visit(ast::IdentifierPattern&) { result = annotator.makeVar(); }
-void PatternTypeVisitor::visit(ast::IntegerPattern&)    { result = annotator.makeClass("Num"); }
-void PatternTypeVisitor::visit(ast::FloatPattern&)      { result = annotator.makeClass("Floating"); }
-void PatternTypeVisitor::visit(ast::CharPattern&)       { result = annotator.makeConst("char"); }
-void PatternTypeVisitor::visit(ast::StringPattern&)     { result = annotator.makeConst("string"); }
+void PatternTypeVisitor::visit(ast::BoolPattern& pattern)    { add(pattern, annotator.makeConst("bool")); }
+void PatternTypeVisitor::visit(ast::IntegerPattern& pattern) { add(pattern, annotator.makeClass("Num")); }
+void PatternTypeVisitor::visit(ast::FloatPattern& pattern)   { add(pattern, annotator.makeClass("Floating")); }
+void PatternTypeVisitor::visit(ast::CharPattern& pattern)    { add(pattern, annotator.makeConst("char")); }
+void PatternTypeVisitor::visit(ast::StringPattern& pattern)  { add(pattern, annotator.makeConst("string")); }
+
+void PatternTypeVisitor::visit(ast::IdentifierPattern& pattern)
+{
+    auto var = annotator.makeVar();
+    annotator.variables[pattern.value] = var;
+    add(pattern, std::move(var));
+}
+
 void PatternTypeVisitor::visit(ast::ConstructorPattern& pattern)
 {
-    result = annotator.makeConst(pattern.identifier.str());
-    // TODO: process arguments
+    add(pattern, annotator.makeConst(pattern.identifier.str()));
+    for (auto& arg : pattern.arguments)
+    {
+        //TODO: add constraints for fields... by index!
+        arg.pattern->accept(this);
+    }
 }
 
+void PatternTypeVisitor::add(ast::Pattern& pattern, TypePtr type)
+{
+    annotator.result[&pattern] = std::move(type);
+}
 
 void Annotator::visit(ast::CaseExp& exp)
 {
@@ -595,9 +609,14 @@ void Annotator::visit(ast::CaseExp& exp)
 
     for (auto& c : exp.clauses)
     {
+        //TODO: push/pop variable scope
+        PatternTypeVisitor::visit(*this, *c.pattern);
+        add({ c.pattern->location, caseExpTV, result[c.pattern.get()] });
+
+        //TODO: add constraints between clauses
+
         c.exp->accept(this);
         add({ c.exp->location, expTV, tv(c.exp) });
-        add({ c.pattern->location, caseExpTV, PatternTypeVisitor::makeType(*this, *c.pattern) });
     }
 }
 
@@ -704,7 +723,7 @@ void Annotator::visit(ast::CallExp& exp)
     auto it = functions.find(funName);
     if (it == functions.end())
     {
-        assert(strchr(funName.c_str(),':') != nullptr);
+        assert(strchr(funName.c_str(), ':') != nullptr);
         functions[std::move(funName)] = funType;
     }
     else

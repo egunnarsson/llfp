@@ -260,6 +260,44 @@ public:
 };
 
 
+class PatternVisitor final : public ast::PatternVisitor
+{
+    Context& context;
+
+public:
+
+    PatternVisitor(Context& context_) : context{ context_ } {}
+
+    void visit(ast::BoolPattern&) override {}
+    void visit(ast::IdentifierPattern&) override {}
+    void visit(ast::IntegerPattern&) override {}
+    void visit(ast::FloatPattern&) override {}
+    void visit(ast::CharPattern&) override {}
+    void visit(ast::StringPattern&) override {}
+    void visit(ast::ConstructorPattern& pattern) override 
+    {
+        fixConstructor(pattern.location, pattern.identifier);
+        for (auto& arg : pattern.arguments)
+        {
+            arg.pattern->accept(this);
+        }
+    }
+
+    void fixConstructor(const SourceLocation& location, GlobalIdentifier& id)
+    {
+        auto dataAst = context.srcModule.lookupType(id);
+        if (dataAst.empty())
+        {
+            Log(context.errs, location, "undefined data constructor \"", id.str(), '"');
+        }
+        else if (id.moduleName.empty())
+        {
+            id.moduleName = dataAst.importedModule->name();
+        }
+    }
+};
+
+
 class ClauseExpVisitor final : public BaseExpVisitor
 {
     class IdentifierLookupVisitor final : public ast::PatternVisitor
@@ -298,8 +336,10 @@ public:
 
     static void resolve(Context& srcModule, const ast::Clause& clause, const Scope* parentScope)
     {
-        ClauseExpVisitor visitor{ srcModule , clause , parentScope };
-        clause.exp->accept(&visitor);
+        PatternVisitor patternVisitor{ srcModule };
+        clause.pattern->accept(&patternVisitor);
+        ClauseExpVisitor expVisitor{ srcModule , clause , parentScope };
+        clause.exp->accept(&expVisitor);
     }
 
     virtual bool isLocal(const std::string& id) const

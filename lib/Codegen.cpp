@@ -429,23 +429,24 @@ ExpCodeGenerator::ExpCodeGenerator(type::TypeInstPtr type_, CodeGenerator *gener
     assert(expectedType->llvmType() != nullptr);
 }
 
-ExpCodeGenerator::ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGenerator *parent_) :
+ExpCodeGenerator::ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGenerator *parent_, std::map<std::string, Value> scope_) :
     parent{ parent_ },
     generator{ parent_->generator },
     expectedType{ type_ },
+    values{ std::move(scope_) },
     result{ nullptr },
     typeAnnotation{ parent_->typeAnnotation }
 {
     assert(expectedType->llvmType() != nullptr);
 }
 
-llvm::Value* ExpCodeGenerator::generate(ast::Exp &exp, type::TypeInstPtr type, ExpCodeGenerator *parent)
+llvm::Value* ExpCodeGenerator::generate(ast::Exp& exp, type::TypeInstPtr type, ExpCodeGenerator* parent, std::map<std::string, Value> scope)
 {
     if (type == nullptr) // or not?
     {
         return nullptr;
     }
-    ExpCodeGenerator generator(type, parent);
+    ExpCodeGenerator generator(type, parent, std::move(scope));
     exp.accept(&generator);
     return generator.result;
 }
@@ -543,9 +544,159 @@ void ExpCodeGenerator::visit(ast::IfExp &exp)
     result = PN;
 }
 
+struct PatternCodeGeneratorContext
+{
+    llvm::IRBuilder<>&           irBuilder;
+    llvm::BasicBlock*            failBlock;
+    type::TypeContext*           typeContext;
+    hm::TypeAnnotation*          typeAnnotation;
+    std::map<std::string, Value> variables;
+};
+
+class PatternCodeGenerator : public ast::PatternVisitor
+{
+    PatternCodeGeneratorContext& context;
+    llvm::Value*                 value;
+    llvm::BasicBlock*            nextBlock;
+
+public:
+
+    PatternCodeGenerator(PatternCodeGeneratorContext& context_, llvm::Value* value_, llvm::BasicBlock* nextBlock_):
+        context{ context_ },
+        value{ value_ },
+        nextBlock{ nextBlock_ }
+    {}
+
+    void visit(ast::BoolPattern& pattern) override
+    {
+        auto condition = context.irBuilder.CreateCmp(llvm::CmpInst::ICMP_EQ, value, llvm::ConstantInt::getBool(context.irBuilder.getContext(), pattern.value), "boolPattern");
+        context.irBuilder.CreateCondBr(condition, nextBlock, context.failBlock);
+    }
+
+    void visit(ast::IdentifierPattern& pattern) override
+    {
+        auto type = context.typeContext->constructTypeUsingAnnotationStuff(*context.typeAnnotation, pattern);
+        context.variables.insert({ pattern.value, {type, value} });
+        context.irBuilder.CreateBr(nextBlock);
+    }
+
+    void visit(ast::IntegerPattern& pattern) override
+    {
+        unsigned int numBits = value->getType()->getIntegerBitWidth();
+        auto patternValue = llvm::ConstantInt::get(llvm::IntegerType::get(context.irBuilder.getContext(), numBits), pattern.value, 10);
+        auto condition = context.irBuilder.CreateCmp(llvm::CmpInst::ICMP_EQ, value, patternValue, "integerPattern");
+        context.irBuilder.CreateCondBr(condition, nextBlock, context.failBlock);
+    }
+
+    void visit(ast::FloatPattern& pattern) override
+    {
+        auto patternValue = llvm::ConstantFP::get(value->getType(), pattern.value);
+        auto condition = context.irBuilder.CreateFCmp(llvm::CmpInst::FCMP_OEQ, value, patternValue, "floatPattern");
+        context.irBuilder.CreateCondBr(condition, nextBlock, context.failBlock);
+    }
+
+    void visit(ast::CharPattern& pattern) override
+    {
+        assert(pattern.value.size() == 1);
+        auto patternValue = llvm::ConstantInt::get(value->getType(), static_cast<uint8_t>(pattern.value[0]));
+        auto condition = context.irBuilder.CreateCmp(llvm::CmpInst::ICMP_EQ, value, patternValue, "charPattern");
+        context.irBuilder.CreateCondBr(condition, nextBlock, context.failBlock);
+    }
+
+    void visit(ast::StringPattern& pattern) override
+    {
+        assert(false);
+    }
+
+    void visit(ast::ConstructorPattern& pattern) override
+    {
+        auto BB = context.irBuilder.GetInsertBlock();
+        std::vector<llvm::BasicBlock*> blocks;
+        for (auto& arg : pattern.arguments)
+        {
+            blocks.push_back(llvm::BasicBlock::Create(context.irBuilder.getContext()));
+        }
+
+        auto function = BB->getParent();
+        unsigned int index = 0;
+        for (auto& branchBlock : blocks)
+        {
+            function->getBasicBlockList().push_back(branchBlock);
+            context.irBuilder.SetInsertPoint(branchBlock);
+
+            auto argValue = context.irBuilder.CreateExtractValue(value, { index });
+
+            auto branchNextBlock = index == blocks.size() - 1 ? nextBlock : blocks[index + 1];
+            PatternCodeGenerator gen{ context, argValue, branchNextBlock };
+            pattern.arguments[index].pattern->accept(&gen);
+
+            ++index;
+        }
+
+        // for now constructors only have one instance, i.e. always true condition
+        context.irBuilder.SetInsertPoint(BB);
+        auto condition = llvm::ConstantInt::getTrue(context.irBuilder.getContext());
+        context.irBuilder.CreateCondBr(condition, blocks.front(), context.failBlock);
+    }
+};
+
 void ExpCodeGenerator::visit(ast::CaseExp &exp)
 {
-    Log(exp.location, "case not implemented");
+    const auto count = exp.clauses.size();
+    assert(count != 0);
+    auto& builder = llvmBuilder();
+    auto function = builder.GetInsertBlock()->getParent();
+
+    auto caseT = getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, *exp.caseExp);
+    auto caseV = ExpCodeGenerator::generate(*exp.caseExp, caseT, this);
+
+    std::vector<llvm::BasicBlock*> expBlocks;
+    std::vector<llvm::BasicBlock*> patternBlocks;
+    for (size_t i = 0; i < count; ++i)
+    {
+        expBlocks.push_back(llvm::BasicBlock::Create(llvmContext(), "caseExp"));
+        patternBlocks.push_back(llvm::BasicBlock::Create(llvmContext(), "casePattern"));
+    }
+    auto mergeBB = llvm::BasicBlock::Create(llvmContext(), "caseCont");
+
+    builder.CreateBr(patternBlocks.front());
+
+    std::vector<std::map<std::string, Value>> variables;
+    // simplify with -jump-threading?
+    for (size_t i = 0; i < count; ++i)
+    {
+        auto uglyHack = expBlocks.back(); //TODO: replace with call to abort()
+        auto failBlock = i == count - 1 ? uglyHack : patternBlocks[i + 1];
+        PatternCodeGeneratorContext context{ builder, failBlock, getTypeContext(), typeAnnotation };
+        PatternCodeGenerator gen{ context, caseV, expBlocks[i] };
+
+        function->getBasicBlockList().push_back(patternBlocks[i]);
+        builder.SetInsertPoint(patternBlocks[i]);
+        exp.clauses[i].pattern->accept(&gen);
+
+        variables.push_back(std::move(context.variables));
+    }
+
+    std::vector<llvm::Value*> caseValues;
+    for (size_t i = 0; i < count; ++i)
+    {
+        function->getBasicBlockList().push_back(expBlocks[i]);
+        builder.SetInsertPoint(expBlocks[i]);
+        auto thenV = ExpCodeGenerator::generate(*exp.clauses[i].exp, expectedType, this, std::move(variables[i]));
+        // Codegen of 'Clause' can change the current block, update ClauseBB for the PHI.
+        expBlocks[i] = builder.GetInsertBlock();
+        caseValues.push_back(thenV);
+        builder.CreateBr(mergeBB);
+    }
+
+    function->getBasicBlockList().push_back(mergeBB);
+    builder.SetInsertPoint(mergeBB);
+    auto PN = builder.CreatePHI(expectedType->llvmType(), static_cast<unsigned int>(count), "casetmp");
+    for (size_t i = 0; i < count; ++i)
+    {
+        PN->addIncoming(caseValues[i], expBlocks[i]);
+    }
+    result = PN;
 }
 
 namespace
@@ -857,7 +1008,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
         else
         {
             assert(exp.value.size() == 1);
-            result = llvm::ConstantInt::get(type, exp.value[0]);
+            result = llvm::ConstantInt::get(type, static_cast<uint8_t>(exp.value[0]));
         }
         break;
 

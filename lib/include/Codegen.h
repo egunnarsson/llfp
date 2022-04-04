@@ -98,10 +98,10 @@ class ExpCodeGenerator : public ast::ExpVisitor
 public:
 
     ExpCodeGenerator(type::TypeInstPtr type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_, hm::TypeAnnotation* typeAnnotation_);
-    ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGenerator *parent_);
+    ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGenerator* parent_, std::map<std::string, Value> scope_);
     virtual ~ExpCodeGenerator() {}
 
-    static llvm::Value* generate(ast::Exp &exp, type::TypeInstPtr type, ExpCodeGenerator *parent);
+    static llvm::Value* generate(ast::Exp& exp, type::TypeInstPtr type, ExpCodeGenerator* parent, std::map<std::string, Value> scope = {});
 
     // lookup, local functions, global functions,
     Function*           getFunction(const GlobalIdentifier& identifier, std::vector<type::TypeInstPtr> types);

@@ -126,7 +126,7 @@ public:
     // type check, and fix if literal etc
     bool check(hm::TypeAnnotation& context, TypeInstPtr inst, const hm::TypePtr& t);
     // a bit temporary
-    TypeInstPtr constructTypeUsingAnnotationStuff(hm::TypeAnnotation& context, const ast::Exp& exp);
+    TypeInstPtr constructTypeUsingAnnotationStuff(hm::TypeAnnotation& context, const ast::Node& node);
 
     TypeInstPtr getBool();
     TypeInstPtr getChar();
