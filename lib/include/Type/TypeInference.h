@@ -314,11 +314,10 @@ private:
 
 class PatternTypeVisitor : public ast::PatternVisitor
 {
-public:
-
     //std::map<std::string, > variables;
-
     Annotator& annotator;
+
+public:
 
     PatternTypeVisitor(Annotator& annotator_);
 

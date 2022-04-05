@@ -537,7 +537,7 @@ void ExpCodeGenerator::visit(ast::IfExp &exp)
     // Emit merge block.
     function->getBasicBlockList().push_back(mergeBB);
     builder.SetInsertPoint(mergeBB);
-    auto PN = builder.CreatePHI(expectedType->llvmType(), 2, "iftmp");
+    auto PN = builder.CreatePHI(expectedType->llvmType(), 2, "ifphi");
 
     PN->addIncoming(thenV, thenBB);
     PN->addIncoming(elseV, elseBB);
@@ -610,31 +610,33 @@ public:
 
     void visit(ast::ConstructorPattern& pattern) override
     {
-        auto BB = context.irBuilder.GetInsertBlock();
+        const unsigned int count = pattern.arguments.size();
+        assert(count != 0);
+
         std::vector<llvm::BasicBlock*> blocks;
-        for (auto& arg : pattern.arguments)
+        for (unsigned int i = 0; i < count; ++i)
         {
             blocks.push_back(llvm::BasicBlock::Create(context.irBuilder.getContext()));
         }
 
-        auto function = BB->getParent();
-        unsigned int index = 0;
-        for (auto& branchBlock : blocks)
+        auto originalBlock = context.irBuilder.GetInsertBlock();
+        auto function = originalBlock->getParent();
+
+        for (unsigned int index = 0; index < count; ++index)
         {
+            auto branchBlock = blocks[index];
             function->getBasicBlockList().push_back(branchBlock);
             context.irBuilder.SetInsertPoint(branchBlock);
 
             auto argValue = context.irBuilder.CreateExtractValue(value, { index });
 
-            auto branchNextBlock = index == blocks.size() - 1 ? nextBlock : blocks[index + 1];
+            auto branchNextBlock = index == blocks.size() - 1 ? nextBlock : blocks[(size_t)index + 1];
             PatternCodeGenerator gen{ context, argValue, branchNextBlock };
             pattern.arguments[index].pattern->accept(&gen);
-
-            ++index;
         }
 
         // for now constructors only have one instance, i.e. always true condition
-        context.irBuilder.SetInsertPoint(BB);
+        context.irBuilder.SetInsertPoint(originalBlock);
         auto condition = llvm::ConstantInt::getTrue(context.irBuilder.getContext());
         context.irBuilder.CreateCondBr(condition, blocks.front(), context.failBlock);
     }
@@ -691,7 +693,7 @@ void ExpCodeGenerator::visit(ast::CaseExp &exp)
 
     function->getBasicBlockList().push_back(mergeBB);
     builder.SetInsertPoint(mergeBB);
-    auto PN = builder.CreatePHI(expectedType->llvmType(), static_cast<unsigned int>(count), "casetmp");
+    auto PN = builder.CreatePHI(expectedType->llvmType(), static_cast<unsigned int>(count), "casephi");
     for (size_t i = 0; i < count; ++i)
     {
         PN->addIncoming(caseValues[i], expBlocks[i]);

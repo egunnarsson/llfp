@@ -51,6 +51,19 @@ void resolveType(Context& context, const SourceLocation& location, ast::TypeIden
     }
 }
 
+void resolveConstructor(Context& context, const SourceLocation& location, GlobalIdentifier& id)
+{
+    auto dataAst = context.srcModule.lookupType(id);
+    if (dataAst.empty())
+    {
+        Log(context.errs, location, "undefined data constructor \"", id.str(), '"');
+    }
+    else if (id.moduleName.empty())
+    {
+        id.moduleName = dataAst.importedModule->name();
+    }
+}
+
 
 class Scope
 {
@@ -78,7 +91,7 @@ public:
         parentScope{ parentScope_ }
     {}
 
-    void fix(const SourceLocation& location, GlobalIdentifier& id)
+    void resolve(const SourceLocation& location, GlobalIdentifier& id)
     {
         if (id.moduleName.empty() && isLocal(id.name))
         {
@@ -109,19 +122,6 @@ public:
         else
         {
             Log(context.errs, location, "undefined function \"", id.str(), '"');
-        }
-    }
-
-    void fixConstructor(const SourceLocation &location, GlobalIdentifier& id)
-    {
-        auto dataAst = context.srcModule.lookupType(id);
-        if (dataAst.empty())
-        {
-            Log(context.errs, location, "undefined data constructor \"", id.str(), '"');
-        }
-        else if (id.moduleName.empty())
-        {
-            id.moduleName = dataAst.importedModule->name();
         }
     }
 
@@ -162,7 +162,7 @@ public:
 
     void visit(ast::CallExp& exp) override
     {
-        fix(exp.location, exp.identifier);
+        resolve(exp.location, exp.identifier);
 
         for (auto& arg: exp.arguments)
         {
@@ -172,7 +172,7 @@ public:
 
     void visit(ast::VariableExp& exp) override
     {
-        fix(exp.location, exp.identifier);
+        resolve(exp.location, exp.identifier);
     }
 
     void visit(ast::FieldExp& exp) override
@@ -182,7 +182,7 @@ public:
 
     void visit(ast::ConstructorExp& exp) override
     {
-        fixConstructor(exp.location, exp.identifier);
+        resolveConstructor(context, exp.location, exp.identifier);
 
         for (auto& arg : exp.arguments)
         {
@@ -274,25 +274,13 @@ public:
     void visit(ast::FloatPattern&) override {}
     void visit(ast::CharPattern&) override {}
     void visit(ast::StringPattern&) override {}
-    void visit(ast::ConstructorPattern& pattern) override 
+    void visit(ast::ConstructorPattern& pattern) override
     {
-        fixConstructor(pattern.location, pattern.identifier);
+        resolveConstructor(context, pattern.location, pattern.identifier);
+
         for (auto& arg : pattern.arguments)
         {
             arg.pattern->accept(this);
-        }
-    }
-
-    void fixConstructor(const SourceLocation& location, GlobalIdentifier& id)
-    {
-        auto dataAst = context.srcModule.lookupType(id);
-        if (dataAst.empty())
-        {
-            Log(context.errs, location, "undefined data constructor \"", id.str(), '"');
-        }
-        else if (id.moduleName.empty())
-        {
-            id.moduleName = dataAst.importedModule->name();
         }
     }
 };
