@@ -40,11 +40,11 @@ public:
     {
         //assert(t.fields.empty());
 
-        if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == "Floating"; }))
+        if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == id::Floating; }))
         {
             result = context->getDouble();
         }
-        else if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == "Signed"; }))
+        else if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == id::Signed; }))
         {
             result = context->getI64();
         }
@@ -76,25 +76,25 @@ TypeContext::TypeContext(llvm::LLVMContext& llvmContext_, SourceModule* sourceMo
     sourceModule{ sourceModule_ },
     globalContext{ globalContext_ }
 {
-    boolType      = addType(name::Bool,    LLVM_TYPE(Int1), { "Eq" });
+    boolType      = addType(id::Bool,    LLVM_TYPE(Int1), { id::Eq });
 
-    /*i8Type    =*/ addType(name::I8,      LLVM_TYPE(Int8),   { "Eq", "Ord", "Num", "Integer", "Signed" });
-    /*i16Type   =*/ addType(name::I16,     LLVM_TYPE(Int16),  { "Eq", "Ord", "Num", "Integer", "Signed" });
-    /*i32Type   =*/ addType(name::I32,     LLVM_TYPE(Int32),  { "Eq", "Ord", "Num", "Integer", "Signed" });
-    i64Type       = addType(name::I64,     LLVM_TYPE(Int64),  { "Eq", "Ord", "Num", "Integer", "Signed" });
-    /*i128Type  =*/ addType(name::I128,    LLVM_TYPE(Int128), { "Eq", "Ord", "Num", "Integer", "Signed" });
+    /*i8Type    =*/ addType(id::I8,      LLVM_TYPE(Int8),   { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
+    /*i16Type   =*/ addType(id::I16,     LLVM_TYPE(Int16),  { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
+    /*i32Type   =*/ addType(id::I32,     LLVM_TYPE(Int32),  { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
+    i64Type       = addType(id::I64,     LLVM_TYPE(Int64),  { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
+    /*i128Type  =*/ addType(id::I128,    LLVM_TYPE(Int128), { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
 
-    /*u8Type    =*/ addType(name::U8,      LLVM_TYPE(Int8),   { "Eq", "Ord", "Num", "Integer" });
-    /*u16Type   =*/ addType(name::U16,     LLVM_TYPE(Int16),  { "Eq", "Ord", "Num", "Integer" });
-    /*u32Type   =*/ addType(name::U32,     LLVM_TYPE(Int32),  { "Eq", "Ord", "Num", "Integer" });
-    u64Type       = addType(name::U64,     LLVM_TYPE(Int64),  { "Eq", "Ord", "Num", "Integer" });
-    /*u128Type  =*/ addType(name::U128,    LLVM_TYPE(Int128), { "Eq", "Ord", "Num", "Integer" });
+    /*u8Type    =*/ addType(id::U8,      LLVM_TYPE(Int8),   { id::Eq, id::Ord, id::Num, id::Integer });
+    /*u16Type   =*/ addType(id::U16,     LLVM_TYPE(Int16),  { id::Eq, id::Ord, id::Num, id::Integer });
+    /*u32Type   =*/ addType(id::U32,     LLVM_TYPE(Int32),  { id::Eq, id::Ord, id::Num, id::Integer });
+    u64Type       = addType(id::U64,     LLVM_TYPE(Int64),  { id::Eq, id::Ord, id::Num, id::Integer });
+    /*u128Type  =*/ addType(id::U128,    LLVM_TYPE(Int128), { id::Eq, id::Ord, id::Num, id::Integer });
 
-    /*halfType  =*/ addType(name::Half,   LLVM_TYPE(Half),    { "Eq", "Ord", "Num", "Floating", "Signed" });
-    /*floatType =*/ addType(name::Float,  LLVM_TYPE(Float),   { "Eq", "Ord", "Num", "Floating", "Signed" });
-    doubleType    = addType(name::Double, LLVM_TYPE(Double),  { "Eq", "Ord", "Num", "Floating", "Signed" });
+    /*halfType  =*/ addType(id::Half,   LLVM_TYPE(Half),    { id::Eq, id::Ord, id::Num, id::Floating, id::Signed });
+    /*floatType =*/ addType(id::Float,  LLVM_TYPE(Float),   { id::Eq, id::Ord, id::Num, id::Floating, id::Signed });
+    doubleType    = addType(id::Double, LLVM_TYPE(Double),  { id::Eq, id::Ord, id::Num, id::Floating, id::Signed });
 
-    charType      = addType(name::Char,   LLVM_TYPE(Int8), { "Eq", "Ord" });
+    charType      = addType(id::Char,   LLVM_TYPE(Int8), { id::Eq, id::Ord });
 }
 
 #undef LLVM_TYPE
@@ -142,8 +142,10 @@ TypeInstPtr TypeContext::constructTypeUsingAnnotationStuff(hm::TypeAnnotation& c
     return visitor.result;
 }
 
-TypeInstance* TypeContext::addType(llvm::StringLiteral name, llvm::Type* llvmType, std::vector<std::string> typeClasses)
+TypeInstance* TypeContext::addType(llvm::StringLiteral name, llvm::Type* llvmType, std::initializer_list<llvm::StringRef> typeClassesRef)
 {
+    std::vector<std::string> typeClasses;
+    for (const auto ref : typeClassesRef) { typeClasses.push_back(ref.str()); }
     auto it = types.insert({
         Identifier{ {"", name.str()}, {} },
         std::make_unique<TypeInstanceBasic>(name, llvmType, std::move(typeClasses)) });

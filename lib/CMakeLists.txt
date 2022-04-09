@@ -35,6 +35,7 @@ add_library(llfp_lib
 	include/Module.h
 	include/Parser.h
 	include/ResolveIdentifiers.h
+	include/String/StringConstants.h
 	include/Type/TypeContext.h
 	include/Type/TypeInference.h
 	include/Type/TypeInstance.h

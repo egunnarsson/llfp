@@ -1,5 +1,6 @@
 
 #include "Error.h"
+#include "String/StringConstants.h"
 
 #include "Type/TypeInference.h"
 
@@ -557,7 +558,7 @@ void Annotator::visit(ast::IfExp& exp)
     exp.elseExp->accept(this);
 
     auto &expTV = result[&exp] = makeVar();
-    add({ exp.condition->location, (tv(exp.condition)), makeConst("bool") });
+    add({ exp.condition->location, (tv(exp.condition)), makeConst(id::Bool) });
     add({ exp.thenExp->location, expTV, (tv(exp.thenExp)) });
     add({ exp.elseExp->location, expTV, (tv(exp.elseExp)) });
 }
@@ -573,11 +574,11 @@ void PatternTypeVisitor::visit(Annotator& annotator, ast::Pattern& pattern)
     pattern.accept(&visitor);
 }
 
-void PatternTypeVisitor::visit(ast::BoolPattern& pattern)    { add(pattern, annotator.makeConst("bool")); }
-void PatternTypeVisitor::visit(ast::IntegerPattern& pattern) { add(pattern, annotator.makeClass("Num")); }
-void PatternTypeVisitor::visit(ast::FloatPattern& pattern)   { add(pattern, annotator.makeClass("Floating")); }
-void PatternTypeVisitor::visit(ast::CharPattern& pattern)    { add(pattern, annotator.makeConst("char")); }
-void PatternTypeVisitor::visit(ast::StringPattern& pattern)  { add(pattern, annotator.makeConst("string")); }
+void PatternTypeVisitor::visit(ast::BoolPattern& pattern)    { add(pattern, annotator.makeConst(id::Bool)); }
+void PatternTypeVisitor::visit(ast::IntegerPattern& pattern) { add(pattern, annotator.makeClass(id::Num)); }
+void PatternTypeVisitor::visit(ast::FloatPattern& pattern)   { add(pattern, annotator.makeClass(id::Floating)); }
+void PatternTypeVisitor::visit(ast::CharPattern& pattern)    { add(pattern, annotator.makeConst(id::Char)); }
+void PatternTypeVisitor::visit(ast::StringPattern& pattern)  { add(pattern, annotator.makeConst(id::String)); }
 
 void PatternTypeVisitor::visit(ast::IdentifierPattern& pattern)
 {
@@ -630,34 +631,34 @@ void Annotator::visit(ast::BinaryExp& exp)
         exp.op == "<"  ||
         exp.op == "<=")
     {
-        result[&exp] = makeConst("bool");
-        add({ exp.location, makeClass("Ord"), tv(exp.lhs) });
-        add({ exp.location, makeClass("Ord"), tv(exp.rhs) });
+        result[&exp] = makeConst(id::Bool);
+        add({ exp.location, makeClass(id::Ord), tv(exp.lhs) });
+        add({ exp.location, makeClass(id::Ord), tv(exp.rhs) });
         add({ exp.location, tv(exp.lhs), tv(exp.rhs) });
     }
     else if (exp.op == "==" || exp.op == "!=")
     {
-        result[&exp] = makeConst("bool");
-        add({ exp.location, makeClass("Eq"), tv(exp.lhs) });
-        add({ exp.location, makeClass("Eq"), tv(exp.rhs) });
+        result[&exp] = makeConst(id::Bool);
+        add({ exp.location, makeClass(id::Eq), tv(exp.lhs) });
+        add({ exp.location, makeClass(id::Eq), tv(exp.rhs) });
         add({ exp.location, tv(exp.lhs), tv(exp.rhs) });
     }
     else
     {
         TypePtr expTV;
-        if (exp.op == "*") { expTV = makeClass("Num"); }
-        else if (exp.op == "/") { expTV = makeClass("Num"); }
-        else if (exp.op == "%") { expTV = makeClass("Num"); }
-        else if (exp.op == "+") { expTV = makeClass("Num"); }
-        else if (exp.op == "-") { expTV = makeClass("Num"); }
-        else if (exp.op == "<<") { expTV = makeClass("Integer"); }
-        else if (exp.op == ">>") { expTV = makeClass("Integer"); }
-        else if (exp.op == ">>>") { expTV = makeClass("Integer"); }
-        else if (exp.op == "&") { expTV = makeClass("Integer"); }
-        else if (exp.op == "|") { expTV = makeClass("Integer"); }
-        else if (exp.op == "^") { expTV = makeClass("Integer"); }
-        else if (exp.op == "&&") { expTV = makeConst("bool"); }
-        else if (exp.op == "||") { expTV = makeConst("bool"); }
+        if (exp.op == "*") { expTV = makeClass(id::Num); }
+        else if (exp.op == "/") { expTV = makeClass(id::Num); }
+        else if (exp.op == "%") { expTV = makeClass(id::Num); }
+        else if (exp.op == "+") { expTV = makeClass(id::Num); }
+        else if (exp.op == "-") { expTV = makeClass(id::Num); }
+        else if (exp.op == "<<") { expTV = makeClass(id::Integer); }
+        else if (exp.op == ">>") { expTV = makeClass(id::Integer); }
+        else if (exp.op == ">>>") { expTV = makeClass(id::Integer); }
+        else if (exp.op == "&") { expTV = makeClass(id::Integer); }
+        else if (exp.op == "|") { expTV = makeClass(id::Integer); }
+        else if (exp.op == "^") { expTV = makeClass(id::Integer); }
+        else if (exp.op == "&&") { expTV = makeConst(id::Bool); }
+        else if (exp.op == "||") { expTV = makeConst(id::Bool); }
         else { assert(false); }
 
         result[&exp] = expTV;
@@ -671,9 +672,9 @@ void Annotator::visit(ast::UnaryExp& exp)
     exp.operand->accept(this);
 
     TypePtr expTV;
-    if (exp.op == "-") { expTV = makeClass("Signed"); }
-    else if (exp.op == "!") { expTV = makeConst("bool"); }
-    else if (exp.op == "~") { expTV = makeClass("Integer"); }
+    if (exp.op == "-") { expTV = makeClass(id::Signed); }
+    else if (exp.op == "!") { expTV = makeConst(id::Bool); }
+    else if (exp.op == "~") { expTV = makeClass(id::Integer); }
 
     result[&exp] = expTV;
     add({ exp.location, expTV, (tv(exp.operand)) });
@@ -686,14 +687,14 @@ void Annotator::visit(ast::LiteralExp& exp)
     {
     case lex::Token::Integer:
         if (exp.value.front() == '-')
-            { expTV = makeClass("Signed"); }
+            { expTV = makeClass(id::Signed); }
         else
-            { expTV = makeClass("Num"); }
+            { expTV = makeClass(id::Num); }
         break;
-    case lex::Token::Float:  expTV = makeClass("Floating"); break;
-    case lex::Token::Char:   expTV = makeConst("char"); break;
-    case lex::Token::String: expTV = makeConst("string"); break;
-    case lex::Token::Bool:   expTV = makeConst("bool"); break;
+    case lex::Token::Float:  expTV = makeClass(id::Floating); break;
+    case lex::Token::Char:   expTV = makeConst(id::Char); break;
+    case lex::Token::String: expTV = makeConst(id::String); break;
+    case lex::Token::Bool:   expTV = makeConst(id::Bool); break;
     default:
         assert(false);
         break;
@@ -783,13 +784,14 @@ TypePtr Annotator::makeVar()
     return std::make_shared<TypeVar>(current++);
 }
 
-TypePtr Annotator::makeConst(std::string s)
+TypePtr Annotator::makeConst(llvm::StringRef stringRef)
 {
-    auto it = typeConstants.find(s);
+    std::string str{ stringRef.str() };
+    auto it = typeConstants.find(str);
     if (it == typeConstants.end())
     {
-        auto &constant = typeConstants[s];
-        constant = std::make_shared<TypeConstant>(std::move(s));
+        auto &constant = typeConstants[str];
+        constant = std::make_shared<TypeConstant>(std::move(str));
         return constant;
     }
     else
@@ -798,10 +800,10 @@ TypePtr Annotator::makeConst(std::string s)
     }
 }
 
-TypePtr Annotator::makeClass(std::string s)
+TypePtr Annotator::makeClass(llvm::StringRef stringRef)
 {
     auto ptr = std::make_shared<TypeVar>(current++);
-    ptr->typeClasses.insert(std::move(s));
+    ptr->typeClasses.insert(stringRef.str());
     return ptr;
 }
 

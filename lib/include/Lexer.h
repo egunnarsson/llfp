@@ -173,6 +173,8 @@ public:
         case Token::Else: return "else";
         case Token::Let: return "let";
         case Token::In: return "in";
+        case Token::Case: return "case";
+        case Token::Of: return "of";
         case Token::Operator: return "operator";
         case Token::Colon: return "colon";
         case Token::Semicolon: return "semicolon";

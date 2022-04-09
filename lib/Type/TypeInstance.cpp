@@ -33,7 +33,7 @@ bool isPrimitive(const ast::TypeIdentifier& id)
 {
     if (id.parameters.empty() && id.identifier.moduleName.empty())
     {
-        for (auto& type : name::AllTypes)
+        for (auto& type : AllTypes)
         {
             if (type == id.identifier.name)
             {
@@ -48,7 +48,7 @@ bool isPrimitive(const Identifier& id)
 {
     if (id.parameters.empty() && id.name.moduleName.empty())
     {
-        for (auto& type : name::AllTypes)
+        for (auto& type : AllTypes)
         {
             if (type == id.name.name)
             {
@@ -114,27 +114,27 @@ TypeInstPtr TypeInstance::getTypeParameter(int) const
 
 bool TypeInstance::isNum() const
 {
-    return llfp::contains(typeClasses, std::string{ "Num" });
+    return llfp::contains(typeClasses, std::string{ id::Num });
 }
 
 bool TypeInstance::isInteger() const
 {
-    return llfp::contains(typeClasses, std::string{ "Integer" });
+    return llfp::contains(typeClasses, std::string{ id::Integer });
 }
 
 bool TypeInstance::isBool() const
 {
-    return checkBasicType(identifier_, "bool");
+    return checkBasicType(identifier_, id::Bool);
 }
 
 bool TypeInstance::isFloating() const
 {
-    return llfp::contains(typeClasses, std::string{ "Floating" });
+    return llfp::contains(typeClasses, std::string{ id::Floating });
 }
 
 bool TypeInstance::isSigned()const
 {
-    return llfp::contains(typeClasses, std::string{ "Signed" });
+    return llfp::contains(typeClasses, std::string{ id::Signed });
 }
 
 unsigned int TypeInstance::getFieldIndex(const std::string&) const

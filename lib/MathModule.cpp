@@ -4,6 +4,7 @@
 #include "GlobalContext.h"
 #include "Parser.h"
 #include "Type/TypeInstance.h"
+#include "String/StringConstants.h"
 
 #include "MathModule.h"
 
@@ -58,11 +59,11 @@ class Fractional a
 
 )x";
 
-void addInstance(const std::unique_ptr<ast::Module>& astModule, const std::unique_ptr<ast::Class>& classPtr, std::string type)
+void addInstance(const std::unique_ptr<ast::Module>& astModule, const std::unique_ptr<ast::Class>& classPtr, llvm::StringRef type)
 {
     auto location = classPtr->location;
     auto classIdentifier = GlobalIdentifier{ "math", classPtr->name };
-    auto typeArgument = ast::TypeIdentifier{ {"", std::move(type)}, {} };
+    auto typeArgument = ast::TypeIdentifier{ {"", type.str()}, {} };
 
     std::vector<std::unique_ptr<ast::Function>> functions;
     for (auto& function: classPtr->functions)
@@ -91,16 +92,16 @@ MathModule::MathModule()
 
     for (auto& classPtr : astModule->classes)
     {
-        if (classPtr->name == "Signed")
+        if (classPtr->name == id::Signed)
         {
-            //addInstance(astModule, classPtr, "i8");
-            //addInstance(astModule, classPtr, "i16");
-            addInstance(astModule, classPtr, "i32");
-            addInstance(astModule, classPtr, "i64");
-            //addInstance(astModule, classPtr, "i128");
+            //addInstance(astModule, classPtr, id::I8);
+            //addInstance(astModule, classPtr, id::I16);
+            addInstance(astModule, classPtr, id::I32);
+            addInstance(astModule, classPtr, id::I64);
+            //addInstance(astModule, classPtr, id::I128);
         }
-        addInstance(astModule, classPtr, "float");
-        addInstance(astModule, classPtr, "double");
+        addInstance(astModule, classPtr, id::Float);
+        addInstance(astModule, classPtr, id::Double);
     }
 }
 
@@ -155,8 +156,8 @@ std::string MathModule::getMangledName(const ast::Function* function, const std:
 {
     assert(types.size() <= 2 && types.size() > 0);
     auto& typeName = types[0]->identifier().name.name;
-    const bool isFloat = typeName == "float";
-    const bool isInt32 = typeName == "i32";
+    const bool isFloat = typeName == id::Float;
+    const bool isInt32 = typeName == id::I32;
     if (function->name == "abs")
     {
         if (types[0]->isFloating())

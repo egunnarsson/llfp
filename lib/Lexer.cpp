@@ -2,6 +2,7 @@
 // https://rosettacode.org/wiki/Compiler/lexical_analyzer
 
 #include "Error.h"
+#include "String/StringConstants.h"
 
 #include "Lexer.h"
 
@@ -227,33 +228,33 @@ Token Lexer::parseIdentifier()
         tokenString += static_cast<char>(lastChar);
 
     // TODO: change to switch or map
-    if (tokenString == "module")
+    if (tokenString == id::Module)
         return Token::Module;
-    if (tokenString == "import")
+    if (tokenString == id::Import)
         return Token::Import;
-    if (tokenString == "export")
+    if (tokenString == id::Export)
         return Token::Export;
-    if (tokenString == "data")
+    if (tokenString == id::Data)
         return Token::Data;
-    if (tokenString == "class")
+    if (tokenString == id::Class)
         return Token::Class;
-    if (tokenString == "instance")
+    if (tokenString == id::Instance)
         return Token::Instance;
-    if (tokenString == "if")
+    if (tokenString == id::If)
         return Token::If;
-    if (tokenString == "then")
+    if (tokenString == id::Then)
         return Token::Then;
-    if (tokenString == "else")
+    if (tokenString == id::Else)
         return Token::Else;
-    if (tokenString == "let")
+    if (tokenString == id::Let)
         return Token::Let;
-    if (tokenString == "in")
+    if (tokenString == id::In)
         return Token::In;
-    if (tokenString == "case")
+    if (tokenString == id::Case)
         return Token::Case;
-    if (tokenString == "of")
+    if (tokenString == id::Of)
         return Token::Of;
-    if (tokenString == "true" || tokenString == "false")
+    if (tokenString == id::True || tokenString == id::False)
         return Token::Bool;
 
     return Token::Identifier;

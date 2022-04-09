@@ -12,6 +12,7 @@
 #include "Ast.h"
 #include "Lexer.h"
 #include "Log.h"
+#include "String/StringConstants.h"
 
 #include "Parser.h"
 
@@ -803,13 +804,13 @@ std::unique_ptr<ast::Pattern> Parser::parsePattern()
         case lex::Token::Char:    return std::make_unique<ast::CharPattern>(location, std::move(string));
         case lex::Token::String:  return std::make_unique<ast::StringPattern>(location, std::move(string));
         case lex::Token::Bool:
-            if (string == "true")
+            if (string == id::True)
             {
                 return std::make_unique<ast::BoolPattern>(location, true);
             }
             else
             {
-                assert(string == "false");
+                assert(string == id::False);
                 return std::make_unique<ast::BoolPattern>(location, false);
             }
         default: return error<ast::Pattern>("expected a pattern");

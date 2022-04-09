@@ -25,6 +25,7 @@ is it ok to fix the type in these cases?
 #include "Ast.h"
 #include "Common/GlobalIdentifier.h"
 #include "Type/TypeInstance.h"
+#include "String/StringConstants.h"
 
 
 namespace llfp
@@ -37,65 +38,13 @@ class GlobalContext;
 namespace type
 {
 
-// names of built in primitive types
-namespace name
-{
-
-#define TypeID(id, name) constexpr llvm::StringLiteral id{name};
-
-TypeID(Bool, "bool");
-
-TypeID(I8, "i8");
-TypeID(I16,"i16");
-TypeID(I32, "i32");
-TypeID(I64, "i64");
-TypeID(I128, "i128");
-
-TypeID(U8, "u8");
-TypeID(U16, "u16");
-TypeID(U32, "u32");
-TypeID(U64, "u64");
-TypeID(U128, "u128");
-
-TypeID(Half, "half");
-TypeID(Float, "float");
-TypeID(Double, "double");
-
-TypeID(Char, "char");
-
-#undef TypeID
-
-constexpr llvm::StringLiteral AllTypes[] {
-    Bool,
-    I8, I16, I32, I64, I128,
-    U8, U16, U32, U64, U128,
-    Half, Float, Double,
-    Char
+inline constexpr llvm::StringLiteral AllTypes[] {
+    id::Bool,
+    id::I8, id::I16, id::I32, id::I64, id::I128,
+    id::U8, id::U16, id::U32, id::U64, id::U128,
+    id::Half, id::Float, id::Double,
+    id::Char
 };
-
-} // namespace name
-
-/*
-namespace typeclass
-{
-
-// Num
-// Integer
-// Bool
-// Signed
-// Floating
-
-}
-
-enum TypeClass
-{
-    Num,
-    Fractional,
-    Eq,
-    Ord,
-    Bits
-};
-*/
 
 class TypeContext
 {
@@ -139,7 +88,7 @@ public:
 
 private:
 
-    TypeInstance* addType(llvm::StringLiteral name, llvm::Type* llvmType, std::vector<std::string> typeClasses);
+    TypeInstance* addType(llvm::StringLiteral name, llvm::Type* llvmType, std::initializer_list<llvm::StringRef> typeClasses);
 };
 
 } // namespace type

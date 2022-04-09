@@ -16,6 +16,7 @@
 #include "Error.h"
 #include "Log.h"
 #include "Module.h"
+#include "String/StringConstants.h"
 
 #include "Codegen.h"
 
@@ -610,7 +611,7 @@ public:
 
     void visit(ast::ConstructorPattern& pattern) override
     {
-        const unsigned int count = pattern.arguments.size();
+        const auto count = static_cast<unsigned int>(pattern.arguments.size());
         assert(count != 0);
 
         std::vector<llvm::BasicBlock*> blocks;
@@ -713,7 +714,7 @@ bool checkNum(ast::Exp &exp, type::TypeInstPtr type)
 {
     if (!type->isNum())
     {
-        typeError(exp, type, "Num"); // TODO: TypeClass name
+        typeError(exp, type, id::Num);
         return false;
     }
     return true;
@@ -723,7 +724,7 @@ bool checkInteger(ast::Exp &exp, type::TypeInstPtr type)
 {
     if (!type->isInteger())
     {
-        typeError(exp, type, "Integer"); // TODO: TypeClass name
+        typeError(exp, type, id::Integer);
         return false;
     }
     return true;
@@ -733,7 +734,7 @@ bool checkBool(ast::Exp &exp, type::TypeInstPtr type)
 {
     if (!type->isBool())
     {
-        typeError(exp, type, "Bool"); // TODO: TypeClass name
+        typeError(exp, type, id::Bool);
         return false;
     }
     return true;
@@ -870,7 +871,7 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
 {
     if (!expectedType->isBool())
     {
-        typeError(exp, expectedType, type::name::Bool);
+        typeError(exp, expectedType, id::Bool);
     }
     else
     {
@@ -911,7 +912,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     {
         if (!expectedType->isSigned())
         {
-            typeError(exp, expectedType, "Signed"); // TODO: TypeClass name
+            typeError(exp, expectedType, id::Signed);
         }
         else
         {
@@ -933,7 +934,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     {
         if (!expectedType->isBool())
         {
-            typeError(exp, expectedType, type::name::Bool);
+            typeError(exp, expectedType, id::Bool);
         }
         else
         {
@@ -948,7 +949,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     {
         if (!expectedType->isInteger())
         {
-            typeError(exp, expectedType, "Integer"); // TODO: TypeClass name
+            typeError(exp, expectedType, id::Integer);
         }
         else
         {
@@ -985,7 +986,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
         }
         else
         {
-            typeError(exp, expectedType, "Num"); // TODO: TypeClass name
+            typeError(exp, expectedType, id::Num);
         }
         break;
 
@@ -993,7 +994,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
         if (!expectedType->isFloating())
         {
-            typeError(exp, expectedType, "Floating"); // TODO: TypeClass name
+            typeError(exp, expectedType, id::Floating);
         }
         else
         {
@@ -1003,9 +1004,9 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
     case lex::Token::Char:
 
-        if (!getTypeContext()->equals(expectedType, type::name::Char))
+        if (!getTypeContext()->equals(expectedType, id::Char))
         {
-            typeError(exp, expectedType, type::name::Char);
+            typeError(exp, expectedType, id::Char);
         }
         else
         {
@@ -1023,15 +1024,15 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
 
         if (!expectedType->isBool())
         {
-            typeError(exp, expectedType, type::name::Bool);
+            typeError(exp, expectedType, id::Bool);
         }
         else
         {
-            if (exp.value == "true")
+            if (exp.value == id::True)
             {
                 result = llvm::ConstantInt::getTrue(llvmContext());
             }
-            else if (exp.value == "false")
+            else if (exp.value == id::False)
             {
                 result = llvm::ConstantInt::getFalse(llvmContext());
             }

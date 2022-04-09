@@ -19,6 +19,12 @@ constructor? possible typevars?
 #include <string>
 #include <vector>
 
+#pragma warning(push, 0)
+
+#include <llvm/ADT/StringRef.h>
+
+#pragma warning(pop)
+
 #include "Ast.h"
 
 
@@ -294,8 +300,8 @@ public:
 private:
 
     TypePtr    makeVar();
-    TypePtr    makeConst(std::string s);
-    TypePtr    makeClass(std::string s);
+    TypePtr    makeConst(llvm::StringRef s);
+    TypePtr    makeClass(llvm::StringRef s);
     FunTypePtr makeFunction(std::vector<TypePtr> types);
 
     TypePtr    tv(const std::string& name);

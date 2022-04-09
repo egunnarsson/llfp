@@ -23,26 +23,26 @@ namespace
 std::string convertType(llfp::SourceModule &module, GlobalIdentifier& type)
 {
     static std::unordered_map<std::string, llvm::StringRef> map {
-        {type::name::Bool.str(), "bool"},
+        {id::Bool.str(), "bool"},
 
-        {type::name::I8.str(), "int8_t"},
-        {type::name::I16.str(), "int16_t"},
-        {type::name::I32.str(), "int32_t"},
-        {type::name::I64.str(), "int64_t"},
-        // {type::name::I128, "i128"}, // unsupported
+        {id::I8.str(), "int8_t"},
+        {id::I16.str(), "int16_t"},
+        {id::I32.str(), "int32_t"},
+        {id::I64.str(), "int64_t"},
+        // {id::I128, "i128"}, // unsupported
 
-        {type::name::U8.str(), "uint8_t"},
-        {type::name::U16.str(), "uint16_t"},
-        {type::name::U32.str(), "uint32_t"},
-        {type::name::U64.str(), "uint64_t"},
-        // {type::name::U128, "u128"}, // unsupported
+        {id::U8.str(), "uint8_t"},
+        {id::U16.str(), "uint16_t"},
+        {id::U32.str(), "uint32_t"},
+        {id::U64.str(), "uint64_t"},
+        // {id::U128, "u128"}, // unsupported
 
-        // {type::name::Half, "half"}, // unsupported
-        {type::name::Float.str(), "float"},
-        {type::name::Double.str(), "double"},
+        // {id::Half, "half"}, // unsupported
+        {id::Float.str(), "float"},
+        {id::Double.str(), "double"},
         // long double usually 80 bit?
 
-        {type::name::Char.str(), "unsigned char"},
+        {id::Char.str(), "unsigned char"},
     };
 
     if (type.moduleName.empty())
