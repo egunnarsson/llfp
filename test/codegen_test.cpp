@@ -139,6 +139,52 @@ TEST(CodegenTest, DataConstructor)
     EXPECT_EQ(compileError(M"data d[a]{a x; a y;}\nexport i32 f1() = d{1,true}.x;"),   "string(3,23): failed to unify types, '@IntegerLiteral' with 'bool'\n");
 }
 
+struct D
+{
+    int64_t x;
+    int64_t y;
+    int64_t z;
+    int64_t w;
+    int64_t k;
+};
+
+//https://www.agner.org/optimize/calling_conventions.pdf
+TEST(CodegenTest, DataArguments)
+{
+    LLVMInitializeNativeAsmPrinter();
+    LLVMInitializeNativeAsmParser();
+
+    llvm::ExitOnError check;
+    std::unique_ptr<llfp::JIT> jit = check(llfp::JIT::Create());
+
+    auto m = compile(M
+        "data d{i64 x; i64 y; i64 z; i64 w; i64 k;}\n"
+        "i64 foo(d x) = x.x + 1;\n"
+        "export i64 bar(d x) = foo(x);\n"
+        "export d baz(d x) = d{x.x + x.y + x.z + x.w + x.k, 1, 2, 3, 4};\n");
+    m.at(0).llvmModule->setDataLayout(jit->getDataLayout());
+
+    auto RT = jit->getMainJITDylib().createResourceTracker();
+    auto TSM = llvm::orc::ThreadSafeModule(std::move(m[0].llvmModule), std::move(m[0].llvmContext));
+    check(jit->addModule(std::move(TSM), RT));
+
+    auto barSym = check(jit->lookup("m_bar"));
+    auto* barFP = (int64_t(*)(const D*))(intptr_t)barSym.getAddress();
+    D arg{ 1, 2, 3, 4, 5 };
+    auto barResult = barFP(&arg);
+    EXPECT_EQ(barResult, 2);
+
+    auto bazSym = check(jit->lookup("m_baz"));
+    auto* bazFP = (void(*)(D*, const D*))(intptr_t)bazSym.getAddress();
+    D bazResult{};
+    bazFP(&bazResult, &arg);
+    EXPECT_EQ(bazResult.x, 1 + 2 + 3 + 4 + 5);
+    EXPECT_EQ(bazResult.y, 1);
+    EXPECT_EQ(bazResult.z, 2);
+    EXPECT_EQ(bazResult.w, 3);
+    EXPECT_EQ(bazResult.k, 4);
+}
+
 TEST(CodegenTest, Arithmetic)
 {
     LLVMInitializeNativeAsmPrinter();
@@ -277,7 +323,7 @@ TEST(CodegenTest, TypeClass)
     auto result = compile(
         M"class C a {a f(a);}\n"
         "instance C i32 {i32 f(i32 x) = 1;}\n"
-        "export i32 foo() = f(2);");
+        "export i32 foo() = f(2);"); // We manage to find the instance type because the return type... and when we have the instance everything is fully qualified
     ASSERT_NE(result[0].llvmModule, nullptr);
     auto llvm = result[0].llvmModule.get();
     auto func = llvm->getFunction("m:f$i32$i32");
@@ -330,6 +376,27 @@ TEST(CodegenTest, Scope)
         "   else\n"
         "       y + 1;"),
         "string(7,8): undefined function \"y\"\n");
+}
+
+TEST(CodegenTest, MathModule)
+{
+    auto m = compile(M
+        "import math;\n"
+        "export float foo(float x, float y) = sin(x) + cos(y);\n");
+
+    LLVMInitializeNativeAsmPrinter();
+    LLVMInitializeNativeAsmParser();
+
+    llvm::ExitOnError check;
+    std::unique_ptr<llfp::JIT> jit = check(llfp::JIT::Create());
+
+    m[0].llvmModule->setDataLayout(jit->getDataLayout());
+    auto RT = jit->getMainJITDylib().createResourceTracker();
+    auto TSM = llvm::orc::ThreadSafeModule(std::move(m[0].llvmModule), std::move(m[0].llvmContext));
+    check(jit->addModule(std::move(TSM), RT));
+
+    double result = call<float, float, float>(jit, "m_foo", 1, 1); // 0.8414709848 + 0.54030230586 = 1.38177329066
+    EXPECT_NEAR(result, 1.3817732, 0.0000001);
 }
 
 /*
