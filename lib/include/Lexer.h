@@ -205,7 +205,7 @@ private:
     Token parseNumber();
     Token parseChar();
     Token parseString();
-    Token parseOperator();
+    Token parseOperator(bool continuation = false);
     Token parseComment();
 };
 

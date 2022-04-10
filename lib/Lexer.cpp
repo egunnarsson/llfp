@@ -290,7 +290,11 @@ Token Lexer::parseNumber()
         }
         if (tokenString == ".")
         {
-            return Token::Operator; // should continue parsing operator... even though there are no operators starting with '.'
+            if (isoperator(lastChar))
+            {
+                return parseOperator(true);
+            }
+            return Token::Operator;
         }
         else
         {
@@ -372,9 +376,14 @@ Token Lexer::parseString()
     return Token::String;
 }
 
-Token Lexer::parseOperator()
+Token Lexer::parseOperator(bool continuation)
 {
-    tokenString = static_cast<char>(lastChar);
+    if (!continuation)
+    {
+        tokenString.clear();
+    }
+
+    tokenString += static_cast<char>(lastChar);
 
     while (isoperator(lastChar = input->getChar()))
     {
