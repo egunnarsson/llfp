@@ -220,7 +220,7 @@ bool Parser::parseDeclaration(const std::unique_ptr<ast::Module> &module)
         break;
 
     case lex::Token::Identifier:
-        if (auto function = parseFunction(exported))
+        if (auto function = parseFunction(exported ? FunctionType::Exported : FunctionType::Internal))
         {
             module->functions.push_back(std::move(function));
             return true;
@@ -291,7 +291,7 @@ std::unique_ptr<ast::Data> Parser::parseData(bool exported)
 }
 
 // [ <tid> ] <id> [ "(" [ { <arg> "," } <arg> ] ")" ] "=" <exp> ";"
-std::unique_ptr<ast::Function> Parser::parseFunction(bool exported)
+std::unique_ptr<ast::Function> Parser::parseFunction(FunctionType funType)
 {
     auto location = lexer->getLocation();
 
@@ -301,11 +301,12 @@ std::unique_ptr<ast::Function> Parser::parseFunction(bool exported)
     {
         return error<ast::Function>("expected an identifier"); // TODO: bad error when "t[] f() = 1;"
     }
-    std::string identifier;
 
+    std::string identifier;
     if (lexer->getToken() != lex::Token::Identifier)
     {
-        if (type.identifier.moduleName.empty() &&
+        if (funType != FunctionType::Instance &&
+            type.identifier.moduleName.empty() &&
             type.parameters.empty())
         {
             identifier = std::move(type.identifier.name);
@@ -377,6 +378,7 @@ std::unique_ptr<ast::Function> Parser::parseFunction(bool exported)
 
     if (!expect(lex::Token::Semicolon)) { return nullptr; }
 
+    const bool exported = funType == FunctionType::Exported;
     return std::make_unique<ast::Function>(
         location,
         std::move(identifier),
@@ -452,7 +454,7 @@ std::unique_ptr<ast::ClassInstance> Parser::parseInstance()
     std::vector<std::unique_ptr<ast::Function>> functions;
     while (true)
     {
-        auto fun = parseFunction(false);
+        auto fun = parseFunction(FunctionType::Instance);
         if (fun == nullptr) { return nullptr; }
         functions.push_back(std::move(fun));
 
@@ -666,7 +668,7 @@ std::unique_ptr<ast::Exp> Parser::parseLetExp()
     std::vector<std::unique_ptr<ast::Function>> declarations;
     while (true)
     {
-        auto declaration = parseFunction(false);
+        auto declaration = parseFunction(FunctionType::Internal);
         if (!declaration)
         {
             return nullptr;

@@ -712,7 +712,7 @@ TEST(ParserTest, InstanceDeclaration)
     EXPECT_EQ(ParseError(M"instance a b {t f();}"),       "string(2,20): expected 'equal'\n");
     EXPECT_EQ(ParseError(M"instance a b {f() = 1;}"),     "string(2,16): expected an identifier\n");
     EXPECT_EQ(ParseError(M"instance a {t f() = 1;}"),     "string(2,12): expected an identifier\n");
-    EXPECT_EQ(ParseError(M"instance a b {t x:f() = 1;}"), "string(2,18): expected 'parenthesis'\n");
+    EXPECT_EQ(ParseError(M"instance a b {t x:f() = 1;}"), "string(2,18): expected 'equal'\n");
 }
 
 TEST(ParserTest, Comments)

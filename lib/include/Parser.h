@@ -33,6 +33,13 @@ public:
 
 private:
 
+    enum class FunctionType
+    {
+        Internal,
+        Exported,
+        Instance
+    };
+
     template<class T>
     std::unique_ptr<T>        error(const char *msg);
     bool                      expect(lex::Token token);
@@ -44,7 +51,7 @@ private:
     bool                      parseDeclaration(const std::unique_ptr<ast::Module> &module);
 
     std::unique_ptr<ast::Data>                parseData(bool exported);
-    std::unique_ptr<ast::Function>            parseFunction(bool exported);
+    std::unique_ptr<ast::Function>            parseFunction(FunctionType funType);
     std::unique_ptr<ast::Class>               parseClass();
     std::unique_ptr<ast::ClassInstance>       parseInstance();
     std::unique_ptr<ast::FunctionDeclaration> parseFunctionDeclaration();
