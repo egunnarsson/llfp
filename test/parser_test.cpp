@@ -493,6 +493,34 @@ TEST(ParserTest, LetExp)
                         MakeInteger({0,0}, "2"))},
                     MakeInteger({0,0}, "3"))) }));
 
+    // nested
+    EXPECT_EQ(Parse(M"f = let\n"
+    "       x = 1;\n"
+    "       y = let\n"
+    "               a = 2;\n"
+    "           in 3;\n"
+    "    in let\n"
+    "           z = let\n"
+    "                   b = 4;\n"
+    "               in 5;\n"
+    "           w = 6;\n"
+    "       in 7;\n"),
+        ModulePtr().functions({
+            MakeFunction({0,0}, Local, "f", "", {},
+                MakeLet({0,0}, {
+                    MakeFunction({0,0}, Local, "x", "", {}, MakeInteger({0,0}, "1")),
+                    MakeFunction({0,0}, Local, "y", "", {},
+                        MakeLet({0,0}, {
+                            MakeFunction({0,0}, Local, "a", "", {}, MakeInteger({0,0}, "2"))},
+                        MakeInteger({0,0}, "3"))) },
+                MakeLet({0,0}, {
+                    MakeFunction({0,0}, Local, "z", "", {},
+                        MakeLet({0,0}, {
+                            MakeFunction({0,0}, Local, "b", "", {}, MakeInteger({0,0}, "4"))},
+                        MakeInteger({0,0}, "5"))),
+                    MakeFunction({0,0}, Local, "w", "", {}, MakeInteger({0,0}, "6")) },
+                MakeInteger({0,0}, "7")))) }));
+
     // negative
     EXPECT_EQ(ParseError(M"f = let x = 1; 2;"),          "string(2,16): expected an identifier\n");
     EXPECT_EQ(ParseError(M"f = let x = 1; y 2;"),        "string(2,18): expected 'equal'\n");
@@ -523,7 +551,8 @@ TEST(ParserTest, CaseExp)
         "   1.1   -> 4,\n"
         "   'a'   -> 5,\n"
         "   \"s\" -> 6,\n"
-        "   c{9}  -> 7;\n"),
+        "   c{9}  -> 7\n"
+        "end;\n"),
         ModulePtr().functions({
             MakeFunction({0,0}, Local, "f", "", {},
                 MakeCase({0,0}, MakeInteger({0,0}, "0"),
@@ -536,6 +565,30 @@ TEST(ParserTest, CaseExp)
                         Clause{MakeStringPattern({0,0}, "s"),     MakeInteger({0,0}, "6")},
                         Clause{MakeConstructorPattern({0,0}, {"","c"}, { NamedArgumentPattern({0,0}, "", MakeIntegerPattern({0,0}, "9")) }), MakeInteger({0,0}, "7")}
                     })) }) );
+
+    // nested
+    EXPECT_EQ(Parse(
+        M"f = "
+        "   case x of\n"
+        "       1 ->\n"
+        "           case y of\n"
+        "               2 -> 3,\n"
+        "               4 -> 5\n"
+        "           end,\n"
+        "       6 -> 7\n"
+        "   end;\n"),
+        ModulePtr().functions({
+            MakeFunction({0,0}, Local, "f", "", {},
+                MakeCase({0,0}, MakeVariable({0,0}, "", "x"), {
+                        Clause{ MakeIntegerPattern({0,0}, "1"),
+                            MakeCase({0,0}, MakeVariable({0,0}, "", "y"), {
+                                Clause{ MakeIntegerPattern({0,0}, "2"),
+                                    MakeInteger({0,0}, "3")},
+                                Clause{ MakeIntegerPattern({0,0}, "4"),
+                                    MakeInteger({0,0}, "5")}}) },
+                        Clause{ MakeIntegerPattern({0,0}, "6"),
+                            MakeInteger({0,0}, "7") }
+                    })) }));
 }
 
 TEST(ParserTest, BinaryExp)

@@ -54,6 +54,7 @@ Constant(Let, "let");
 Constant(In, "in");
 Constant(Case, "case");
 Constant(Of, "of");
+Constant(End, "end");
 Constant(True, "true");
 Constant(False, "false");
 

@@ -254,6 +254,8 @@ Token Lexer::parseIdentifier()
         return Token::Case;
     if (tokenString == id::Of)
         return Token::Of;
+    if (tokenString == id::End)
+        return Token::End;
     if (tokenString == id::True || tokenString == id::False)
         return Token::Bool;
 

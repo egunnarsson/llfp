@@ -45,6 +45,7 @@ enum class Token
     In,
     Case,
     Of,
+    End,
 
     Operator,
     Colon,
@@ -175,6 +176,7 @@ public:
         case Token::In: return "in";
         case Token::Case: return "case";
         case Token::Of: return "of";
+        case Token::End: return "end";
         case Token::Operator: return "operator";
         case Token::Colon: return "colon";
         case Token::Semicolon: return "semicolon";

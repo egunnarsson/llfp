@@ -14,7 +14,9 @@ auto Parse(const char* string)
     auto lexer = llfp::lex::Lexer(&input);
     auto parser = llfp::parse::Parser(&lexer);
     auto astPtr = parser.parse();
+    if (!astPtr) { throw 0; }
     auto modulePtr = llfp::SourceModule::create(std::move(astPtr));
+    if (!modulePtr) { throw 0; }
     llfp::resolveIdentifiers(*modulePtr);
     return modulePtr;
 }
@@ -49,7 +51,7 @@ std::string ParseError(const char* string)
 
 TEST(TypeTest, CaseExp)
 {
-    auto modulePtr = Parse("module m(f); f(b,x,y) = case b of true -> x, false -> y;");
+    auto modulePtr = Parse("module m(f); f(b,x,y) = case b of true -> x, false -> y end;");
     auto funType = Infer(*modulePtr, "f");
 
     ASSERT_NE(funType, nullptr);

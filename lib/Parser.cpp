@@ -820,7 +820,7 @@ std::unique_ptr<ast::Pattern> Parser::parsePattern()
     }
 }
 
-// "case" <exp> "of" <pattern> "->" <exp> { "," <pattern> "->" <exp> }
+// "case" <exp> "of" <pattern> "->" <exp> { "," <pattern> "->" <exp> } "end"
 std::unique_ptr<ast::Exp> Parser::parseCaseExp()
 {
     auto location = lexer->getLocation();
@@ -859,6 +859,8 @@ std::unique_ptr<ast::Exp> Parser::parseCaseExp()
             break;
         }
     }
+
+    if (!expect(lex::Token::End)) { return nullptr; }
 
     return std::make_unique<ast::CaseExp>(location, std::move(caseExp), std::move(clauses));
 }

@@ -126,6 +126,7 @@ TEST(LexerTest, Tokens)
     PARSE_TOKEN("in", Token::In, "in");
     PARSE_TOKEN("case", Token::Case, "case");
     PARSE_TOKEN("of", Token::Of, "of");
+    PARSE_TOKEN("end", Token::End, "end");
     
     PARSE_TOKEN("=", Token::Equal, "=");
     
