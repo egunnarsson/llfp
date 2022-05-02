@@ -11,8 +11,6 @@
 #include <type_traits>
 
 
-using namespace llfp::ast;
-
 // https://stackoverflow.com/questions/46737054/vectorunique-ptra-using-initialization-list
 template<class T>
 struct movable_il
@@ -29,15 +27,18 @@ std::vector<T, A> vector_from_il(std::initializer_list<movable_il<T>> il)
     return r;
 }
 
+template<class T>
+using uptr_il = std::initializer_list<movable_il<std::unique_ptr<T>>>;
+
 // So that we can print the root node properly
 struct ModulePtr
 {
-    std::unique_ptr<Module> ptr;
+    std::unique_ptr<llfp::ast::Module> ptr;
 
-    ModulePtr(std::unique_ptr<Module>&& ptr_) : ptr{ std::move(ptr_) } {}
+    ModulePtr(std::unique_ptr<llfp::ast::Module>&& ptr_) : ptr{ std::move(ptr_) } {}
     ModulePtr(llfp::SourceLocation location = { 0,0 }, std::string name = "m")
     {
-        ptr = std::make_unique<Module>(location, std::move(name));
+        ptr = std::make_unique<llfp::ast::Module>(location, std::move(name));
     }
 
     bool operator==(const ModulePtr& other) const
@@ -47,37 +48,37 @@ struct ModulePtr
         return *ptr == *other.ptr;
     }
 
-    ModulePtr& publics(std::vector<Public> f)
+    ModulePtr& publics(std::vector<llfp::ast::Public> f)
     {
         ptr->publics = std::move(f);
         return *this;
     }
 
-    ModulePtr& imports(std::vector<Import> f)
+    ModulePtr& imports(std::vector<llfp::ast::Import> f)
     {
         ptr->imports = std::move(f);
         return *this;
     }
 
-    ModulePtr& datas(std::initializer_list<movable_il<std::unique_ptr<Data>>> d)
+    ModulePtr& datas(uptr_il<llfp::ast::Data> d)
     {
         ptr->datas = vector_from_il(d);
         return *this;
     }
 
-    ModulePtr& functions(std::initializer_list<movable_il<std::unique_ptr<Function>>> funs)
+    ModulePtr& functions(uptr_il<llfp::ast::Function> funs)
     {
         ptr->functions = vector_from_il(funs);
         return *this;
     }
 
-    ModulePtr& classes(std::initializer_list<movable_il<std::unique_ptr<Class>>> c)
+    ModulePtr& classes(uptr_il<llfp::ast::Class> c)
     {
         ptr->classes = vector_from_il(c);
         return *this;
     }
 
-    ModulePtr& instances(std::initializer_list<movable_il<std::unique_ptr<ClassInstance>>> i)
+    ModulePtr& instances(uptr_il<llfp::ast::ClassInstance> i)
     {
         ptr->classInstances = vector_from_il(i);
         return *this;
@@ -104,158 +105,151 @@ std::string ParseError(const char* string)
     return testing::internal::GetCapturedStderr();
 }
 
-auto MakeTypeId(std::string moduleName, std::string name, std::vector< llfp::ast::TypeIdentifier> parameters)
+auto TypeId(std::string moduleName, std::string name, std::vector<llfp::ast::TypeIdentifier> parameters)
 {
     return llfp::ast::TypeIdentifier{ llfp::GlobalIdentifier {std::move(moduleName), std::move(name) }, std::move(parameters) };
 }
 
-auto MakeDataDecl(llfp::SourceLocation location, bool exported, std::string name, std::vector<Field> fields)
+auto DataDecl(llfp::SourceLocation location, bool exported, std::string name, std::vector<llfp::ast::Field> fields)
 {
-    return std::make_unique<Data>(location, std::move(name), std::vector<std::string>{}, std::move(fields), exported);
+    return std::make_unique<llfp::ast::Data>(location, std::move(name), std::vector<std::string>{}, std::move(fields), exported);
 }
 
-auto MakeFunction(
+auto Function(
     llfp::SourceLocation location,
     bool exported,
     std::string name,
     std::string typeName,
-    std::initializer_list<movable_il<std::unique_ptr<Parameter>>> parameters,
-    std::unique_ptr<Exp> functionBody)
+    uptr_il<llfp::ast::Parameter> parameters,
+    std::unique_ptr<llfp::ast::Exp> functionBody)
 {
-    return std::make_unique<Function>(location, std::move(name), llfp::ast::TypeIdentifier{ llfp::GlobalIdentifier{ "",  std::move(typeName) }, {} }, vector_from_il(parameters), std::move(functionBody), exported);
+    return std::make_unique<llfp::ast::Function>(location, std::move(name), llfp::ast::TypeIdentifier{ llfp::GlobalIdentifier{ "",  std::move(typeName) }, {} }, vector_from_il(parameters), std::move(functionBody), exported);
 }
 
-auto MakeFunction(
+auto Function(
     llfp::SourceLocation location,
     bool exported,
     std::string name,
     llfp::ast::TypeIdentifier typeName,
-    std::initializer_list<movable_il<std::unique_ptr<Parameter>>> parameters,
-    std::unique_ptr<Exp> functionBody)
+    uptr_il<llfp::ast::Parameter> parameters,
+    std::unique_ptr<llfp::ast::Exp> functionBody)
 {
-    return std::make_unique<Function>(location, std::move(name), std::move(typeName), vector_from_il(parameters), std::move(functionBody), exported);
+    return std::make_unique<llfp::ast::Function>(location, std::move(name), std::move(typeName), vector_from_il(parameters), std::move(functionBody), exported);
 }
 
-auto MakeParameter(llfp::SourceLocation location, std::string typeName, std::string name)
+auto Parameter(llfp::SourceLocation location, std::string typeName, std::string name)
 {
-    return std::make_unique<Parameter>(location, MakeTypeId("", std::move(typeName), {}), std::move(name));
+    return std::make_unique<llfp::ast::Parameter>(location, TypeId("", std::move(typeName), {}), std::move(name));
 }
 
-auto MakeParameter(llfp::SourceLocation location, llfp::ast::TypeIdentifier typeName, std::string name)
+auto Parameter(llfp::SourceLocation location, llfp::ast::TypeIdentifier typeName, std::string name)
 {
-    return std::make_unique<Parameter>(location, std::move(typeName), std::move(name));
+    return std::make_unique<llfp::ast::Parameter>(location, std::move(typeName), std::move(name));
 }
 
-std::unique_ptr<Exp> MakeLiteral(llfp::SourceLocation location, llfp::lex::Token tokenType, std::string value)
+std::unique_ptr<llfp::ast::Exp> Literal(llfp::SourceLocation location, llfp::lex::Token tokenType, std::string value)
 {
-    return std::make_unique<LiteralExp>(location, tokenType, std::move(value));
+    return std::make_unique<llfp::ast::LiteralExp>(location, tokenType, std::move(value));
 }
 
-std::unique_ptr<Exp> MakeInteger(llfp::SourceLocation location, std::string value)
+std::unique_ptr<llfp::ast::Exp> Integer(llfp::SourceLocation location, std::string value)
 {
-    return MakeLiteral(location, llfp::lex::Token::Integer, std::move(value));
+    return Literal(location, llfp::lex::Token::Integer, std::move(value));
 }
 
-std::unique_ptr<Exp> MakeLet(
-    llfp::SourceLocation location,
-    std::initializer_list<movable_il<std::unique_ptr<Function>>> letStatments,
-    std::unique_ptr<Exp> exp)
+std::unique_ptr<llfp::ast::Exp> Let(llfp::SourceLocation location, uptr_il<llfp::ast::Function> letStatments, std::unique_ptr<llfp::ast::Exp> exp)
 {
-    return std::make_unique<LetExp>(location, vector_from_il(letStatments), std::move(exp));
+    return std::make_unique<llfp::ast::LetExp>(location, vector_from_il(letStatments), std::move(exp));
 }
 
-std::unique_ptr<Exp> MakeIf(llfp::SourceLocation location, std::unique_ptr<Exp> condition, std::unique_ptr<Exp> thenExp, std::unique_ptr<Exp> elseExp)
+std::unique_ptr<llfp::ast::Exp> If(llfp::SourceLocation location, std::unique_ptr<llfp::ast::Exp> condition, std::unique_ptr<llfp::ast::Exp> thenExp, std::unique_ptr<llfp::ast::Exp> elseExp)
 {
-    return std::make_unique<IfExp>(location, std::move(condition), std::move(thenExp), std::move(elseExp));
+    return std::make_unique<llfp::ast::IfExp>(location, std::move(condition), std::move(thenExp), std::move(elseExp));
 }
 
-std::unique_ptr<Exp> MakeCase(llfp::SourceLocation location, std::unique_ptr<Exp> caseExp, std::initializer_list<movable_il<Clause>> clauses)
+std::unique_ptr<llfp::ast::Exp> Case(llfp::SourceLocation location, std::unique_ptr<llfp::ast::Exp> caseExp, std::initializer_list<movable_il<llfp::ast::Clause>> clauses)
 {
-    return std::make_unique<CaseExp>(location, std::move(caseExp), vector_from_il(clauses));
+    return std::make_unique<llfp::ast::CaseExp>(location, std::move(caseExp), vector_from_il(clauses));
 }
 
-std::unique_ptr<Exp> MakeBinary(llfp::SourceLocation location, std::string op, std::unique_ptr<Exp> lhs, std::unique_ptr<Exp> rhs)
+std::unique_ptr<llfp::ast::Exp> Binary(llfp::SourceLocation location, std::string op, std::unique_ptr<llfp::ast::Exp> lhs, std::unique_ptr<llfp::ast::Exp> rhs)
 {
-    return std::make_unique<BinaryExp>(location, std::move(op), std::move(lhs), std::move(rhs));
+    return std::make_unique<llfp::ast::BinaryExp>(location, std::move(op), std::move(lhs), std::move(rhs));
 }
 
-std::unique_ptr<Exp> MakeUnary(llfp::SourceLocation location, std::string op, std::unique_ptr<Exp> operand)
+std::unique_ptr<llfp::ast::Exp> Unary(llfp::SourceLocation location, std::string op, std::unique_ptr<llfp::ast::Exp> operand)
 {
-    return std::make_unique<UnaryExp>(location, std::move(op), std::move(operand));
+    return std::make_unique<llfp::ast::UnaryExp>(location, std::move(op), std::move(operand));
 }
 
-std::unique_ptr<Exp> MakeCall(
-    llfp::SourceLocation location,
-    std::string moduleName,
-    std::string name,
-    std::initializer_list<movable_il<std::unique_ptr<Exp>>> args)
+std::unique_ptr<llfp::ast::Exp> Call(llfp::SourceLocation location, std::string moduleName, std::string name, uptr_il<llfp::ast::Exp> args)
 {
-    return std::make_unique<CallExp>(location, llfp::GlobalIdentifier{ std::move(moduleName), std::move(name) }, vector_from_il(args));
+    return std::make_unique<llfp::ast::CallExp>(location, llfp::GlobalIdentifier{ std::move(moduleName), std::move(name) }, vector_from_il(args));
 }
 
-std::unique_ptr<Exp> MakeVariable(llfp::SourceLocation location, std::string moduleName, std::string name)
+std::unique_ptr<llfp::ast::Exp> Variable(llfp::SourceLocation location, std::string moduleName, std::string name)
 {
-    return std::make_unique<VariableExp>(location, llfp::GlobalIdentifier{ std::move(moduleName), std::move(name) });
+    return std::make_unique<llfp::ast::VariableExp>(location, llfp::GlobalIdentifier{ std::move(moduleName), std::move(name) });
 }
 
-std::unique_ptr<Exp> MakeField(llfp::SourceLocation location, std::unique_ptr<Exp> lhs, std::string fieldName)
+std::unique_ptr<llfp::ast::Exp> Field(llfp::SourceLocation location, std::unique_ptr<llfp::ast::Exp> lhs, std::string fieldName)
 {
-    return std::make_unique<FieldExp>(location, std::move(lhs), std::move(fieldName));
+    return std::make_unique<llfp::ast::FieldExp>(location, std::move(lhs), std::move(fieldName));
 }
 
-std::unique_ptr<Exp> MakeConstructor(llfp::SourceLocation location, llfp::GlobalIdentifier name, std::initializer_list<movable_il<NamedArgument>> args)
+std::unique_ptr<llfp::ast::Exp> Constructor(llfp::SourceLocation location, llfp::GlobalIdentifier name, std::initializer_list<movable_il<llfp::ast::NamedArgument>> args)
 {
-    return std::make_unique<ConstructorExp>(location, std::move(name), vector_from_il(args));
+    return std::make_unique<llfp::ast::ConstructorExp>(location, std::move(name), vector_from_il(args));
 }
 
-std::unique_ptr<Class> MakeClass(llfp::SourceLocation location, std::string name, std::string typeVar, std::initializer_list<movable_il<std::unique_ptr<FunctionDeclaration>>> funs)
+auto Class(llfp::SourceLocation location, std::string name, std::string typeVar, uptr_il<llfp::ast::FunctionDeclaration> funs)
 {
-    return std::make_unique<Class>(location, std::move(name), std::move(typeVar), vector_from_il(funs));
+    return std::make_unique<llfp::ast::Class>(location, std::move(name), std::move(typeVar), vector_from_il(funs));
 }
 
-std::unique_ptr<ClassInstance> MakeInstance(llfp::SourceLocation location, llfp::GlobalIdentifier id, TypeIdentifier typeArg, std::initializer_list<movable_il<std::unique_ptr<Function>>> funs)
+auto Instance(llfp::SourceLocation location, llfp::GlobalIdentifier id, llfp::ast::TypeIdentifier typeArg, uptr_il<llfp::ast::Function> funs)
 {
-    return std::make_unique<ClassInstance>(location, std::move(id), std::move(typeArg), vector_from_il(funs));
+    return std::make_unique<llfp::ast::ClassInstance>(location, std::move(id), std::move(typeArg), vector_from_il(funs));
 }
 
-std::unique_ptr<FunctionDeclaration> MakeFunctionDecl(llfp::SourceLocation location, TypeIdentifier type, std::string name, std::initializer_list<movable_il<std::unique_ptr<Parameter>>> params)
+auto FunctionDecl(llfp::SourceLocation location, llfp::ast::TypeIdentifier type, std::string name, uptr_il<llfp::ast::Parameter> params)
 {
-    return std::make_unique<FunctionDeclaration>(location, std::move(name), std::move(type), vector_from_il(params));
+    return std::make_unique<llfp::ast::FunctionDeclaration>(location, std::move(name), std::move(type), vector_from_il(params));
 }
 
-std::unique_ptr<BoolPattern> MakeBoolPattern(llfp::SourceLocation location, bool value)
+auto BoolPattern(llfp::SourceLocation location, bool value)
 {
-    return std::make_unique<BoolPattern>(location, value);
+    return std::make_unique<llfp::ast::BoolPattern>(location, value);
 }
 
-std::unique_ptr<IdentifierPattern> MakeIdentifierPattern(llfp::SourceLocation location, std::string value)
+auto IdentifierPattern(llfp::SourceLocation location, std::string value)
 {
-    return std::make_unique<IdentifierPattern>(location, value);
+    return std::make_unique<llfp::ast::IdentifierPattern>(location, value);
 }
 
-std::unique_ptr<IntegerPattern> MakeIntegerPattern(llfp::SourceLocation location, std::string value)
+auto IntegerPattern(llfp::SourceLocation location, std::string value)
 {
-    return std::make_unique<IntegerPattern>(location, value);
+    return std::make_unique<llfp::ast::IntegerPattern>(location, value);
 }
 
-std::unique_ptr<FloatPattern> MakeFloatPattern(llfp::SourceLocation location, std::string value)
+auto FloatPattern(llfp::SourceLocation location, std::string value)
 {
-    return std::make_unique<FloatPattern>(location, value);
+    return std::make_unique<llfp::ast::FloatPattern>(location, value);
 }
 
-std::unique_ptr<CharPattern> MakeCharPattern(llfp::SourceLocation location, std::string value)
+auto CharPattern(llfp::SourceLocation location, std::string value)
 {
-    return std::make_unique<CharPattern>(location, value);
+    return std::make_unique<llfp::ast::CharPattern>(location, value);
 }
 
-std::unique_ptr<StringPattern> MakeStringPattern(llfp::SourceLocation location, std::string value)
+auto StringPattern(llfp::SourceLocation location, std::string value)
 {
-    return std::make_unique<StringPattern>(location, value);
+    return std::make_unique<llfp::ast::StringPattern>(location, value);
 }
 
-std::unique_ptr<ConstructorPattern> MakeConstructorPattern(llfp::SourceLocation location, llfp::GlobalIdentifier gid, std::initializer_list<movable_il< NamedArgumentPattern>> args)
+auto ConstructorPattern(llfp::SourceLocation location, llfp::GlobalIdentifier gid, std::initializer_list<movable_il<llfp::ast::NamedArgumentPattern>> args)
 {
-    return std::make_unique<ConstructorPattern>(location, std::move(gid), vector_from_il(args));
+    return std::make_unique<llfp::ast::ConstructorPattern>(location, std::move(gid), vector_from_il(args));
 }
 
 namespace {
@@ -266,9 +260,9 @@ constexpr bool Exported = true;
 /**
 Make a module m with a function f with exp.
 */
-ModulePtr MakeMF(std::unique_ptr<Exp> exp)
+ModulePtr m_f(std::unique_ptr<llfp::ast::Exp> exp)
 {
-    return std::move(ModulePtr().functions({ MakeFunction({0,0}, Local, "f","", {}, std::move(exp)) }));
+    return std::move(ModulePtr().functions({ Function({0,0}, Local, "f","", {}, std::move(exp)) }));
 }
 
 TEST(ParserTest, Imports)
@@ -318,15 +312,15 @@ TEST(ParserTest, DataDeclarations)
     // change to data a = {};
     // to allow data a = a1{} | a2{}; in the future
 
-    EXPECT_EQ(Parse(M"data a{}"), ModulePtr().datas({ MakeDataDecl({ 0,0 }, Local, "a", {}) }));
-    EXPECT_EQ(Parse(M"data a{t x;}"), ModulePtr().datas({ MakeDataDecl({ 0,0 }, Local, "a", { Field({ 0,0 }, {{"", "t"}, {}}, "x") }) }));
-    EXPECT_EQ(Parse(M"data a{m2:t x;}"), ModulePtr().datas({ MakeDataDecl({ 0,0 }, Local, "a",{ Field({ 0,0 }, {{ "m2", "t" }, {}}, "x") }) }));
+    EXPECT_EQ(Parse(M"data a{}"), ModulePtr().datas({ DataDecl({ 0,0 }, Local, "a", {}) }));
+    EXPECT_EQ(Parse(M"data a{t x;}"), ModulePtr().datas({ DataDecl({ 0,0 }, Local, "a", { llfp::ast::Field({ 0,0 }, {{"", "t"}, {}}, "x") }) }));
+    EXPECT_EQ(Parse(M"data a{m2:t x;}"), ModulePtr().datas({ DataDecl({ 0,0 }, Local, "a",{ llfp::ast::Field({ 0,0 }, {{ "m2", "t" }, {}}, "x") }) }));
     EXPECT_EQ(Parse(M"data a{t1 x; t2 y;}"),
         ModulePtr().datas({
-            MakeDataDecl({ 0,0 }, Local, "a", {
-                Field({ 0,0 }, {{"", "t1"},{}}, "x"),
-                Field({ 0,0 }, {{"", "t2"},{}}, "y") }) }));
-    EXPECT_EQ(Parse(M"export data a{}"), ModulePtr().datas({ MakeDataDecl({ 0,0 }, Exported, "a",{}) }));
+            DataDecl({ 0,0 }, Local, "a", {
+                llfp::ast::Field({ 0,0 }, {{"", "t1"},{}}, "x"),
+                llfp::ast::Field({ 0,0 }, {{"", "t2"},{}}, "y") }) }));
+    EXPECT_EQ(Parse(M"export data a{}"), ModulePtr().datas({ DataDecl({ 0,0 }, Exported, "a",{}) }));
 
     // negative
     EXPECT_EQ(ParseError(M"data a{x;}"),      "string(2,9): expected an identifier\n");
@@ -339,25 +333,25 @@ TEST(ParserTest, DataDeclarations)
 
 TEST(ParserTest, DataConstructor)
 {
-    EXPECT_EQ(Parse(M"f = a{};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, {})));
-    EXPECT_EQ(Parse(M"f = a{1};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({0,0}, "", MakeInteger({0,0}, "1")) })));
-    EXPECT_EQ(Parse(M"f = a{x};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({0,0}, "", MakeVariable({0,0}, "", "x")) })));
-    EXPECT_EQ(Parse(M"f = a{x:y};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({ 0,0 }, "", MakeVariable({ 0,0 }, "x", "y")) })));
-    EXPECT_EQ(Parse(M"f = a{x = y};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({ 0,0 }, "x", MakeVariable({ 0,0 }, "", "y")) })));
-    EXPECT_EQ(Parse(M"f = a{x()};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({ 0,0 }, "", MakeCall({0,0},"", "x", {})) })));
-    EXPECT_EQ(Parse(M"f = a{x + 1};"), MakeMF(
-        MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({ 0,0 }, "",
-            MakeBinary({ 0,0 }, "+",
-                MakeVariable({ 0,0 }, "", "x"),
-                MakeInteger({ 0,0 }, "1"))) })));
-    EXPECT_EQ(Parse(M"f = a{1, x};"), MakeMF(MakeConstructor({ 0,0 }, { "", "a" }, {
-        NamedArgument({ 0,0 }, "", MakeInteger({ 0,0 }, "1")),
-        NamedArgument({ 0,0 }, "", MakeVariable({ 0,0 }, "", "x")) })));
-    EXPECT_EQ(Parse(M"f = a:b{1};"), MakeMF(MakeConstructor({ 0,0 }, { "a", "b" }, { NamedArgument({ 0,0 }, "",  MakeInteger({ 0,0 }, "1")) })));
-    EXPECT_EQ(Parse(M"f = a{b{1}};"), MakeMF(
-        MakeConstructor({ 0,0 }, { "", "a" }, { NamedArgument({ 0,0 }, "",
-            MakeConstructor({ 0,0 }, { "", "b" }, { NamedArgument({ 0,0 }, "",
-                MakeInteger({ 0,0 }, "1")) })) })));
+    EXPECT_EQ(Parse(M"f = a{};"), m_f(Constructor({ 0,0 }, { "", "a" }, {})));
+    EXPECT_EQ(Parse(M"f = a{1};"), m_f(Constructor({ 0,0 }, { "", "a" }, { llfp::ast::NamedArgument({0,0}, "", Integer({0,0}, "1")) })));
+    EXPECT_EQ(Parse(M"f = a{x};"), m_f(Constructor({ 0,0 }, { "", "a" }, { llfp::ast::NamedArgument({0,0}, "", Variable({0,0}, "", "x")) })));
+    EXPECT_EQ(Parse(M"f = a{x:y};"), m_f(Constructor({ 0,0 }, { "", "a" }, { llfp::ast::NamedArgument({ 0,0 }, "", Variable({ 0,0 }, "x", "y")) })));
+    EXPECT_EQ(Parse(M"f = a{x = y};"), m_f(Constructor({ 0,0 }, { "", "a" }, { llfp::ast::NamedArgument({ 0,0 }, "x", Variable({ 0,0 }, "", "y")) })));
+    EXPECT_EQ(Parse(M"f = a{x()};"), m_f(Constructor({ 0,0 }, { "", "a" }, { llfp::ast::NamedArgument({ 0,0 }, "", Call({0,0},"", "x", {})) })));
+    EXPECT_EQ(Parse(M"f = a{x + 1};"), m_f(
+        Constructor({ 0,0 }, { "", "a" }, { llfp::ast::NamedArgument({ 0,0 }, "",
+            Binary({ 0,0 }, "+",
+                Variable({ 0,0 }, "", "x"),
+                Integer({ 0,0 }, "1"))) })));
+    EXPECT_EQ(Parse(M"f = a{1, x};"), m_f(Constructor({ 0,0 }, { "", "a" }, {
+        llfp::ast::NamedArgument({ 0,0 }, "", Integer({ 0,0 }, "1")),
+        llfp::ast::NamedArgument({ 0,0 }, "", Variable({ 0,0 }, "", "x")) })));
+    EXPECT_EQ(Parse(M"f = a:b{1};"), m_f(Constructor({ 0,0 }, { "a", "b" }, { llfp::ast::NamedArgument({ 0,0 }, "", Integer({ 0,0 }, "1")) })));
+    EXPECT_EQ(Parse(M"f = a{b{1}};"), m_f(
+        Constructor({ 0,0 }, { "", "a" }, { llfp::ast::NamedArgument({ 0,0 }, "",
+            Constructor({ 0,0 }, { "", "b" }, { llfp::ast::NamedArgument({ 0,0 }, "",
+                Integer({ 0,0 }, "1")) })) })));
 
     // negative
     EXPECT_EQ(ParseError(M"f = a{x:}"),     "string(2,9): expected an identifier\n");
@@ -368,62 +362,61 @@ TEST(ParserTest, DataConstructor)
 TEST(ParserTest, Functions)
 {
     // untyped function
-    EXPECT_EQ(Parse(M"f = 1;"),
-        ModulePtr().functions({MakeFunction({0,0}, Local, "f", "", {}, MakeInteger({0,0}, "1")) }));
+    EXPECT_EQ(Parse(M"f = 1;"), m_f(Integer({0,0}, "1")));
 
     // no params
     EXPECT_EQ(Parse(M"t f = 1;"),
-        ModulePtr().functions({MakeFunction({0,0}, Local, "f", "t", {}, MakeInteger({0,0}, "1")) }));
+        ModulePtr().functions({Function({0,0}, Local, "f", "t", {}, Integer({0,0}, "1")) }));
     EXPECT_EQ(Parse(M"m2:t f = 1;"),
-        ModulePtr().functions({MakeFunction({ 0,0 }, Local, "f", MakeTypeId("m2", "t", {}), {}, MakeInteger({ 0,0 }, "1")) }));
+        ModulePtr().functions({Function({ 0,0 }, Local, "f", TypeId("m2", "t", {}), {}, Integer({ 0,0 }, "1")) }));
 
     // one params
     EXPECT_EQ(Parse(M"t f(x) = 1;"),
         ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "t",{MakeParameter({0,0}, "", "x")},
-                MakeInteger({0,0}, "1")) }));
+            Function({0,0}, Local, "f", "t",{Parameter({0,0}, "", "x")},
+                Integer({0,0}, "1")) }));
 
     // multiple params
     EXPECT_EQ(Parse(M"t f(x,y) = 1;"),
         ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "t", {
-                MakeParameter({0,0}, "", "x"),
-                MakeParameter({0,0}, "", "y")},
-                MakeInteger({0,0}, "1")) }));
+            Function({0,0}, Local, "f", "t", {
+                Parameter({0,0}, "", "x"),
+                Parameter({0,0}, "", "y")},
+                Integer({0,0}, "1")) }));
 
     // typed params
     EXPECT_EQ(Parse(M"t f(t x) = 1;"),
         ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "t", { MakeParameter({0,0}, "t", "x")},
-                MakeInteger({0,0}, "1")) }));
+            Function({0,0}, Local, "f", "t", { Parameter({0,0}, "t", "x")},
+                Integer({0,0}, "1")) }));
     EXPECT_EQ(Parse(M"t f(t x, t2 y) = 1;"),
         ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "t", {
-                MakeParameter({0,0}, "t", "x"),
-                MakeParameter({0,0}, "t2", "y")},
-                MakeInteger({0,0}, "1")) }));
+            Function({0,0}, Local, "f", "t", {
+                Parameter({0,0}, "t", "x"),
+                Parameter({0,0}, "t2", "y")},
+                Integer({0,0}, "1")) }));
     EXPECT_EQ(Parse(M"t f(m:t x) = 1;"),
         ModulePtr().functions({
-            MakeFunction({ 0,0 }, Local, "f", "t", { MakeParameter({ 0,0 }, MakeTypeId("m", "t", {}), "x") },
-                MakeInteger({ 0,0 }, "1")) }));
+            Function({ 0,0 }, Local, "f", "t", { Parameter({ 0,0 }, TypeId("m", "t", {}), "x") },
+                Integer({ 0,0 }, "1")) }));
 
     // parameterized types
     EXPECT_EQ(Parse(M"t[x] f() = 1;"),
         ModulePtr().functions({
-            MakeFunction({ 0,0 }, Local, "f", MakeTypeId("", "t", { MakeTypeId("", "x", {}) }), {},
-            MakeInteger({ 0,0 }, "1")) }));
+            Function({ 0,0 }, Local, "f", TypeId("", "t", { TypeId("", "x", {}) }), {},
+            Integer({ 0,0 }, "1")) }));
     EXPECT_EQ(Parse(M"f(x[y] z) = 1;"),
         ModulePtr().functions({
-            MakeFunction({ 0,0 }, Local, "f", "", { MakeParameter({0,0}, MakeTypeId("", "x", { MakeTypeId("", "y", {}) }), "z") },
-            MakeInteger({ 0,0 }, "1")) }));
+            Function({ 0,0 }, Local, "f", "", { Parameter({0,0}, TypeId("", "x", { TypeId("", "y", {}) }), "z") },
+            Integer({ 0,0 }, "1")) }));
     EXPECT_EQ(Parse(M"x[y[z]] f() = 1;"),
         ModulePtr().functions({
-            MakeFunction({ 0,0 }, Local, "f", MakeTypeId("", "x", { MakeTypeId("", "y", { MakeTypeId("", "z", {}) }) }), {},
-            MakeInteger({ 0,0 }, "1")) }));
+            Function({ 0,0 }, Local, "f", TypeId("", "x", { TypeId("", "y", { TypeId("", "z", {}) }) }), {},
+            Integer({ 0,0 }, "1")) }));
     EXPECT_EQ(Parse(M"x[y,z] f() = 1;"),
         ModulePtr().functions({
-            MakeFunction({ 0,0 }, Local, "f", MakeTypeId("", "x", { MakeTypeId("", "y", {}), MakeTypeId("", "z", {}) }), {},
-            MakeInteger({ 0,0 }, "1")) }));
+            Function({ 0,0 }, Local, "f", TypeId("", "x", { TypeId("", "y", {}), TypeId("", "z", {}) }), {},
+            Integer({ 0,0 }, "1")) }));
 
     // negative
     EXPECT_EQ(ParseError(M"f = ;"),        "string(2,5): expected an expression\n");
@@ -442,10 +435,10 @@ TEST(ParserTest, Declarations)
          "data b{}"
          "g = 2;"),
         ModulePtr()
-        .functions({ MakeFunction({ 0,0 }, Local, "f", "", {}, MakeInteger({ 0,0 }, "1")),
-                     MakeFunction({ 0,0 }, Local, "g", "", {}, MakeInteger({ 0,0 }, "2")) })
-        .datas({ MakeDataDecl({ 0,0 }, Local, "a",{}),
-                 MakeDataDecl({ 0,0 }, Local, "b",{}) }));
+        .functions({ Function({ 0,0 }, Local, "f", "", {}, Integer({ 0,0 }, "1")),
+                     Function({ 0,0 }, Local, "g", "", {}, Integer({ 0,0 }, "2")) })
+        .datas({ DataDecl({ 0,0 }, Local, "a",{}),
+                 DataDecl({ 0,0 }, Local, "b",{}) }));
 
     // negative
 }
@@ -453,22 +446,16 @@ TEST(ParserTest, Declarations)
 TEST(ParserTest, Literals)
 {
     // integer
-    EXPECT_EQ(Parse(M"f = 1;"),
-        ModulePtr().functions({ MakeFunction({0,0}, Local, "f", "", {}, MakeInteger({0,0}, "1")) }));
+    EXPECT_EQ(Parse(M"f = 1;"), m_f(Integer({0,0}, "1")));
     // float
-    EXPECT_EQ(Parse(M"f = 1.0;"),
-        ModulePtr().functions({ MakeFunction({0,0}, Local, "f", "", {}, MakeLiteral({0,0}, llfp::lex::Token::Float, "1.0")) }));
+    EXPECT_EQ(Parse(M"f = 1.0;"), m_f(Literal({0,0}, llfp::lex::Token::Float, "1.0")));
     // char
-    EXPECT_EQ(Parse(M"f = \'c\';"),
-        ModulePtr().functions({ MakeFunction({0,0}, Local, "f", "", {}, MakeLiteral({0,0}, llfp::lex::Token::Char, "c")) }));
+    EXPECT_EQ(Parse(M"f = \'c\';"), m_f(Literal({0,0}, llfp::lex::Token::Char, "c")));
     // string
-    EXPECT_EQ(Parse(M"f = \"ac\";"),
-        ModulePtr().functions({ MakeFunction({0,0}, Local, "f", "", {}, MakeLiteral({0,0}, llfp::lex::Token::String, "ac")) }));
+    EXPECT_EQ(Parse(M"f = \"ac\";"), m_f(Literal({0,0}, llfp::lex::Token::String, "ac")));
     // bool
-    EXPECT_EQ(Parse(M"f = true;"),
-        ModulePtr().functions({ MakeFunction({0,0}, Local, "f", "", {}, MakeLiteral({0,0}, llfp::lex::Token::Bool, "true")) }));
-    EXPECT_EQ(Parse(M"f = false;"),
-        ModulePtr().functions({ MakeFunction({0,0}, Local, "f", "", {}, MakeLiteral({0,0}, llfp::lex::Token::Bool, "false")) }));
+    EXPECT_EQ(Parse(M"f = true;"), m_f(Literal({0,0}, llfp::lex::Token::Bool, "true")));
+    EXPECT_EQ(Parse(M"f = false;"), m_f(Literal({0,0}, llfp::lex::Token::Bool, "false")));
 
     // negative
     // invalid string escape
@@ -477,49 +464,43 @@ TEST(ParserTest, Literals)
 TEST(ParserTest, LetExp)
 {
     EXPECT_EQ(Parse(M"f = let x = 1; in 2;"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                MakeLet({0,0}, {
-                    MakeFunction({0,0}, Local, "x", "", {},
-                        MakeInteger({0,0}, "1"))},
-                    MakeInteger({0,0}, "2"))) }));
+        m_f(Let({ 0,0 }, {
+                Function({0,0}, Local, "x", "", {},
+                    Integer({0,0}, "1")) },
+                    Integer({ 0,0 }, "2"))));
     EXPECT_EQ(Parse(M"f = let x = 1; y = 2; in 3;"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                MakeLet({0,0}, {
-                    MakeFunction({0,0}, Local, "x", "", {},
-                        MakeInteger({0,0}, "1")),
-                    MakeFunction({0,0}, Local, "y", "", {},
-                        MakeInteger({0,0}, "2"))},
-                    MakeInteger({0,0}, "3"))) }));
+        m_f(Let({ 0,0 }, {
+                Function({0,0}, Local, "x", "", {},
+                    Integer({0,0}, "1")),
+                Function({0,0}, Local, "y", "", {},
+                    Integer({0,0}, "2")) },
+                    Integer({ 0,0 }, "3"))));
 
     // nested
     EXPECT_EQ(Parse(M"f = let\n"
-    "       x = 1;\n"
-    "       y = let\n"
-    "               a = 2;\n"
-    "           in 3;\n"
-    "    in let\n"
-    "           z = let\n"
-    "                   b = 4;\n"
-    "               in 5;\n"
-    "           w = 6;\n"
-    "       in 7;\n"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                MakeLet({0,0}, {
-                    MakeFunction({0,0}, Local, "x", "", {}, MakeInteger({0,0}, "1")),
-                    MakeFunction({0,0}, Local, "y", "", {},
-                        MakeLet({0,0}, {
-                            MakeFunction({0,0}, Local, "a", "", {}, MakeInteger({0,0}, "2"))},
-                        MakeInteger({0,0}, "3"))) },
-                MakeLet({0,0}, {
-                    MakeFunction({0,0}, Local, "z", "", {},
-                        MakeLet({0,0}, {
-                            MakeFunction({0,0}, Local, "b", "", {}, MakeInteger({0,0}, "4"))},
-                        MakeInteger({0,0}, "5"))),
-                    MakeFunction({0,0}, Local, "w", "", {}, MakeInteger({0,0}, "6")) },
-                MakeInteger({0,0}, "7")))) }));
+        "       x = 1;\n"
+        "       y = let\n"
+        "               a = 2;\n"
+        "           in 3;\n"
+        "    in let\n"
+        "           z = let\n"
+        "                   b = 4;\n"
+        "               in 5;\n"
+        "           w = 6;\n"
+        "       in 7;\n"),
+        m_f(Let({ 0,0 }, {
+                Function({0,0}, Local, "x", "", {}, Integer({0,0}, "1")),
+                Function({0,0}, Local, "y", "", {},
+                    Let({0,0}, {
+                        Function({0,0}, Local, "a", "", {}, Integer({0,0}, "2"))},
+                    Integer({0,0}, "3"))) },
+                    Let({ 0,0 }, {
+                        Function({0,0}, Local, "z", "", {},
+                            Let({0,0}, {
+                                Function({0,0}, Local, "b", "", {}, Integer({0,0}, "4"))},
+                            Integer({0,0}, "5"))),
+                        Function({0,0}, Local, "w", "", {}, Integer({0,0}, "6")) },
+                        Integer({ 0,0 }, "7")))));
 
     // negative
     EXPECT_EQ(ParseError(M"f = let x = 1; 2;"),          "string(2,16): expected an identifier\n");
@@ -530,12 +511,10 @@ TEST(ParserTest, LetExp)
 TEST(ParserTest, IfExp)
 {
     EXPECT_EQ(Parse(M"f = if x then y else z;"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeIf({0,0},
-                                     MakeVariable({0,0}, "", "x"),
-                                     MakeVariable({0,0}, "", "y"),
-                                     MakeVariable({0,0}, "", "z"))) }));
+        m_f(If({ 0,0 },
+                Variable({ 0,0 }, "", "x"),
+                Variable({ 0,0 }, "", "y"),
+                Variable({ 0,0 }, "", "z"))));
 
     // negative
     EXPECT_EQ(ParseError(M"f = if x,a then y else z;"), "string(2,9): expected 'then'\n");
@@ -544,7 +523,7 @@ TEST(ParserTest, IfExp)
 TEST(ParserTest, CaseExp)
 {
     EXPECT_EQ(Parse(
-       M"f() = case 0 of\n"
+        M"f() = case 0 of\n"
         "   true  -> 1,\n"
         "   id    -> 2,\n"
         "   11    -> 3,\n"
@@ -553,18 +532,16 @@ TEST(ParserTest, CaseExp)
         "   \"s\" -> 6,\n"
         "   c{9}  -> 7\n"
         "end;\n"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                MakeCase({0,0}, MakeInteger({0,0}, "0"),
-                    {
-                        Clause{MakeBoolPattern({0,0},true),       MakeInteger({0,0}, "1")},
-                        Clause{MakeIdentifierPattern({0,0},"id"), MakeInteger({0,0}, "2")},
-                        Clause{MakeIntegerPattern({0,0}, "11"),   MakeInteger({0,0}, "3")},
-                        Clause{MakeFloatPattern({0,0}, "1.1"),    MakeInteger({0,0}, "4")},
-                        Clause{MakeCharPattern({0,0}, "a"),       MakeInteger({0,0}, "5")},
-                        Clause{MakeStringPattern({0,0}, "s"),     MakeInteger({0,0}, "6")},
-                        Clause{MakeConstructorPattern({0,0}, {"","c"}, { NamedArgumentPattern({0,0}, "", MakeIntegerPattern({0,0}, "9")) }), MakeInteger({0,0}, "7")}
-                    })) }) );
+        m_f(Case({ 0,0 }, Integer({ 0,0 }, "0"),
+            {
+                llfp::ast::Clause{BoolPattern({0,0},true),       Integer({0,0}, "1")},
+                llfp::ast::Clause{IdentifierPattern({0,0},"id"), Integer({0,0}, "2")},
+                llfp::ast::Clause{IntegerPattern({0,0}, "11"),   Integer({0,0}, "3")},
+                llfp::ast::Clause{FloatPattern({0,0}, "1.1"),    Integer({0,0}, "4")},
+                llfp::ast::Clause{CharPattern({0,0}, "a"),       Integer({0,0}, "5")},
+                llfp::ast::Clause{StringPattern({0,0}, "s"),     Integer({0,0}, "6")},
+                llfp::ast::Clause{ConstructorPattern({0,0}, {"","c"}, { llfp::ast::NamedArgumentPattern({0,0}, "", IntegerPattern({0,0}, "9")) }), Integer({0,0}, "7")}
+            })));
 
     // nested
     EXPECT_EQ(Parse(
@@ -577,69 +554,55 @@ TEST(ParserTest, CaseExp)
         "           end,\n"
         "       6 -> 7\n"
         "   end;\n"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                MakeCase({0,0}, MakeVariable({0,0}, "", "x"), {
-                        Clause{ MakeIntegerPattern({0,0}, "1"),
-                            MakeCase({0,0}, MakeVariable({0,0}, "", "y"), {
-                                Clause{ MakeIntegerPattern({0,0}, "2"),
-                                    MakeInteger({0,0}, "3")},
-                                Clause{ MakeIntegerPattern({0,0}, "4"),
-                                    MakeInteger({0,0}, "5")}}) },
-                        Clause{ MakeIntegerPattern({0,0}, "6"),
-                            MakeInteger({0,0}, "7") }
-                    })) }));
+        m_f(Case({ 0,0 }, Variable({ 0,0 }, "", "x"), {
+                        llfp::ast::Clause{ IntegerPattern({0,0}, "1"),
+                            Case({0,0}, Variable({0,0}, "", "y"), {
+                                llfp::ast::Clause{ IntegerPattern({0,0}, "2"),
+                                    Integer({0,0}, "3")},
+                                llfp::ast::Clause{ IntegerPattern({0,0}, "4"),
+                                    Integer({0,0}, "5")}}) },
+                        llfp::ast::Clause{ IntegerPattern({0,0}, "6"),
+                            Integer({0,0}, "7") }
+            })));
 }
 
 TEST(ParserTest, BinaryExp)
 {
     EXPECT_EQ(Parse(M"f = x + y;"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeBinary({0,0}, "+",
-                                         MakeVariable({0,0}, "", "x"),
-                                         MakeVariable({0,0}, "", "y"))) }));
+        m_f(Binary({ 0,0 }, "+",
+            Variable({ 0,0 }, "", "x"),
+            Variable({ 0,0 }, "", "y"))));
     EXPECT_EQ(Parse(M"f = x + y + z;"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeBinary({0,0}, "+",
-                                         MakeBinary({0,0}, "+",
-                                                    MakeVariable({0,0}, "", "x"),
-                                                    MakeVariable({0,0}, "", "y")),
-                                         MakeVariable({0,0}, "", "z"))) }));
+        m_f(Binary({ 0,0 }, "+",
+            Binary({ 0,0 }, "+",
+                Variable({ 0,0 }, "", "x"),
+                Variable({ 0,0 }, "", "y")),
+            Variable({ 0,0 }, "", "z"))));
     EXPECT_EQ(Parse(M"f = x + y * z;"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeBinary({0,0}, "+",
-                                         MakeVariable({0,0}, "", "x"),
-                                         MakeBinary({0,0}, "*",
-                                                    MakeVariable({0,0}, "", "y"),
-                                                    MakeVariable({0,0}, "", "z")))) }));
+        m_f(Binary({ 0,0 }, "+",
+            Variable({ 0,0 }, "", "x"),
+            Binary({ 0,0 }, "*",
+                Variable({ 0,0 }, "", "y"),
+                Variable({ 0,0 }, "", "z")))));
     EXPECT_EQ(Parse(M"f = x * y + z;"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeBinary({0,0}, "+",
-                                         MakeBinary({0,0}, "*",
-                                                    MakeVariable({0,0}, "", "x"),
-                                                    MakeVariable({0,0}, "", "y")),
-                                         MakeVariable({0,0}, "", "z"))) }));
+        m_f(Binary({ 0,0 }, "+",
+            Binary({ 0,0 }, "*",
+                Variable({ 0,0 }, "", "x"),
+                Variable({ 0,0 }, "", "y")),
+            Variable({ 0,0 }, "", "z"))));
 
     EXPECT_EQ(Parse(M"f = x * (y + z);"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeBinary({0,0}, "*",
-                                         MakeVariable({0,0}, "", "x"),
-                                         MakeBinary({0,0}, "+",
-                                                    MakeVariable({0,0}, "", "y"),
-                                                    MakeVariable({0,0}, "", "z")))) }));
+        m_f(Binary({ 0,0 }, "*",
+            Variable({ 0,0 }, "", "x"),
+            Binary({ 0,0 }, "+",
+                Variable({ 0,0 }, "", "y"),
+                Variable({ 0,0 }, "", "z")))));
     EXPECT_EQ(Parse(M"f = (x + y) * z;"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeBinary({0,0}, "*",
-                                         MakeBinary({0,0}, "+",
-                                                    MakeVariable({0,0}, "", "x"),
-                                                    MakeVariable({0,0}, "", "y")),
-                                         MakeVariable({0,0}, "", "z"))) }));
+        m_f(Binary({ 0,0 }, "*",
+            Binary({ 0,0 }, "+",
+                Variable({ 0,0 }, "", "x"),
+                Variable({ 0,0 }, "", "y")),
+            Variable({ 0,0 }, "", "z"))));
 
     //"f = a+-b;"; // ? or force a + - b or a+(-b)
 
@@ -658,43 +621,33 @@ TEST(ParserTest, CallExp)
 {
     // one param
     EXPECT_EQ(Parse(M"f = f2(x);"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeCall({0,0}, "", "f2",
-                                       {MakeVariable({0,0}, "", "x")})) }));
+        m_f(Call({ 0,0 }, "", "f2",
+                { Variable({0,0}, "", "x") })));
     // multiple params
     EXPECT_EQ(Parse(M"f = f2(x,y);"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeCall({0,0}, "", "f2",
-                                       {MakeVariable({0,0}, "", "x"),
-                                        MakeVariable({0,0}, "", "y")})) }));
+        m_f(Call({ 0,0 }, "", "f2",
+                { Variable({0,0}, "", "x"),
+                 Variable({0,0}, "", "y") })));
 
     // local function
 
     // imported function
     EXPECT_EQ(Parse(M"f = m2:f1(x);"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeCall({0,0}, "m2", "f1",
-                                       {MakeVariable({0,0}, "", "x")})) }));
+        m_f(Call({ 0,0 }, "m2", "f1",
+                { Variable({0,0}, "", "x") })));
     EXPECT_EQ(Parse(M"f = m2:f1(x,y);"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeCall({0,0}, "m2", "f1",
-                                       {MakeVariable({0,0}, "", "x"),
-                                        MakeVariable({0,0}, "", "y")})) }));
+        m_f(Call({ 0,0 }, "m2", "f1",
+                { Variable({0,0}, "", "x"),
+                 Variable({0,0}, "", "y") })));
 
     // exp in params
     EXPECT_EQ(Parse(M"f = f2(x+y, f3(z));"),
-        ModulePtr().functions({
-            MakeFunction({0,0}, Local, "f", "", {},
-                              MakeCall({0,0}, "", "f2",
-                                       {MakeBinary({0,0}, "+",
-                                                   MakeVariable({0,0}, "", "x"),
-                                                   MakeVariable({0,0}, "", "y")),
-                                        MakeCall({0,0}, "", "f3",
-                                           {MakeVariable({0,0}, "", "z")})})) }));
+        m_f(Call({ 0,0 }, "", "f2",
+                { Binary({0,0}, "+",
+                            Variable({0,0}, "", "x"),
+                            Variable({0,0}, "", "y")),
+                 Call({0,0}, "", "f3",
+                    {Variable({0,0}, "", "z")}) })));
 
     // higher order function
     "f = f2()()";
@@ -705,10 +658,8 @@ TEST(ParserTest, CallExp)
 
 TEST(ParserTest, VariableExp)
 {
-    EXPECT_EQ(Parse(M"f = x;"),
-        ModulePtr().functions({ MakeFunction({0,0}, Local, "f", "", {}, MakeVariable({0,0}, "", "x")) }));
-    EXPECT_EQ(Parse(M"f = m:x;"),
-        ModulePtr().functions({ MakeFunction({0,0}, Local, "f", "", {}, MakeVariable({0,0}, "m", "x")) }));
+    EXPECT_EQ(Parse(M"f = x;"),   m_f(Variable({0,0}, "", "x")));
+    EXPECT_EQ(Parse(M"f = m:x;"), m_f(Variable({0,0}, "m", "x")));
 
     // negative
     EXPECT_EQ(ParseError(M"f = m:;"),    "string(2,7): expected an identifier\n");
@@ -717,14 +668,10 @@ TEST(ParserTest, VariableExp)
 
 TEST(ParserTest, FieldExp)
 {
-    EXPECT_EQ(Parse(M"f = x.y;"),
-        ModulePtr().functions({ MakeFunction({0,0}, Local, "f", "", {}, MakeField({0,0}, MakeVariable({0,0}, "", "x"), "y")) }));
-    EXPECT_EQ(Parse(M"f = x.y.z;"),
-        ModulePtr().functions({ MakeFunction({0,0}, Local, "f", "", {}, MakeField({0,0}, MakeField({0,0}, MakeVariable({0,0}, "", "x"), "y"), "z")) }));
-    EXPECT_EQ(Parse(M"f = x:y.z;"),
-        ModulePtr().functions({ MakeFunction({0,0}, Local, "f", "", {}, MakeField({0,0}, MakeVariable({0,0}, "x", "y"), "z")) }));
-    EXPECT_EQ(Parse(M"f = x().y;"),
-        ModulePtr().functions({ MakeFunction({ 0,0 }, Local, "f", "", {}, MakeField({ 0,0 }, MakeCall({0,0}, "", "x", {}), "y")) }));
+    EXPECT_EQ(Parse(M"f = x.y;"),   m_f(Field({0,0}, Variable({0,0}, "", "x"), "y")));
+    EXPECT_EQ(Parse(M"f = x.y.z;"), m_f(Field({0,0}, Field({0,0}, Variable({0,0}, "", "x"), "y"), "z")));
+    EXPECT_EQ(Parse(M"f = x:y.z;"), m_f(Field({0,0}, Variable({0,0}, "x", "y"), "z")));
+    EXPECT_EQ(Parse(M"f = x().y;"), m_f(Field({0,0}, Call({0,0}, "", "x", {}), "y")));
 
     // negative
     EXPECT_EQ(ParseError(M"f = x.);"), "string(2,7): expected a field identifier\n");
@@ -733,7 +680,7 @@ TEST(ParserTest, FieldExp)
 TEST(ParserTest, ClassDeclaration)
 {
     EXPECT_EQ(Parse(M"class a b {t f();}"),
-        ModulePtr().classes({ MakeClass({0,0}, "a", "b", { MakeFunctionDecl({0,0}, {{"", "t"}, {}}, "f", {}) }) }));
+        ModulePtr().classes({ Class({0,0}, "a", "b", { FunctionDecl({0,0}, {{"", "t"}, {}}, "f", {}) }) }));
 
     // negative
     EXPECT_EQ(ParseError(M"class{}"),              "string(2,6): expected an identifier\n");
@@ -748,15 +695,15 @@ TEST(ParserTest, InstanceDeclaration)
 {
     EXPECT_EQ(Parse(M"instance a b {t f() = 1;}"),
         ModulePtr().instances({
-            MakeInstance({0,0},{"","a"},{{"","b"},{}},{
-                MakeFunction({ 0,0 }, Local, "f",  TypeIdentifier{ {"","t"},{} }, {}, MakeInteger({ 0,0 }, "1")),
+            Instance({0,0},{"","a"},{{"","b"},{}},{
+                Function({ 0,0 }, Local, "f", llfp::ast::TypeIdentifier{ {"","t"},{} }, {}, Integer({ 0,0 }, "1")),
             })
         }));
 
     EXPECT_EQ(Parse(M"instance m:a n:b {x:t f() = 1;}"),
         ModulePtr().instances({
-            MakeInstance({0,0},{"m","a"},{{"n","b"},{}},{
-                MakeFunction({ 0,0 }, Local, "f",  TypeIdentifier{ {"x","t"},{} }, {}, MakeInteger({ 0,0 }, "1")),
+            Instance({0,0},{"m","a"},{{"n","b"},{}},{
+                Function({ 0,0 }, Local, "f", llfp::ast::TypeIdentifier{ {"x","t"},{} }, {}, Integer({ 0,0 }, "1")),
             })
         }));
 
