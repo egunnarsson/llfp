@@ -279,11 +279,51 @@ TEST(CodegenTest, Arithmetic)
 
 TEST(CodegenTest, Logic)
 {
+    LLVMInitializeNativeAsmPrinter();
+    LLVMInitializeNativeAsmParser();
+
+    llvm::ExitOnError check;
+    std::unique_ptr<llfp::JIT> jit = check(llfp::JIT::Create());
+
     // if
 
     // let
 
     // case
+    {
+        auto m = compile(M
+            "data a{bool x; bool y;}\n"
+            "data b{a v1; bool v2; i32 v3; float v4; char v5;}\n"
+            "export i32 foo(i32 x, i32 y) = case x of\n"
+            "    1 -> 0,\n"
+            "    2 -> y,\n"
+            "    a -> a + 2\n"
+            "end;\n"
+            "export i32 bar(bool A, i32 B, float C, char D) =\n"
+            "case b{a{true, false}, A, B, C, D} of\n"
+            "    b{E, true, G, H,   I}   -> 1,\n"
+            "    b{E, F,    1, H,   I}   -> 2,\n"
+            "    b{E, F,    G, 1.0, I}   -> 3,\n"
+            "    b{E, F,    G, H,   'a'} -> 4,\n"
+            "    X -> 5\n"
+            "end;\n");
+
+        m[0].llvmModule->setDataLayout(jit->getDataLayout());
+        auto RT = jit->getMainJITDylib().createResourceTracker();
+        auto TSM = llvm::orc::ThreadSafeModule(std::move(m[0].llvmModule), std::move(m[0].llvmContext));
+        check(jit->addModule(std::move(TSM), RT));
+
+        EXPECT_EQ((call<int32_t, int32_t, int32_t>(jit, "m_foo", 1, 1)), 0);
+        EXPECT_EQ((call<int32_t, int32_t, int32_t>(jit, "m_foo", 2, 1)), 1);
+        EXPECT_EQ((call<int32_t, int32_t, int32_t>(jit, "m_foo", 3, 1)), 5);
+
+        EXPECT_EQ((call<int32_t, bool, int32_t, float, char>(jit, "m_bar", true,  0, 0.0f, '\0')), 1);
+        EXPECT_EQ((call<int32_t, bool, int32_t, float, char>(jit, "m_bar", false, 1, 0.0f, '\0')), 2);
+        EXPECT_EQ((call<int32_t, bool, int32_t, float, char>(jit, "m_bar", false, 0, 1.0f, '\0')), 3);
+        EXPECT_EQ((call<int32_t, bool, int32_t, float, char>(jit, "m_bar", false, 0, 0.0f, 'a')),  4);
+        EXPECT_EQ((call<int32_t, bool, int32_t, float, char>(jit, "m_bar", false, 1, 0.0f, 'a')),  2);
+        EXPECT_EQ((call<int32_t, bool, int32_t, float, char>(jit, "m_bar", false, 0, 0.0f, '\0')), 5);
+    }
 
     // field (part of data?)
 }
@@ -356,14 +396,6 @@ TEST(CodegenTest, TypeClass)
         M"class C a {i32 f(a);}\n"
         "instance C i32 {i32 f(i32 x) = 1;}\n"
         "export i32 foo() = f(true);"), "string(4,20): no instance of \"m:C bool\"\n");
-}
-
-TEST(CodegenTest, TypeCheck)
-{
-
-    //negative
-    // call with wrong type
-    // assign with wrong return type, let i32 x = funcReturnBool()
 }
 
 TEST(CodegenTest, Scope)
