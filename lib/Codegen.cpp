@@ -134,7 +134,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
         size_t i = 1;
         for (auto &arg : ast->parameters)
         {
-            typeContext.check(typeAnnotation, types[i], typeAnnotation.getVar(arg->identifier));
+            typeContext.check(typeAnnotation, types[i++], typeAnnotation.getVar(arg->identifier));
         }
     }
     catch (const ErrorLocation& error)
