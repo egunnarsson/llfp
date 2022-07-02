@@ -73,15 +73,18 @@ std::unique_ptr<SourceModule> SourceModule::create(std::unique_ptr<ast::Module> 
         }
 
         // check duplicate fields;
-        auto end = dataDecl->fields.end();
-        for (auto it = dataDecl->fields.begin(); it != end; ++it)
+        for (auto &constructor: dataDecl->constructors)
         {
-            auto predicate = [it](const llfp::ast::Field& field) { return it->name == field.name; };
-            auto it1 = std::find_if(it + 1, end, predicate);
-            if (it1 != end)
+            auto end = constructor.fields.end();
+            for (auto it = constructor.fields.begin(); it != end; ++it)
             {
-                Log(it1->location, "duplicate field \"", it1->name, '"');
-                return nullptr;
+                auto predicate = [it](const llfp::ast::Field& field) { return it->name == field.name; };
+                auto result = std::find_if(it + 1, end, predicate);
+                if (result != end)
+                {
+                    Log(result->location, "duplicate field \"", result->name, '"');
+                    return nullptr;
+                }
             }
         }
     }
@@ -155,9 +158,17 @@ std::string SourceModule::getMangledName(const ast::Function*function, const std
     return result;
 }
 
-std::string SourceModule::getMangledName(const ast::Data *data, const std::vector<const type::TypeInstance*>& types) const
+std::string SourceModule::getMangledName(const ast::Data* data) const
 {
+    assert(data->typeVariables.empty());
     return name() + '_' + data->name;
+}
+
+std::string SourceModule::getMangledName(const ast::Data *data, int constructorIndex) const
+{
+    assert(data->typeVariables.empty());
+    assert(data->constructors.size() > 1);
+    return name() + '_' + data->name + '_' + data->constructors.at(constructorIndex).name;
 }
 
 std::string SourceModule::getExportedName(const ast::Function*function) const

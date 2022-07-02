@@ -6,6 +6,7 @@
 #pragma warning(push, 0)
 
 #include "llvm/Support/FormatVariadic.h"
+#include "llvm/IR/Constants.h"
 
 #pragma warning(pop)
 
@@ -79,9 +80,9 @@ std::string Identifier::str() const
 }
 
 
-TypeInstance::TypeInstance(Identifier identifier, std::vector<std::string> typeClasses_):
-    identifier_{std::move(identifier)},
-    typeClasses{std::move(typeClasses_)}
+TypeInstance::TypeInstance(Identifier identifier, std::vector<std::string> typeClasses_) :
+    identifier_{ std::move(identifier) },
+    typeClasses{ std::move(typeClasses_) }
 {
 }
 
@@ -114,12 +115,12 @@ TypeInstPtr TypeInstance::getTypeParameter(int) const
 
 bool TypeInstance::isNum() const
 {
-    return llfp::contains(typeClasses, std::string{ id::Num });
+    return llfp::contains(typeClasses, id::Num.str());
 }
 
 bool TypeInstance::isInteger() const
 {
-    return llfp::contains(typeClasses, std::string{ id::Integer });
+    return llfp::contains(typeClasses,  id::Integer.str());
 }
 
 bool TypeInstance::isBool() const
@@ -129,30 +130,31 @@ bool TypeInstance::isBool() const
 
 bool TypeInstance::isFloating() const
 {
-    return llfp::contains(typeClasses, std::string{ id::Floating });
+    return llfp::contains(typeClasses, id::Floating.str());
 }
 
 bool TypeInstance::isSigned()const
 {
-    return llfp::contains(typeClasses, std::string{ id::Signed });
+    return llfp::contains(typeClasses, id::Signed.str());
 }
 
-unsigned int TypeInstance::getFieldIndex(const std::string&) const
-{
-    return InvalidIndex;
-}
+unsigned int TypeInstance::getFieldIndex(const std::string&) const { return InvalidIndex; }
+unsigned int TypeInstance::getFieldIndex(const std::string&, const std::string&) const { return InvalidIndex; }
 
-const TypeInstance* TypeInstance::getFieldType(unsigned int) const
+TypeInstPtr TypeInstance::getFieldType(unsigned int) const
 {
     assert(false);
     throw Error("internal error (TypeInstance::getFieldType)");
-    //return nullptr;
 }
 
-unsigned int TypeInstance::getFieldCount() const
+TypeInstPtr TypeInstance::getFieldType(const std::string&, unsigned int) const
 {
-    return 0;
+    assert(false);
+    throw Error("internal error (TypeInstance::getFieldType)");
 }
+
+unsigned int TypeInstance::getFieldCount() const { return 0; }
+unsigned int TypeInstance::getFieldCount(const std::string&) const { return 0; }
 
 
 TypeInstanceBasic::TypeInstanceBasic(llvm::StringLiteral name, llvm::Type* llvmType, std::vector<std::string> typeClasses_) :
@@ -186,7 +188,7 @@ std::shared_ptr<hm::TypeConstant> TypeInstanceStruct::getType() const
     size_t i = 0;
     for (const auto& field : fields)
     {
-        type->fields.insert({ast->fields[i].name, field->getType()});
+        type->fields.insert({ast->constructors.front().fields[i].name, field->getType()});
         ++i;
     }
     return type;
@@ -204,67 +206,103 @@ bool TypeInstanceStruct::isStructType() const
 
 unsigned int TypeInstanceStruct::getFieldIndex(const std::string& fieldIdentifier) const
 {
-    assert(ast->fields.size() == fields.size());
-    const unsigned int size = static_cast<unsigned int>(ast->fields.size());
+    assert(ast->constructors.size() == 1);
+    auto& constructor = ast->constructors.front();
+    assert(constructor.fields.size() == fields.size());
+    const unsigned int size = static_cast<unsigned int>(constructor.fields.size());
     for (unsigned int i = 0; i < size; ++i)
     {
-        if (ast->fields[i].name == fieldIdentifier) { return i; }
+        if (constructor.fields[i].name == fieldIdentifier) { return i; }
+    }
+    return InvalidIndex;
+}
+
+unsigned int TypeInstanceStruct::getFieldIndex(const std::string& constructorName, const std::string& fieldIdentifier) const
+{
+    if (ast->constructors.front().name != constructorName) { throw Error("unknown constructor"); }
+    const auto& astFields = ast->constructors.front().fields;
+    assert(astFields.size() == fields.size());
+    const unsigned int size = static_cast<unsigned int>(astFields.size());
+    for (unsigned int i = 0; i < size; ++i)
+    {
+        if (astFields[i].name == fieldIdentifier) { return i; }
     }
     return InvalidIndex;
 }
 
 TypeInstPtr TypeInstanceStruct::getFieldType(unsigned int index) const
 {
+    assert(ast->constructors.size() == 1);
+    assert(index < fields.size());
+    return fields[index];
+}
+
+TypeInstPtr TypeInstanceStruct::getFieldType(const std::string& constructorName, unsigned int index) const
+{
+    if (ast->constructors.front().name != constructorName) { throw Error("unknown constructor"); }
     assert(index < fields.size());
     return fields[index];
 }
 
 unsigned int TypeInstanceStruct::getFieldCount() const
 {
+    assert(ast->constructors.size() == 1);
     return static_cast<unsigned int>(fields.size());
 }
+
+unsigned int TypeInstanceStruct::getFieldCount(const std::string& constructorName) const
+{
+    if (ast->constructors.front().name != constructorName) { throw Error("unknown constructor"); }
+    return static_cast<unsigned int>(fields.size());
+}
+
+namespace {
+
+TypeInstPtr findTypeOfTypeVar(const std::string& typeVar, const ast::TypeIdentifier& typeId, TypeInstPtr type)
+{
+    auto findType_impl = [&typeVar](const ast::TypeIdentifier& typeId, TypeInstPtr type, auto& find_ref) -> TypeInstPtr
+    {
+        if (typeId.identifier.moduleName.empty() && typeId.identifier.name == typeVar)
+        {
+            assert(typeId.parameters.empty());
+            return type;
+        }
+
+        //assert(typeId.parameters.size() == type->getTypeParameterCount());
+        for (unsigned int i = 0; i < typeId.parameters.size(); ++i)
+        {
+            auto result = find_ref(typeId.parameters[i], type->getTypeParameter(i), find_ref);
+            if (result != nullptr) { return result; }
+        }
+
+        return nullptr;
+    };
+    return findType_impl(typeId, type, findType_impl);
+}
+
+} // namespace
 
 void TypeInstanceStruct::setFields(std::vector<const TypeInstance*> fieldTypes)
 {
     assert(fields.size() == 0);
     assert(parameters.size() == 0);
-    assert(ast->fields.size() == fieldTypes.size());
+    assert(ast->constructors.size() == 1);
+    const auto& astFields = ast->constructors.front().fields;
+    assert(astFields.size() == fieldTypes.size());
 
     for (auto& typeVar : ast->typeVariables)
     {
-        const auto findType = [&typeVar](const ast::TypeIdentifier& typeId, TypeInstPtr type) -> TypeInstPtr
-        {
-            auto findType_impl = [&typeVar](const ast::TypeIdentifier& typeId, TypeInstPtr type, auto& find_ref) -> TypeInstPtr
-            {
-                if (typeId.identifier.moduleName.empty() && typeId.identifier.name == typeVar)
-                {
-                    assert(typeId.parameters.empty());
-                    return type;
-                }
-
-                //assert(typeId.parameters.size() == type->getTypeParameterCount());
-                for (unsigned int i = 0; i < typeId.parameters.size(); ++i)
-                {
-                    auto result = find_ref(typeId.parameters[i], type->getTypeParameter(i), find_ref);
-                    if (result != nullptr) { return result; }
-                }
-
-                return nullptr;
-            };
-            return findType_impl(typeId, type, findType_impl);
-        };
-
         TypeInstPtr result = nullptr;
         for (unsigned int i = 0; i < fieldTypes.size(); ++i)
         {
-            result = findType(ast->fields[i].type, fieldTypes[i]);
+            result = findTypeOfTypeVar(typeVar, astFields[i].type, fieldTypes[i]);
             if (result != nullptr) { break; }
         }
         assert(result != nullptr);
         parameters.push_back(result);
     }
 
-    if (llvmType_ != nullptr)
+    if (llvmType_ != nullptr) // when is this not null?
     {
         std::vector<llvm::Type*> llvmTypes;
         std::transform(fieldTypes.begin(), fieldTypes.end(), std::back_inserter(llvmTypes),
@@ -273,6 +311,116 @@ void TypeInstanceStruct::setFields(std::vector<const TypeInstance*> fieldTypes)
         llvmType_->setBody(llvmTypes);
     }
     fields = std::move(fieldTypes);
+}
+
+
+TypeInstanceVariant::TypeInstanceVariant(
+    Identifier identifier,
+    llvm::PointerType* llvmType,
+    const ImportedModule* module_,
+    const ast::Data* ast_,
+    std::vector<std::string> typeClasses) :
+    TypeInstance(std::move(identifier), std::move(typeClasses)),
+    llvmType_{ llvmType },
+    module{ module_ },
+    ast{ ast_ }
+{
+}
+
+std::shared_ptr<hm::TypeConstant> TypeInstanceVariant::getType() const
+{
+    auto type = TypeInstance::getType();
+    size_t constructorIndex = 0;
+    for (const auto& constructor : ast->constructors)
+    {
+        type->constructors.push_back(constructor.name);
+        size_t fieldIndex = 0;
+        for (const auto& field : constructors[constructorIndex].fields)
+        {
+            type->fields.insert({ constructor.fields[fieldIndex].name, field->getType() });
+            ++fieldIndex;
+        }
+        ++constructorIndex;
+    }
+    assert(!(!type->fields.empty() && type->constructors.size() > 1));
+    return type;
+}
+
+llvm::Type* TypeInstanceVariant::llvmType() const
+{
+    return llvmType_;
+}
+
+bool TypeInstanceVariant::isStructType() const
+{
+    return true;
+}
+
+unsigned int TypeInstanceVariant::getFieldIndex(const std::string&) const
+{
+    assert(false);
+    return InvalidIndex;
+}
+
+unsigned int TypeInstanceVariant::getFieldIndex(const std::string& constructor, const std::string& fieldIdentifier) const
+{
+    auto i = findIndex(ast->constructors, [&constructor](const ast::DataConstructor& c) { return c.name == constructor; });
+    if (!checkIndex(i)) { throw Error("unknown constructor"); }
+    auto j = findIndex(ast->constructors[i].fields, [&fieldIdentifier](const ast::Field& f) { return f.name == fieldIdentifier; });
+    if (!checkIndex(j)) { return InvalidIndex; }
+    return static_cast<unsigned int>(j);
+}
+
+const TypeInstance* TypeInstanceVariant::getFieldType(unsigned int) const
+{
+    assert(false);
+    return nullptr;
+}
+
+const TypeInstance* TypeInstanceVariant::getFieldType(const std::string& constructor, unsigned int index) const
+{
+    auto i = findIndex(ast->constructors, [&constructor](const ast::DataConstructor& c) { return c.name == constructor; });
+    if (!checkIndex(i)) { throw Error("unknown constructor"); }
+    return constructors[i].fields[index];
+}
+
+unsigned int TypeInstanceVariant::getFieldCount() const
+{
+    assert(false);
+    return 0;
+}
+
+unsigned int TypeInstanceVariant::getFieldCount(const std::string& constructor) const
+{
+    auto i = findIndex(ast->constructors, [&constructor](const ast::DataConstructor& c) { return c.name == constructor; });
+    if (!checkIndex(i)) { throw Error("unknown constructor"); }
+    return static_cast<unsigned int>(constructors[i].fields.size());
+}
+
+void TypeInstanceVariant::setConstructors(std::vector<TypeConstructor> constructors_)
+{
+    for (auto& typeVar : ast->typeVariables)
+    {
+        TypeInstPtr result = nullptr;
+        for (unsigned int constructorIndex = 0; constructorIndex < constructors_.size(); ++constructorIndex)
+        {
+            const auto& astFields = ast->constructors[constructorIndex].fields;
+            const auto& constructor = constructors_[constructorIndex];
+
+            assert(astFields.size() == constructor.fields.size());
+
+            for (unsigned int fieldIndex = 0; fieldIndex < constructor.fields.size(); ++fieldIndex)
+            {
+                result = findTypeOfTypeVar(typeVar, astFields[fieldIndex].type, constructor.fields[fieldIndex]);
+                if (result != nullptr) { break; }
+            }
+            if (result != nullptr) { break; }
+        }
+        assert(result != nullptr);
+        parameters.push_back(result);
+    }
+
+    constructors = std::move(constructors_);
 }
 
 } // namespace Type

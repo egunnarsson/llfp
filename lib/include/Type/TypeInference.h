@@ -91,7 +91,8 @@ public:
 
     std::set<std::string>          typeClasses;
     std::map<std::string, TypePtr> fields;
-    //std::vector<std::string> constructors;
+    std::vector<std::string>       constructors;
+    // assert(!(!fields.empty() && constructors.size() > 1));
 
     std::vector<Substitution> addConstraints(const SimpleType& other);
     std::string               printConstraints(std::string base) const;

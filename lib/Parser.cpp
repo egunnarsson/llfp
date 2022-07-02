@@ -10,6 +10,7 @@
 #pragma warning(pop)
 
 #include "Ast.h"
+#include "Error.h"
 #include "Lexer.h"
 #include "Log.h"
 #include "String/StringConstants.h"
@@ -232,7 +233,51 @@ bool Parser::parseDeclaration(const std::unique_ptr<ast::Module> &module)
     return false;
 }
 
-// "data" <id> [ "[" { <id> "," } <id> "]" ] "{" { <tid> <id> ";" } "}"
+// [ <id> ] "{" { <tid> <id> ";" } "}"
+std::optional<ast::DataConstructor> Parser::parseDataConstructor()
+{
+    auto constructorLocation = lexer->getLocation();
+
+    std::string name;
+    if (lexer->getToken() == lex::Token::Identifier)
+    {
+        name = lexer->getString();
+        lexer->nextToken();
+    }
+
+    if (!expect(lex::Token::Open_brace)) { return std::nullopt; }
+
+    std::vector<ast::Field> fields;
+    while (lexer->getToken() != lex::Token::Close_brace)
+    {
+        auto fieldLocation = lexer->getLocation();
+
+        ast::TypeIdentifier fieldType;
+        if (!parseType(fieldType)) { return std::nullopt; }
+        if (fieldType.identifier.name.empty())
+        {
+            Log(lexer->getLocation(), "expected an identifier");
+            return std::nullopt;
+        }
+
+        if (lexer->getToken() != lex::Token::Identifier)
+        {
+            Log(lexer->getLocation(), "expected an identifier");
+            return std::nullopt;
+        }
+        std::string fieldName = lexer->getString();
+        lexer->nextToken();
+
+        if (!expect(lex::Token::Semicolon)) { return std::nullopt; }
+
+        fields.push_back({ fieldLocation, std::move(fieldType), std::move(fieldName) });
+    }
+    lexer->nextToken(); // eat "}"
+
+    return ast::DataConstructor{ constructorLocation, std::move(name), std::move(fields) };
+}
+
+// "data" <id> [ "[" { <id> "," } <id> "]" ] "=" <constructor> { "," <constructor> } ";"
 std::unique_ptr<ast::Data> Parser::parseData(bool exported)
 {
     auto location = lexer->getLocation();
@@ -260,34 +305,23 @@ std::unique_ptr<ast::Data> Parser::parseData(bool exported)
         if (!parseList<lex::Token::Open_bracket, lex::Token::Close_bracket>(parseVariable)) { return nullptr; }
     }
 
-    if (!expect(lex::Token::Open_brace)) { return nullptr; }
-
-    std::vector<ast::Field> fields;
-    while (lexer->getToken() != lex::Token::Close_brace)
+    std::vector<ast::DataConstructor> constructors;
+    auto parseConstructor = [this, &constructors]()
     {
-        auto fieldLocation = lexer->getLocation();
-
-        ast::TypeIdentifier fieldType;
-        if (!parseType(fieldType)) { return nullptr; }
-        if (fieldType.identifier.name.empty())
+        if (auto constructor = parseDataConstructor())
         {
-            return error<ast::Data>("expected an identifier");
+            constructors.push_back(std::move(constructor.value()));
+            return true;
         }
-
-        if (lexer->getToken() != lex::Token::Identifier)
+        else
         {
-            return error<ast::Data>("expected an identifier");
+            return false;
         }
-        std::string fieldName = lexer->getString();
-        lexer->nextToken();
+    };
 
-        if (!expect(lex::Token::Semicolon)) { return nullptr; }
+    if (!parseList<lex::Token::Equal, lex::Token::Semicolon>(parseConstructor)) { return nullptr; }
 
-        fields.push_back({ fieldLocation, std::move(fieldType), std::move(fieldName) });
-    }
-    lexer->nextToken(); // eat }
-
-    return std::make_unique<ast::Data>(location, std::move(name), std::move(typeVariables), std::move(fields), exported);
+    return std::make_unique<ast::Data>(location, std::move(name), std::move(typeVariables), std::move(constructors), exported);
 }
 
 // [ <tid> ] <id> [ "(" [ { <arg> "," } <arg> ] ")" ] "=" <exp> ";"

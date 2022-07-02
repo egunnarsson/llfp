@@ -175,7 +175,13 @@ std::string MathModule::getMangledName(const ast::Function* function, const std:
     }
 }
 
-std::string MathModule::getMangledName(const ast::Data* data, const std::vector<const type::TypeInstance*>& types) const
+std::string MathModule::getMangledName(const ast::Data* data) const
+{
+    assert(false);
+    return "";
+}
+
+std::string MathModule::getMangledName(const ast::Data* data, int constructorIndex) const
 {
     assert(false);
     return "";

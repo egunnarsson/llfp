@@ -26,4 +26,22 @@ bool contains(const std::vector<T> &list, const U& value)
     return std::any_of(list.begin(), list.end(), [&value](const T& item) { return item == value; });
 }
 
+template<class T>
+constexpr T npos = T(-1);
+
+template<class T>
+bool checkIndex(T i)
+{
+    return npos<T> != i;
+}
+
+template<class T, class P>
+typename std::vector<T>::size_type findIndex(const std::vector<T>& list, const P& pred)
+{
+    auto it = std::find_if(list.begin(), list.end(), pred);
+    if (it == list.end()) { return npos<std::vector<T>::size_type>; }
+    auto distance = std::distance(list.begin(), it);
+    return static_cast<std::vector<T>::size_type>(distance);
+}
+
 } // llfp

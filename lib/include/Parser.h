@@ -56,6 +56,8 @@ private:
     std::unique_ptr<ast::ClassInstance>       parseInstance();
     std::unique_ptr<ast::FunctionDeclaration> parseFunctionDeclaration();
 
+    std::optional<ast::DataConstructor>       parseDataConstructor();
+
     std::unique_ptr<ast::Exp> parseLiteralExp();
     std::unique_ptr<ast::Exp> parseParenthesizedExp();
     std::unique_ptr<ast::Exp> parseIdentifierExp();

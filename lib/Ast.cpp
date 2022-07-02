@@ -45,17 +45,26 @@ Field::Field(SourceLocation location_, TypeIdentifier type_, std::string name_) 
 Field::~Field() {}
 
 
+DataConstructor::DataConstructor(SourceLocation location_, std::string name_, std::vector<Field> fields_) :
+    Node(location_),
+    name{ std::move(name_) },
+    fields{ std::move(fields_) }
+{}
+
+DataConstructor::~DataConstructor() {}
+
+
 Data::Data(
     SourceLocation location_,
     std::string name_,
     std::vector<std::string> typeVariables_,
-    std::vector<Field> fields_,
+    std::vector<DataConstructor> constructors_,
     bool exported_) :
 
     Node(location_),
     name{ std::move(name_) },
     typeVariables{ std::move(typeVariables_) },
-    fields{ std::move(fields_) },
+    constructors{ std::move(constructors_) },
     exported{ exported_ }
 {}
 
@@ -72,7 +81,6 @@ Parameter::~Parameter() {}
 
 
 Exp::Exp(SourceLocation location_) : Node(location_) {}
-Exp::~Exp() {}
 
 
 Function::Function(

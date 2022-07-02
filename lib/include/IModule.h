@@ -64,7 +64,8 @@ public:
     virtual DataAst     getType(const std::string &name) const = 0;
 
     virtual std::string getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const = 0;
-    virtual std::string getMangledName(const ast::Data* data, const std::vector<const type::TypeInstance*>& types) const = 0;
+    virtual std::string getMangledName(const ast::Data* data) const = 0;
+    virtual std::string getMangledName(const ast::Data* data, int constructorIndex) const = 0;
     virtual std::string getExportedName(const ast::Function *function) const = 0;
     virtual bool        fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const = 0;
 

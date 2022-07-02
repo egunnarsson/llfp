@@ -1208,7 +1208,7 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
     {
         getTypeContext()->check(*typeAnnotation, expectedType, typeAnnotation->get(&exp));
 
-        const auto size = expectedType->getFieldCount();
+        const auto size = expectedType->getFieldCount(exp.identifier.name);
         if (size != exp.arguments.size())
         {
             Log(exp.location, "incorrect number of arguments");
@@ -1224,7 +1224,7 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
             // at the moment name is only used to check correctness
             if (!arg.name.empty())
             {
-                auto index = expectedType->getFieldIndex(arg.name);
+                auto index = expectedType->getFieldIndex(exp.identifier.name, arg.name);
                 if (index != i)
                 {
                     Log(arg.location, index == type::TypeInstance::InvalidIndex
@@ -1234,7 +1234,7 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
                 }
             }
 
-            auto argValue = ExpCodeGenerator::generate(*arg.exp, expectedType->getFieldType(i), this);
+            auto argValue = ExpCodeGenerator::generate(*arg.exp, expectedType->getFieldType(exp.identifier.name, i), this);
             if (argValue != nullptr)
             {
                 value = llvmBuilder().CreateInsertValue(value, argValue, { i });

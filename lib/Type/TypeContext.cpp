@@ -171,6 +171,70 @@ TypeInstPtr TypeContext::getTypeFromAst(const ast::TypeIdentifier& identifier, c
     throw Error(std::string{ "failed to fully qualify name: " } + identifier.str());
 }
 
+std::vector<TypeInstPtr> TypeContext::getFieldTypes(llfp::DataAst ast, const std::vector<llfp::ast::Field>& fields, const std::map<std::string, Identifier>& typeVariables)
+{
+    std::vector<TypeInstPtr> result;
+    for (auto& field : fields)
+    {
+        TypeInstPtr fieldType = nullptr;
+        if (field.type.identifier.moduleName.empty())
+        {
+            auto it = typeVariables.find(field.type.identifier.name);
+            if (it != typeVariables.end())
+            {
+                fieldType = getType(it->second);
+            }
+        }
+        if (fieldType == nullptr)
+        {
+            fieldType = getTypeFromAst(field.type, ast.importedModule);
+        }
+
+        if (fieldType == nullptr)
+        {
+            Log(field.location, "unknown type: ", field.type.identifier.str());
+            throw Error("");
+        }
+        result.push_back(std::move(fieldType));
+    }
+    return result;
+}
+
+TypeInstPtr TypeContext::makeTypeInstanceStruct(const Identifier& identifier, llfp::DataAst ast, std::vector<std::string> typeClasses, const std::map<std::string, Identifier> &typeVariables)
+{
+    auto llvmType = llvm::StructType::create(llvmContext, "");
+    auto tmpPtr = std::make_unique<TypeInstanceStruct>(identifier, ast.importedModule, ast.data, llvmType, typeClasses);
+    auto typePtr = tmpPtr.get();
+    auto it2 = types.insert({ identifier, std::move(tmpPtr) });
+    assert(it2.second);
+
+    auto& constructor = ast.data->constructors.front();
+    auto fieldTypes = getFieldTypes(ast, constructor.fields, typeVariables);
+
+    llvmType->setName(ast.importedModule->getMangledName(ast.data, 0)); // should be type variables
+    typePtr->setFields(std::move(fieldTypes));
+
+    return typePtr;
+}
+
+TypeInstPtr TypeContext::makeTypeInstanceVariant(const Identifier& identifier, llfp::DataAst ast, std::vector<std::string> typeClasses, const std::map<std::string, Identifier>& typeVariables)
+{
+    auto llvmType = llvm::Type::getInt8PtrTy(llvmContext);
+    auto tmpPtr = std::make_unique<TypeInstanceVariant>(identifier, llvmType, ast.importedModule, ast.data, std::move(typeClasses));
+    auto typePtr = tmpPtr.get();
+    auto it2 = types.insert({ identifier, std::move(tmpPtr) });
+    assert(it2.second);
+
+    std::vector<TypeConstructor> constructors;
+    for (auto& astConstructor : ast.data->constructors)
+    {
+        constructors.push_back(TypeConstructor{ getFieldTypes(ast, astConstructor.fields, typeVariables) });
+    }
+    typePtr->setConstructors(constructors);
+
+    return typePtr;
+}
+
 /**
 Get or create a type. The identifier is assumed to be fully qualified and of a concrete type.
 */
@@ -194,49 +258,20 @@ TypeInstPtr TypeContext::getType(const Identifier& identifier)
 
         std::vector<std::string> typeClasses; // TODO!!!
 
-        auto llvmType = llvm::StructType::create(llvmContext, "");
-        auto tmpPtr = std::make_unique<TypeInstanceStruct>(identifier, ast.importedModule, ast.data, llvmType, typeClasses);
-        auto typePtr = tmpPtr.get();
-        auto it2 = types.insert({ identifier, std::move(tmpPtr) });
-        assert(it2.second);
-
-        // generate body
-
         std::map<std::string, Identifier> typeVariables; // I think we need to build this
         for (int i = 0; i < ast.data->typeVariables.size(); ++i)
         {
             typeVariables[ast.data->typeVariables[i]] = identifier.parameters[i];
         }
 
-        std::vector<const TypeInstance*> fieldTypes;
-        for (auto& field : ast.data->fields)
+        if (ast.data->constructors.size() == 1)
         {
-            const TypeInstance* fieldType = nullptr;
-            if (field.type.identifier.moduleName.empty())
-            {
-                auto it = typeVariables.find(field.type.identifier.name);
-                if (it != typeVariables.end())
-                {
-                    fieldType = getType(it->second);
-                }
-            }
-            if (fieldType == nullptr)
-            {
-                fieldType = getTypeFromAst(field.type, ast.importedModule);
-            }
-
-            if (fieldType == nullptr)
-            {
-                Log(field.location, "unknown type: ", field.type.identifier.str());
-                throw Error("");
-            }
-            fieldTypes.push_back(std::move(fieldType));
+            return makeTypeInstanceStruct(identifier, ast, typeClasses, typeVariables);
         }
-
-        llvmType->setName(ast.importedModule->getMangledName(ast.data, fieldTypes));
-        typePtr->setFields(std::move(fieldTypes));
-
-        return typePtr;
+        else
+        {
+            return makeTypeInstanceVariant(identifier, ast, typeClasses, typeVariables);
+        }
     }
 
     throw Error(std::string{ "unknown data " } + identifier.name.str());

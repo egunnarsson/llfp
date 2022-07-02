@@ -24,6 +24,7 @@ is it ok to fix the type in these cases?
 
 #include "Ast.h"
 #include "Common/GlobalIdentifier.h"
+#include "IModule.h"
 #include "Type/TypeInstance.h"
 #include "String/StringConstants.h"
 
@@ -89,6 +90,10 @@ public:
 private:
 
     TypeInstance* addType(llvm::StringLiteral name, llvm::Type* llvmType, std::initializer_list<llvm::StringRef> typeClasses);
+
+    TypeInstPtr makeTypeInstanceVariant(const Identifier& identifier, llfp::DataAst ast, std::vector<std::string> typeClasses, const std::map<std::string, Identifier>& typeVariables);
+    TypeInstPtr makeTypeInstanceStruct(const Identifier& identifier, llfp::DataAst ast, std::vector<std::string> typeClasses, const std::map<std::string, Identifier>& typeVariables);
+    std::vector<TypeInstPtr> getFieldTypes(llfp::DataAst ast, const std::vector<llfp::ast::Field>& fields, const std::map<std::string, Identifier>& typeVariables);
 };
 
 } // namespace type

@@ -390,9 +390,12 @@ bool resolveIdentifiers(SourceModule& srcModule)
             return false;
         };
 
-        for (auto& field : data->fields)
+        for (auto& constructor : data->constructors)
         {
-            resolveType(context, field.location, field.type, checkLocalFun, false);
+            for (auto& field : constructor.fields)
+            {
+                resolveType(context, field.location, field.type, checkLocalFun, false);
+            }
         }
     }
 

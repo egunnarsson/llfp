@@ -20,7 +20,7 @@ namespace llfp
 namespace
 {
 
-std::string convertType(llfp::SourceModule &module, GlobalIdentifier& type)
+std::string convertType(llfp::SourceModule &module, const GlobalIdentifier& type)
 {
     static std::unordered_map<std::string, llvm::StringRef> map {
         {id::Bool.str(), "bool"},
@@ -122,12 +122,43 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
             llvm::errs() << "cannot export data type with type variables: " << module.name() << ':' << d->name;
             continue;
         }
-        os << "struct " << module.getMangledName(d.get(), {}) << "\n{\n";
-        for (auto &f : d->fields)
+
+        auto writeStruct = [&module, &os](const std::string& name, const std::vector<ast::Field>& fields)
         {
-            os << '\t' << convertType(module, f.type.identifier) << ' ' << f.name << ";\n";
+            os << "struct " << name << "\n{\n";
+            for (auto& f : fields)
+            {
+                os << '\t' << convertType(module, f.type.identifier) << ' ' << f.name << ";\n";
+            }
+            os << "};\n\n";
+        };
+
+        if (d->constructors.size() > 1)
+        {
+            for (int i = 0; i < d->constructors.size(); ++i)
+            {
+                writeStruct(module.getMangledName(d.get(), i), d->constructors[i].fields);
+            }
+
+            // make union struct
+            if (d->constructors.size() > 1) {
+                os <<
+                    "struct " << module.getMangledName(d.get()) << "\n{\n"
+                    "\tint type;\n"
+                    "\tunion {\n";
+                for (int i = 0; i < d->constructors.size(); ++i)
+                {
+                    os << "\t\tstruct " << module.getMangledName(d.get(), i) << ' ' << d->constructors[i].name << ";\n";
+                }
+                os <<
+                    "\t};\n";
+                "};\n\n";
+            }
         }
-        os << "};\n\n";
+        else
+        {
+            writeStruct(module.getMangledName(d.get()), d->constructors.at(0).fields);
+        }
     }
 
     for (auto &f : module.getAST()->functions)

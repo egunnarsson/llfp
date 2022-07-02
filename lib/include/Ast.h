@@ -89,9 +89,10 @@ struct Node
 protected:
 
     Node(SourceLocation location_);
+    ~Node() = default;
 };
 
-struct Field : public Node
+struct Field final : public Node
 {
     TypeIdentifier type;
     std::string    name;
@@ -100,23 +101,35 @@ struct Field : public Node
     virtual ~Field();
 };
 
-struct Data : public Node
+struct DataConstructor final : public Node
 {
-    std::string              name;
-    std::vector<std::string> typeVariables;
-    std::vector<Field>       fields;
-    bool                     exported;
+    std::string        name;
+    std::vector<Field> fields;
+
+    DataConstructor(
+        SourceLocation location_,
+        std::string name_,
+        std::vector<Field> fields_);
+    virtual ~DataConstructor();
+};
+
+struct Data final : public Node
+{
+    std::string                  name;
+    std::vector<std::string>     typeVariables;
+    std::vector<DataConstructor> constructors;
+    bool                         exported;
 
     Data(
         SourceLocation location_,
         std::string name_,
         std::vector<std::string> typeVariables_,
-        std::vector<Field> fields_,
+        std::vector<DataConstructor> constructors_,
         bool exported_);
     virtual ~Data();
 };
 
-struct Parameter : public Node
+struct Parameter final : public Node
 {
     TypeIdentifier type;
     std::string    identifier; // or name?
@@ -127,7 +140,7 @@ struct Parameter : public Node
 
 struct Exp : public Node
 {
-    virtual ~Exp();
+    virtual ~Exp() = default;
 
     virtual void accept(ExpVisitor* visitor) = 0;
 
@@ -143,7 +156,7 @@ enum FunctionType
     Instance
 };
 */
-struct Function : public Node
+struct Function final : public Node
 {
     std::string          name;
     TypeIdentifier       type;
@@ -161,7 +174,7 @@ struct Function : public Node
     virtual ~Function();
 };
 
-struct FunctionDeclaration : public Node
+struct FunctionDeclaration final : public Node
 {
     std::string    name;
     TypeIdentifier type;
@@ -175,7 +188,7 @@ struct FunctionDeclaration : public Node
     virtual ~FunctionDeclaration();
 };
 
-struct Class : public Node
+struct Class final : public Node
 {
     std::string name;
     std::string typeVariable;
@@ -189,7 +202,7 @@ struct Class : public Node
     virtual ~Class();
 };
 
-struct ClassInstance : public Node
+struct ClassInstance final : public Node
 {
     GlobalIdentifier classIdentifier;
     TypeIdentifier   typeArgument;
@@ -203,7 +216,7 @@ struct ClassInstance : public Node
     virtual ~ClassInstance();
 };
 
-struct Public : public Node
+struct Public final : public Node
 {
     std::string name;
 
@@ -211,7 +224,7 @@ struct Public : public Node
     virtual ~Public();
 };
 
-struct Import : public Node
+struct Import final : public Node
 {
     std::string name;
 
@@ -219,7 +232,7 @@ struct Import : public Node
     virtual ~Import();
 };
 
-struct Module : public Node
+struct Module final : public Node
 {
     std::string                                 name;
     std::vector<Public>                         publics;
@@ -233,7 +246,7 @@ struct Module : public Node
     virtual ~Module();
 };
 
-struct LetExp : public Exp
+struct LetExp final : public Exp
 {
     std::vector<std::unique_ptr<Function>> letStatments;
     std::unique_ptr<Exp> exp;
@@ -244,7 +257,7 @@ struct LetExp : public Exp
     void accept(ExpVisitor *visitor) override;
 };
 
-struct IfExp : public Exp
+struct IfExp final : public Exp
 {
     std::unique_ptr<Exp> condition;
     std::unique_ptr<Exp> thenExp;
@@ -264,7 +277,7 @@ struct Pattern : public Node
     virtual void accept(PatternVisitor* visitor) = 0;
 };
 
-struct BoolPattern : public Pattern
+struct BoolPattern final : public Pattern
 {
     bool value;
 
@@ -274,7 +287,7 @@ struct BoolPattern : public Pattern
     void accept(PatternVisitor* visitor) override;
 };
 
-struct IdentifierPattern : public Pattern
+struct IdentifierPattern final : public Pattern
 {
     std::string value;
 
@@ -284,7 +297,7 @@ struct IdentifierPattern : public Pattern
     void accept(PatternVisitor* visitor) override;
 };
 
-struct IntegerPattern : public Pattern
+struct IntegerPattern final : public Pattern
 {
     std::string value;
 
@@ -294,7 +307,7 @@ struct IntegerPattern : public Pattern
     void accept(PatternVisitor* visitor) override;
 };
 
-struct FloatPattern : public Pattern
+struct FloatPattern final : public Pattern
 {
     std::string value;
 
@@ -304,7 +317,7 @@ struct FloatPattern : public Pattern
     void accept(PatternVisitor* visitor) override;
 };
 
-struct CharPattern : public Pattern
+struct CharPattern final : public Pattern
 {
     std::string value;
 
@@ -314,7 +327,7 @@ struct CharPattern : public Pattern
     void accept(PatternVisitor* visitor) override;
 };
 
-struct StringPattern : public Pattern
+struct StringPattern final : public Pattern
 {
     std::string value;
 
@@ -324,7 +337,7 @@ struct StringPattern : public Pattern
     void accept(PatternVisitor* visitor) override;
 };
 
-struct NamedArgumentPattern : public Node
+struct NamedArgumentPattern final : public Node
 {
     std::string              name;
     std::unique_ptr<Pattern> pattern;
@@ -334,7 +347,7 @@ struct NamedArgumentPattern : public Node
     virtual ~NamedArgumentPattern();
 };
 
-struct ConstructorPattern : public Pattern
+struct ConstructorPattern final : public Pattern
 {
     GlobalIdentifier                  identifier;
     std::vector<NamedArgumentPattern> arguments;
@@ -345,13 +358,13 @@ struct ConstructorPattern : public Pattern
     void accept(PatternVisitor* visitor) override;
 };
 
-struct Clause
+struct Clause final
 {
     std::unique_ptr<Pattern> pattern;
     std::unique_ptr<Exp>     exp;
 };
 
-struct CaseExp : public Exp
+struct CaseExp final : public Exp
 {
     std::unique_ptr<Exp> caseExp;
     std::vector<Clause>  clauses;
@@ -362,7 +375,7 @@ struct CaseExp : public Exp
     void accept(ExpVisitor *visitor) override;
 };
 
-struct BinaryExp : public Exp
+struct BinaryExp final : public Exp
 {
     std::string          op;
     std::unique_ptr<Exp> lhs;
@@ -374,7 +387,7 @@ struct BinaryExp : public Exp
     void accept(ExpVisitor *visitor) override;
 };
 
-struct UnaryExp : public Exp
+struct UnaryExp final : public Exp
 {
     std::string          op;
     std::unique_ptr<Exp> operand;
@@ -385,7 +398,7 @@ struct UnaryExp : public Exp
     void accept(ExpVisitor *visitor) override;
 };
 
-struct LiteralExp : public Exp
+struct LiteralExp final : public Exp
 {
     lex::Token  tokenType; // remove this dependency
     std::string value;
@@ -396,7 +409,7 @@ struct LiteralExp : public Exp
     void accept(ExpVisitor *visitor) override;
 };
 
-struct VariableExp : public Exp
+struct VariableExp final : public Exp
 {
     GlobalIdentifier identifier;
 
@@ -406,7 +419,7 @@ struct VariableExp : public Exp
     void accept(ExpVisitor *visitor) override;
 };
 
-struct CallExp : public Exp
+struct CallExp final : public Exp
 {
     GlobalIdentifier                  identifier;
     std::vector<std::unique_ptr<Exp>> arguments;
@@ -417,7 +430,7 @@ struct CallExp : public Exp
     void accept(ExpVisitor *visitor) override;
 };
 
-struct FieldExp : public Exp
+struct FieldExp final : public Exp
 {
     std::unique_ptr<Exp> lhs;
     std::string          fieldIdentifier;
@@ -428,7 +441,7 @@ struct FieldExp : public Exp
     void accept(ExpVisitor *visitor) override;
 };
 
-struct NamedArgument : public Node
+struct NamedArgument final : public Node
 {
     std::string          name;
     std::unique_ptr<Exp> exp;
@@ -438,7 +451,7 @@ struct NamedArgument : public Node
     virtual ~NamedArgument();
 };
 
-struct ConstructorExp : public Exp
+struct ConstructorExp final : public Exp
 {
     GlobalIdentifier           identifier;
     std::vector<NamedArgument> arguments;
