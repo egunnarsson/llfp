@@ -319,6 +319,11 @@ std::unique_ptr<ast::Data> Parser::parseData(bool exported)
         }
     };
 
+    if (lexer->getToken() != lex::Token::Equal)
+    {
+        return error<ast::Data>("expected 'equal'");
+    }
+
     if (!parseList<lex::Token::Equal, lex::Token::Semicolon>(parseConstructor)) { return nullptr; }
 
     return std::make_unique<ast::Data>(location, std::move(name), std::move(typeVariables), std::move(constructors), exported);

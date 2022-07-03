@@ -112,7 +112,8 @@ auto TypeId(std::string moduleName, std::string name, std::vector<llfp::ast::Typ
 
 auto DataDecl(llfp::SourceLocation location, bool exported, std::string name, std::vector<llfp::ast::Field> fields)
 {
-    return std::make_unique<llfp::ast::Data>(location, std::move(name), std::vector<std::string>{}, std::move(fields), exported);
+    llfp::ast::DataConstructor constructor{ {}, "", std::move(fields) };
+    return std::make_unique<llfp::ast::Data>(location, std::move(name), std::vector<std::string>{}, std::vector<llfp::ast::DataConstructor>{ std::move(constructor) }, exported);
 }
 
 auto Function(
@@ -309,26 +310,25 @@ TEST(ParserTest, PublicDeclarations)
 
 TEST(ParserTest, DataDeclarations)
 {
-    // change to data a = {};
-    // to allow data a = a1{} | a2{}; in the future
-
-    EXPECT_EQ(Parse(M"data a{}"), ModulePtr().datas({ DataDecl({ 0,0 }, Local, "a", {}) }));
-    EXPECT_EQ(Parse(M"data a{t x;}"), ModulePtr().datas({ DataDecl({ 0,0 }, Local, "a", { llfp::ast::Field({ 0,0 }, {{"", "t"}, {}}, "x") }) }));
-    EXPECT_EQ(Parse(M"data a{m2:t x;}"), ModulePtr().datas({ DataDecl({ 0,0 }, Local, "a",{ llfp::ast::Field({ 0,0 }, {{ "m2", "t" }, {}}, "x") }) }));
-    EXPECT_EQ(Parse(M"data a{t1 x; t2 y;}"),
+    EXPECT_EQ(Parse(M"data a={};"), ModulePtr().datas({ DataDecl({ 0,0 }, Local, "a", {}) }));
+    EXPECT_EQ(Parse(M"data a={t x;};"), ModulePtr().datas({ DataDecl({ 0,0 }, Local, "a", { llfp::ast::Field({ 0,0 }, {{"", "t"}, {}}, "x") }) }));
+    EXPECT_EQ(Parse(M"data a={m2:t x;};"), ModulePtr().datas({ DataDecl({ 0,0 }, Local, "a",{ llfp::ast::Field({ 0,0 }, {{ "m2", "t" }, {}}, "x") }) }));
+    EXPECT_EQ(Parse(M"data a={t1 x; t2 y;};"),
         ModulePtr().datas({
             DataDecl({ 0,0 }, Local, "a", {
                 llfp::ast::Field({ 0,0 }, {{"", "t1"},{}}, "x"),
                 llfp::ast::Field({ 0,0 }, {{"", "t2"},{}}, "y") }) }));
-    EXPECT_EQ(Parse(M"export data a{}"), ModulePtr().datas({ DataDecl({ 0,0 }, Exported, "a",{}) }));
+    EXPECT_EQ(Parse(M"export data a={};"), ModulePtr().datas({ DataDecl({ 0,0 }, Exported, "a",{}) }));
 
     // negative
-    EXPECT_EQ(ParseError(M"data a{x;}"),      "string(2,9): expected an identifier\n");
-    EXPECT_EQ(ParseError(M"data a{x}"),       "string(2,9): expected an identifier\n");
-    EXPECT_EQ(ParseError(M"data a{t x}"),     "string(2,11): expected 'semicolon'\n");
-    EXPECT_EQ(ParseError(M"data a{t x; y;}"), "string(2,14): expected an identifier\n");
-    EXPECT_EQ(ParseError(M"data a{t x y;}"),  "string(2,12): expected 'semicolon'\n");
-    EXPECT_EQ(ParseError(M"data{t x;}"),      "string(2,5): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"data a={x;};"),      "string(2,10): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"data a{t x;};"),     "string(2,7): expected 'equal'\n");
+    EXPECT_EQ(ParseError(M"data a={x};"),       "string(2,10): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"data a={t x};"),     "string(2,12): expected 'semicolon'\n");
+    EXPECT_EQ(ParseError(M"data a={t x; y;};"), "string(2,15): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"data a={t x y;};"),  "string(2,13): expected 'semicolon'\n");
+    EXPECT_EQ(ParseError(M"data{t x;};"),       "string(2,5): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"data a={t x;}"),     "string(2,14): expected 'comma'\n");
 }
 
 TEST(ParserTest, DataConstructor)
@@ -430,9 +430,9 @@ TEST(ParserTest, Functions)
 TEST(ParserTest, Declarations)
 {
     EXPECT_EQ(Parse(
-        M"data a{}"
+        M"data a={};"
          "f = 1;"
-         "data b{}"
+         "data b={};"
          "g = 2;"),
         ModulePtr()
         .functions({ Function({ 0,0 }, Local, "f", "", {}, Integer({ 0,0 }, "1")),

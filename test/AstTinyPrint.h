@@ -10,6 +10,7 @@
 std::ostream& operator<<(std::ostream& os, const llfp::GlobalIdentifier& i);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::TypeIdentifier& t);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Field& f);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::DataConstructor& d);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Data& d);
 //TODO: need a const visitor for this to be const
 std::ostream& operator<<(std::ostream& os, llfp::ast::Exp& e);

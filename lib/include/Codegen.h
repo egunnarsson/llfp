@@ -140,8 +140,7 @@ private:
     {
         if (tcf(exp, expectedType))
         {
-            auto args = generateBinary(expectedType, exp);
-            auto arg1 = std::get<0>(args), arg2 = std::get<1>(args);
+            auto [arg1, arg2] = generateBinary(expectedType, exp);
             if (arg1 == nullptr || arg2 == nullptr)
             {
                 return;
@@ -155,8 +154,7 @@ private:
     {
         if (tcf(exp, expectedType))
         {
-            auto args = generateBinary(expectedType, exp);
-            auto arg1 = std::get<0>(args), arg2 = std::get<1>(args);
+            auto [arg1, arg2] = generateBinary(expectedType, exp);
             if (arg1 == nullptr || arg2 == nullptr)
             {
                 return;
@@ -177,8 +175,7 @@ private:
     {
         if (tcf(exp, expectedType))
         {
-            auto args = generateBinary(expectedType, exp);
-            auto arg1 = std::get<0>(args), arg2 = std::get<1>(args);
+            auto [arg1, arg2] = generateBinary(expectedType, exp);
             if (arg1 == nullptr || arg2 == nullptr)
             {
                 return;

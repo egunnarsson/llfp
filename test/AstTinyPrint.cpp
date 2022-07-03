@@ -78,9 +78,14 @@ std::ostream& operator<<(std::ostream& os, const llfp::ast::TypeIdentifier& t)
 
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Field& f) { return os << f.type << ' ' << f.name; }
 
+std::ostream& operator<<(std::ostream& os, const llfp::ast::DataConstructor& d)
+{
+    return os << d.name << d.fields;
+}
+
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Data& d)
 {
-    return os << '{' << (d.exported ? '+' : '-') << d.name << ' ' << d.fields << '}';
+    return os << '{' << (d.exported ? '+' : '-') << d.name << ' ' << d.constructors << '}';
 }
 
 std::ostream& operator<<(std::ostream& os, llfp::ast::Exp& e) { return ExpPrint::visit(os, e); }
