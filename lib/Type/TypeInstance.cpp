@@ -138,6 +138,13 @@ bool TypeInstance::isSigned()const
     return llfp::contains(typeClasses, id::Signed.str());
 }
 
+const ConstructorList& TypeInstance::getConstructors() const
+{
+    static ConstructorList empty;
+    assert(false);
+    return empty;
+}
+
 unsigned int TypeInstance::getFieldIndex(const std::string&) const { return InvalidIndex; }
 unsigned int TypeInstance::getFieldIndex(const std::string&, const std::string&) const { return InvalidIndex; }
 
@@ -173,6 +180,10 @@ bool TypeInstanceBasic::isStructType() const
     return false;
 }
 
+llvm::TypeSize TypeInstanceBasic::getSize(const llvm::Module* llvmModule) const
+{
+    return llvmModule->getDataLayout().getTypeAllocSize(llvmType_);
+}
 
 TypeInstanceStruct::TypeInstanceStruct(Identifier identifier, const ImportedModule* module_, const ast::Data* ast_, llvm::StructType* llvmType, std::vector<std::string> typeClasses) :
     TypeInstance(std::move(identifier), std::move(typeClasses)),
@@ -202,6 +213,11 @@ llvm::Type* TypeInstanceStruct::llvmType() const
 bool TypeInstanceStruct::isStructType() const
 {
     return true;
+}
+
+llvm::TypeSize TypeInstanceStruct::getSize(const llvm::Module* llvmModule) const
+{
+    return llvmModule->getDataLayout().getTypeAllocSize(llvmType_);
 }
 
 unsigned int TypeInstanceStruct::getFieldIndex(const std::string& fieldIdentifier) const
@@ -282,7 +298,7 @@ TypeInstPtr findTypeOfTypeVar(const std::string& typeVar, const ast::TypeIdentif
 
 } // namespace
 
-void TypeInstanceStruct::setFields(std::vector<const TypeInstance*> fieldTypes)
+void TypeInstanceStruct::setFields(FieldList fieldTypes)
 {
     assert(fields.size() == 0);
     assert(parameters.size() == 0);
@@ -356,6 +372,25 @@ bool TypeInstanceVariant::isStructType() const
     return true;
 }
 
+llvm::TypeSize TypeInstanceVariant::getSize(const llvm::Module* llvmModule) const
+{
+    llvm::TypeSize size = llvm::TypeSize::getFixed(0);
+    for (auto& constructor : constructors)
+    {
+        auto variantSize = llvmModule->getDataLayout().getTypeAllocSize(constructor.llvmType_);
+        if (variantSize.getFixedSize() > size.getFixedSize())
+        {
+            size = variantSize;
+        }
+    }
+    return size;
+}
+
+const ConstructorList& TypeInstanceVariant::getConstructors() const
+{
+    return constructors;
+}
+
 unsigned int TypeInstanceVariant::getFieldIndex(const std::string&) const
 {
     assert(false);
@@ -397,7 +432,7 @@ unsigned int TypeInstanceVariant::getFieldCount(const std::string& constructor) 
     return static_cast<unsigned int>(constructors[i].fields.size());
 }
 
-void TypeInstanceVariant::setConstructors(std::vector<TypeConstructor> constructors_)
+void TypeInstanceVariant::setConstructors(ConstructorList constructors_)
 {
     for (auto& typeVar : ast->typeVariables)
     {

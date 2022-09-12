@@ -53,7 +53,7 @@ class CodeGenerator
     llvm::Module*      llvmModule;
 
     // mangled name as id
-    std::unordered_map<std::string, Function> functions; // unique_ptr<Function>?
+    std::unordered_map<std::string, Function> functions; // unique_ptr<Function>? value probably not moved because hm::TypeAnnotation
     type::TypeContext  typeContext; // move to source module (if it should create types it needs the llvmContext)
 
 public:
@@ -79,6 +79,10 @@ private:
 
     // lookup, global functions, generate llvmFunction if first external reference
     Function*          getFunction(const GlobalIdentifier& identifier, std::vector<const type::TypeInstance*> types);
+
+    llvm::Function*    generateCopyFunctionBody(type::TypeInstPtr type);
+    llvm::Function*    generateDeleteFunctionBody(type::TypeInstPtr type);
+    llvm::Function*    getCopyFunction(type::TypeInstPtr type) const;
 
     friend ExpCodeGenerator;
 };

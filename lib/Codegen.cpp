@@ -1,4 +1,5 @@
 
+#include <array>
 #include <stack>
 
 #pragma warning(push, 0)
@@ -631,7 +632,7 @@ public:
 
             auto argValue = context.irBuilder.CreateExtractValue(value, { index });
 
-            auto branchNextBlock = index == blocks.size() - 1 ? nextBlock : blocks[(size_t)index + 1];
+            auto branchNextBlock = index == blocks.size() - 1 ? nextBlock : blocks[static_cast<size_t>(index) + 1];
             PatternCodeGenerator gen{ context, argValue, branchNextBlock };
             pattern.arguments[index].pattern->accept(&gen);
         }
@@ -880,8 +881,7 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
             auto type = getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, *exp.lhs);
             getTypeContext()->check(*typeAnnotation, type, typeAnnotation->get(exp.rhs.get()));
 
-            auto args = generateBinary(type, exp);
-            auto arg1 = std::get<0>(args), arg2 = std::get<1>(args);
+            auto [arg1, arg2] = generateBinary(type, exp);
             if (arg1 == nullptr || arg2 == nullptr)
             {
                 return;
@@ -1277,6 +1277,142 @@ const Value& ExpCodeGenerator::getNamedValue(const std::string &name)
 llvm::Value* ExpCodeGenerator::getResult()
 {
     return result;
+}
+
+llvm::Function* CodeGenerator::getCopyFunction(type::TypeInstPtr type) const
+{
+    assert(false);
+    return nullptr;
+}
+
+/*
+struct T {
+    int type;
+    union {
+        struct a {int x; int y ;};
+        struct b {foo* ptr;};
+        struct c {T* ptr2;};
+    };
+};
+
+T* copy(T* src) {
+    T* dst = malloc(sizeof(T));
+    dst->type = src->type;
+    switch (src->type) {
+        case 0: dst->x = src->x; dst->y = src->y; break;
+        case 1: dst->ptr = copy(src->ptr); break;
+        case 2: dst->ptr2 = copy(src->ptr2); break;
+        default: abort();
+    }
+    return dst;
+}
+*/
+llvm::Function* CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type)
+{
+    if (!type->isStructType()) { return nullptr; }
+
+    auto name = type->identifier().str();
+
+    llvm::Type* returnType = type->llvmType();
+    std::array<llvm::Type*, 1> parameterTypes = { type->llvmType() };
+
+    auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
+    auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
+    auto srcValue = llvmFunction->arg_begin();
+
+    auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
+    auto retBB = llvm::BasicBlock::Create(*llvmContext, "return", llvmFunction);
+    llvmBuilder.SetInsertPoint(entryBB);
+
+    // call malloc
+    auto intPtrType = llvmModule->getDataLayout().getIntPtrType(*llvmContext);
+    auto returnTypeSize = type->getSize(llvmModule);
+    auto sizeValue = llvm::ConstantInt::get(intPtrType, returnTypeSize.getFixedSize());
+    auto dstValue = llvm::CallInst::CreateMalloc(llvmBuilder.GetInsertBlock(), intPtrType, returnType/*wrong type?*/, sizeValue, nullptr, nullptr, "new");
+
+    // copy "type" enum
+    llvm::Value* typeValue = nullptr;
+    {
+        std::array<llvm::Value*, 2> idxList =
+        {
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), 0),
+            llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), 0)
+        };
+
+        assert(!type->getConstructors().empty());
+        assert(!type->getConstructors().front().fields.empty());
+
+        // just grab first type, doesn't matter, all cases have type enum as first value
+        auto& firstConstructor = type->getConstructors().front();
+        auto enumValuePtr = llvmBuilder.CreateGEP(firstConstructor.llvmType_, srcValue, idxList, "typePtr");
+        typeValue = llvmBuilder.CreateLoad(firstConstructor.fields.front()->llvmType(), enumValuePtr, "type");
+    }
+
+    std::vector<llvm::BasicBlock*> constructorBlocks;
+    for (auto& constructor : type->getConstructors())
+    {
+        // TODO: move malloc here to malloc size of variant instead
+
+        auto block = llvm::BasicBlock::Create(*llvmContext, llvm::Twine{ "constructor" } + llvm::Twine{ constructorBlocks.size() }, llvmFunction);
+        llvmBuilder.SetInsertPoint(block);
+
+        auto variantType = constructor.llvmType_;
+
+        const size_t fieldCount = constructor.fields.size();
+        for (size_t fieldIndex = 0; fieldIndex < fieldCount; ++fieldIndex)
+        {
+            std::array<llvm::Value*, 2> idxList =
+            {
+                llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), 0),
+                llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), fieldIndex + 1)
+            };
+            auto fieldPtr = llvmBuilder.CreateGEP(variantType, srcValue, idxList, "");
+            auto dstPtr = llvmBuilder.CreateGEP(variantType, dstValue, idxList, "");
+
+            auto fieldType = constructor.fields[fieldIndex];
+            if (fieldType->isStructType())
+            {
+                auto copyFunction = getCopyFunction(fieldType);
+                std::array<llvm::Value*, 1> arguments{ fieldPtr };
+                auto fieldDstValue = llvmBuilder.CreateCall(copyFunction, arguments, "");
+                llvmBuilder.CreateStore(fieldDstValue, dstPtr);
+            }
+            else
+            {
+                auto fieldValue = llvmBuilder.CreateLoad(fieldType->llvmType(), fieldPtr);
+                llvmBuilder.CreateStore(fieldValue, dstPtr);
+            }
+        }
+
+        llvmBuilder.CreateBr(retBB);
+
+        constructorBlocks.push_back(block);
+    }
+
+    // switch over constructors
+    auto failBB = llvm::BasicBlock::Create(*llvmContext, "invalidVariantType", llvmFunction);
+    llvmBuilder.SetInsertPoint(failBB);
+    // TODO: call abort?
+    llvmBuilder.CreateUnreachable();
+
+    llvmBuilder.SetInsertPoint(entryBB);
+    auto numBits = typeValue->getType()->getIntegerBitWidth();
+    auto enumIntType = llvm::IntegerType::get(llvmBuilder.getContext(), numBits);
+    auto switchInst = llvmBuilder.CreateSwitch(typeValue, failBB, constructorBlocks.size());
+    for (size_t index = 0; index < constructorBlocks.size(); ++index)
+    {
+        switchInst->addCase(llvm::ConstantInt::get(enumIntType, index), constructorBlocks[index]);
+    }
+
+    llvmBuilder.SetInsertPoint(retBB);
+    llvmBuilder.CreateRet(dstValue);
+
+    return llvmFunction;
+}
+
+llvm::Function* CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type)
+{
+    return nullptr;
 }
 
 } // namespace codegen

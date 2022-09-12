@@ -219,18 +219,32 @@ TypeInstPtr TypeContext::makeTypeInstanceStruct(const Identifier& identifier, ll
 
 TypeInstPtr TypeContext::makeTypeInstanceVariant(const Identifier& identifier, llfp::DataAst ast, std::vector<std::string> typeClasses, const std::map<std::string, Identifier>& typeVariables)
 {
-    auto llvmType = llvm::Type::getInt8PtrTy(llvmContext);
-    auto tmpPtr = std::make_unique<TypeInstanceVariant>(identifier, llvmType, ast.importedModule, ast.data, std::move(typeClasses));
+    auto llvmPtrType = llvm::Type::getInt8PtrTy(llvmContext);
+    auto tmpPtr = std::make_unique<TypeInstanceVariant>(identifier, llvmPtrType, ast.importedModule, ast.data, std::move(typeClasses));
     auto typePtr = tmpPtr.get();
     auto it2 = types.insert({ identifier, std::move(tmpPtr) });
     assert(it2.second);
 
+    int index = 0;
     std::vector<TypeConstructor> constructors;
     for (auto& astConstructor : ast.data->constructors)
     {
-        constructors.push_back(TypeConstructor{ getFieldTypes(ast, astConstructor.fields, typeVariables) });
+        auto llvmType = llvm::StructType::create(llvmContext, "");
+        auto fieldTypes = getFieldTypes(ast, astConstructor.fields, typeVariables);
+
+        llvmType->setName(ast.importedModule->getMangledName(ast.data, index));
+
+        std::vector<llvm::Type*> llvmTypes;
+        llvmTypes.push_back(llvm::Type::getInt32Ty(llvmContext)); // variant type
+        std::transform(fieldTypes.begin(), fieldTypes.end(), std::back_inserter(llvmTypes),
+            [](const TypeInstPtr& type) { return type->llvmType(); });
+        llvmType->setBody(llvmTypes);
+
+        constructors.push_back(TypeConstructor{ std::move(fieldTypes), llvmType });
+
+        ++index;
     }
-    typePtr->setConstructors(constructors);
+    typePtr->setConstructors(std::move(constructors));
 
     return typePtr;
 }
