@@ -27,7 +27,7 @@ void logRecursive(T value, Args&&... args)
     logRecursive(std::forward<Args>(args)...);
 }
 
-} // detail
+} // namespace detail
 
 #endif
 
@@ -52,4 +52,4 @@ void Log(const SourceLocation &location, Args&&... args)
 }
 
 
-} // llfp
+} // namespace llfp

@@ -44,4 +44,4 @@ typename std::vector<T>::size_type findIndex(const std::vector<T>& list, const P
     return static_cast<std::vector<T>::size_type>(distance);
 }
 
-} // llfp
+} // namespace llfp

@@ -75,4 +75,4 @@ public:
     virtual DataAst     lookupType(const GlobalIdentifier &) const = 0;
 };
 
-} // llfp
+} // namespace llfp

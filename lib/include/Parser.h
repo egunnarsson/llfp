@@ -14,9 +14,7 @@
 #include "Log.h"
 
 
-namespace llfp
-{
-namespace parse
+namespace llfp::parse
 {
 
 class Parser
@@ -80,5 +78,4 @@ private:
     bool                      parseType(ast::TypeIdentifier&);
 };
 
-} // namespace parse
-} // namespace llfp
+} // namespace llfp::parse

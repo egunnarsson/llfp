@@ -40,4 +40,4 @@ bool operator==(const NamedArgument &n1, const NamedArgument &n2);
 
 bool operator==(const Module &m1, const Module &m2);
 
-} // llfp::ast
+} // namespace llfp::ast

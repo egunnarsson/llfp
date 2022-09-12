@@ -22,9 +22,7 @@
 #include "Codegen.h"
 
 
-namespace llfp
-{
-namespace codegen
+namespace llfp::codegen
 {
 
 const Value ExpCodeGenerator::EmptyValue{ nullptr, nullptr };
@@ -1415,5 +1413,4 @@ llvm::Function* CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type
     return nullptr;
 }
 
-} // namespace codegen
-} // namespace hpfp
+} // namespace llfp::codegen

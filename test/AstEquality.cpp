@@ -405,4 +405,4 @@ bool operator==(const Module &m1, const Module &m2)
            EqPtrV(m1.classInstances, m2.classInstances);
 }
 
-} // llfp::ast
+} // namespace llfp::ast

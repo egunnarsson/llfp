@@ -18,9 +18,7 @@
 #include "Type/TypeContext.h"
 
 
-namespace llfp
-{
-namespace type
+namespace llfp::type
 {
 
 namespace
@@ -312,5 +310,4 @@ TypeInstPtr TypeContext::getI64() { return i64Type; }
 TypeInstPtr TypeContext::getU64() { return u64Type; }
 TypeInstPtr TypeContext::getDouble() { return doubleType; }
 
-} // namespace Type
-} // namespace llfp
+} // namespace llfp::type

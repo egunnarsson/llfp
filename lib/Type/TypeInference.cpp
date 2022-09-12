@@ -7,9 +7,7 @@
 #include <iostream> //TODO: remove only for debug
 
 
-namespace llfp
-{
-namespace hm
+namespace llfp::hm
 {
 
 void Type::apply(TypePtr& ptr, Substitution s)
@@ -907,5 +905,4 @@ TypeAnnotation inferType(const std::string& moduleName, const ast::Function& fun
     return annotation;
 }
 
-} // namespace hm
-} // namespace llfp
+} // namespace llfp::hm

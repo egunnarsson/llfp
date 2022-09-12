@@ -9,9 +9,7 @@
 #include "Lexer.h"
 
 
-namespace llfp
-{
-namespace ast
+namespace llfp::ast
 {
 
 struct TypeIdentifier
@@ -462,5 +460,4 @@ struct ConstructorExp final : public Exp
     void accept(ExpVisitor *visitor) override;
 };
 
-} // ast
-} // llfp
+} // namespace llfp::ast

@@ -21,12 +21,12 @@
 
 namespace llvm
 {
+
 class Module;
+
 } // namespace llvm
 
-namespace llfp
-{
-namespace type
+namespace llfp::type
 {
 
 struct Identifier
@@ -47,11 +47,11 @@ struct Identifier
     }
 };
 
-} // namespace type
-} // namespace llfp
+} // namespace llfp::type
 
 namespace std
 {
+
 template<> struct hash<llfp::type::Identifier>
 {
     std::size_t operator()(llfp::type::Identifier const& id) const noexcept
@@ -65,6 +65,7 @@ template<> struct hash<llfp::type::Identifier>
             llvm::hash_combine_range(tmp.begin(), tmp.end()));
     }
 };
+
 } // namespace std
 
 namespace llfp
@@ -113,10 +114,10 @@ public:
 
     // creates a new hm type
     virtual std::shared_ptr<hm::TypeConstant> getType() const;
-    const Identifier& identifier() const;
+    const Identifier&                         identifier() const;
 
     virtual llvm::Type* llvmType() const = 0;
-    virtual bool isStructType() const = 0;
+    virtual bool        isStructType() const = 0;
     virtual TypeInstPtr getTypeParameter(int index) const;
 
     virtual llvm::TypeSize getSize(const llvm::Module* llvmModule) const = 0;

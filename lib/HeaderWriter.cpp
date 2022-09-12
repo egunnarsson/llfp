@@ -205,4 +205,4 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
         "#endif\n";
 }
 
-} // llfp
+} // namespace llfp

@@ -7,4 +7,4 @@ class SourceModule;
 
 bool resolveIdentifiers(SourceModule& srcModule);
 
-}
+} // namespace llfp

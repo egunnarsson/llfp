@@ -74,9 +74,7 @@ int precedence(const std::string &op)
 
 } // namespace
 
-namespace llfp
-{
-namespace parse
+namespace llfp::parse
 {
 
 template<class T>
@@ -1112,5 +1110,4 @@ bool Parser::parseType(ast::TypeIdentifier &type)
     return true;
 }
 
-} // namespace parse
-} // namespace hpfp
+} // namespace llfp::parse

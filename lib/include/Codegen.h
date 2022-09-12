@@ -202,5 +202,5 @@ private:
     void generateCompare(llvm::CmpInst::Predicate predicate, ast::BinaryExp &exp);
 };
 
-} // codegen
-} // llfp
+} // namespace codegen
+} // namespace llfp

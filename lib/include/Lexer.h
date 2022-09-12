@@ -12,9 +12,7 @@
 #include "Common/SourceLocation.h"
 
 
-namespace llfp
-{
-namespace lex
+namespace llfp::lex
 {
 
 enum class Token
@@ -211,5 +209,4 @@ private:
     Token parseComment();
 };
 
-} // namespace lex
-} // namespece llfp
+} // namespace llfp::lex

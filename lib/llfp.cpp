@@ -212,4 +212,4 @@ std::vector<CompiledModule> compile(const std::vector<std::unique_ptr<lex::Input
     return result;
 }
 
-} // llfp
+} // namespace llfp

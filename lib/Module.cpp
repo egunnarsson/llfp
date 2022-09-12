@@ -319,4 +319,4 @@ DataAst SourceModule::lookupType(const GlobalIdentifier& identifier) const
         "undefined data type ");
 }
 
-} // llfp
+} // namespace llfp

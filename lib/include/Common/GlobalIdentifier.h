@@ -49,7 +49,7 @@ struct GlobalIdentifier
     }
 };
 
-} // llfp
+} // namespace llfp
 
 
 namespace std
@@ -63,4 +63,4 @@ template<> struct hash<llfp::GlobalIdentifier>
     }
 };
 
-} // std
+} // namespace std

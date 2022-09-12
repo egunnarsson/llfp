@@ -20,9 +20,7 @@
 #include "Type/TypeInstance.h"
 
 
-namespace llfp
-{
-namespace type
+namespace llfp::type
 {
 
 bool checkBasicType(const Identifier& id, llvm::StringRef name)
@@ -458,5 +456,4 @@ void TypeInstanceVariant::setConstructors(ConstructorList constructors_)
     constructors = std::move(constructors_);
 }
 
-} // namespace Type
-} // namespace llfp
+} // namespace llfp::type

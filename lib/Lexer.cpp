@@ -7,9 +7,7 @@
 #include "Lexer.h"
 
 
-namespace llfp
-{
-namespace lex
+namespace llfp::lex
 {
 
 int Input::getChar()
@@ -457,5 +455,4 @@ Token Lexer::parseComment()
     }
 }
 
-} // namespace lex
-} // namespece hpfp
+} // namespace llfp::lex

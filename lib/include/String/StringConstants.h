@@ -3,9 +3,7 @@
 #include <llvm/ADT/StringRef.h>
 
 
-namespace llfp
-{
-namespace id
+namespace llfp::id
 {
 
 #define Constant(var, name) inline constexpr llvm::StringLiteral var{name};
@@ -60,5 +58,4 @@ Constant(False, "false");
 
 #undef Constant
 
-} // namespace id
-} // namespace llfp
+} // namespace llfp::id

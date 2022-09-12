@@ -16,4 +16,4 @@ struct SourceLocation
     llvm::StringRef File;
 };
 
-} // llfp
+} // namespace llfp

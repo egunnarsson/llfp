@@ -46,4 +46,4 @@ std::vector<CompiledModule> compile(const std::vector<std::unique_ptr<lex::Input
 // used for future Language Server
 // llfp::TaggedAst parse(std::string source);
 
-} // llfp
+} // namespace llfp

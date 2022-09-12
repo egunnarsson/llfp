@@ -22,4 +22,4 @@ public:
     void write(llvm::raw_ostream &os, llfp::SourceModule &module);
 };
 
-} // llfp
+} // namespace llfp

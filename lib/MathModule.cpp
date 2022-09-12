@@ -217,5 +217,4 @@ DataAst MathModule::lookupType(const GlobalIdentifier&) const
     return { nullptr, nullptr };
 }
 
-
 } // namespace llfp

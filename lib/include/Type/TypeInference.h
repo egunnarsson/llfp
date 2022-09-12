@@ -28,9 +28,7 @@ constructor? possible typevars?
 #include "Ast.h"
 
 
-namespace llfp
-{
-namespace hm
+namespace llfp::hm
 {
 
 typedef int TypeVarId;
@@ -348,5 +346,4 @@ std::string test(const std::string& moduleName, ast::Function& fun);
 
 TypeAnnotation inferType(const std::string& moduleName, const ast::Function& fun);
 
-} // namespace hm
-} // namespace llfp
+} // namespace llfp::hm

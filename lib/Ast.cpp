@@ -2,9 +2,7 @@
 #include "Ast.h"
 
 
-namespace llfp
-{
-namespace ast
+namespace llfp::ast
 {
 
 std::string TypeIdentifier::str() const
@@ -388,6 +386,4 @@ ConstructorExp::~ConstructorExp() {}
 void ConstructorExp::accept(ExpVisitor *visitor) { visitor->visit(*this); }
 
 
-} // namespace ast
-} // namespace llfp
-
+} // namespace llfp::ast

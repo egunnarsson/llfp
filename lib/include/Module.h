@@ -77,4 +77,4 @@ public:
     std::string        getExportedName(const ast::Function*function) const override;
 };
 
-} // llfp
+} // namespace llfp
