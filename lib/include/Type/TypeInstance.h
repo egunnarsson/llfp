@@ -118,6 +118,7 @@ public:
 
     virtual llvm::Type* llvmType() const = 0;
     virtual bool        isStructType() const = 0;
+    virtual bool        isRefType() const = 0;
     virtual TypeInstPtr getTypeParameter(int index) const;
 
     virtual llvm::TypeSize getSize(const llvm::Module* llvmModule) const = 0;
@@ -152,6 +153,7 @@ public:
 
     llvm::Type*    llvmType() const override;
     bool           isStructType() const override;
+    bool           isRefType() const override;
     llvm::TypeSize getSize(const llvm::Module* llvmModule) const override;
 };
 
@@ -172,6 +174,7 @@ public:
 
     llvm::Type*    llvmType() const override;
     bool           isStructType() const override;
+    bool           isRefType() const override;
     llvm::TypeSize getSize(const llvm::Module* llvmModule) const override;
 
     unsigned int   getFieldIndex(const std::string& fieldIdentifier) const override;
@@ -205,6 +208,7 @@ public:
 
     llvm::Type*    llvmType() const override;
     bool           isStructType() const override;
+    bool           isRefType() const override;
     llvm::TypeSize getSize(const llvm::Module* llvmModule) const override;
 
     const ConstructorList& getConstructors() const override;

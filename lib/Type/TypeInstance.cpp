@@ -168,15 +168,9 @@ TypeInstanceBasic::TypeInstanceBasic(llvm::StringLiteral name, llvm::Type* llvmT
 {
 }
 
-llvm::Type* TypeInstanceBasic::llvmType() const
-{
-    return llvmType_;
-}
-
-bool TypeInstanceBasic::isStructType() const
-{
-    return false;
-}
+llvm::Type* TypeInstanceBasic::llvmType() const { return llvmType_; }
+bool TypeInstanceBasic::isStructType() const { return false; }
+bool TypeInstanceBasic::isRefType() const { return false; }
 
 llvm::TypeSize TypeInstanceBasic::getSize(const llvm::Module* llvmModule) const
 {
@@ -203,15 +197,9 @@ std::shared_ptr<hm::TypeConstant> TypeInstanceStruct::getType() const
     return type;
 }
 
-llvm::Type* TypeInstanceStruct::llvmType() const
-{
-    return llvmType_;
-}
-
-bool TypeInstanceStruct::isStructType() const
-{
-    return true;
-}
+llvm::Type* TypeInstanceStruct::llvmType() const { return llvmType_; }
+bool TypeInstanceStruct::isStructType() const { return true; }
+bool TypeInstanceStruct::isRefType() const { return false; }
 
 llvm::TypeSize TypeInstanceStruct::getSize(const llvm::Module* llvmModule) const
 {
@@ -360,15 +348,9 @@ std::shared_ptr<hm::TypeConstant> TypeInstanceVariant::getType() const
     return type;
 }
 
-llvm::Type* TypeInstanceVariant::llvmType() const
-{
-    return llvmType_;
-}
-
-bool TypeInstanceVariant::isStructType() const
-{
-    return true;
-}
+llvm::Type* TypeInstanceVariant::llvmType() const { return llvmType_; }
+bool TypeInstanceVariant::isStructType() const { return true; }
+bool TypeInstanceVariant::isRefType() const { return true; }
 
 llvm::TypeSize TypeInstanceVariant::getSize(const llvm::Module* llvmModule) const
 {

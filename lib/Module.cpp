@@ -171,6 +171,12 @@ std::string SourceModule::getMangledName(const ast::Data *data, int constructorI
     return name() + '_' + data->name + '_' + data->constructors.at(constructorIndex).name;
 }
 
+std::string SourceModule::getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const
+{
+    // this might clash with user defined function 'copy' and 'delete'
+    return name() + ':' + internalFunctionName + '$' + type->identifier().str();
+}
+
 std::string SourceModule::getExportedName(const ast::Function*function) const
 {
     return name() + '_' + function->name;

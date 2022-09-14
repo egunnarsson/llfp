@@ -38,8 +38,8 @@ struct Function
 
 struct Value
 {
-    const type::TypeInstance* type;
-    llvm::Value*  value;
+    type::TypeInstPtr type;
+    llvm::Value*      value;
 };
 
 class CodeGenerator
@@ -83,6 +83,7 @@ private:
     llvm::Function*    generateCopyFunctionBody(type::TypeInstPtr type);
     llvm::Function*    generateDeleteFunctionBody(type::TypeInstPtr type);
     llvm::Function*    getCopyFunction(type::TypeInstPtr type) const;
+    llvm::Function*    getDeleteFunction(type::TypeInstPtr type) const;
 
     friend ExpCodeGenerator;
 };

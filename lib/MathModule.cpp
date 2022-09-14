@@ -187,6 +187,12 @@ std::string MathModule::getMangledName(const ast::Data* data, int constructorInd
     return "";
 }
 
+std::string MathModule::getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const
+{
+    assert(false);
+    return "";
+}
+
 std::string MathModule::getExportedName(const ast::Function * function) const
 {
     assert(false);

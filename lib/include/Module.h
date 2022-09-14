@@ -45,6 +45,7 @@ public:
     std::string        getMangledName(const ast::Function *function, const std::vector<const type::TypeInstance*> &types) const override;
     std::string        getMangledName(const ast::Data* data) const override;
     std::string        getMangledName(const ast::Data *data, int constructorIndex) const override;
+    std::string        getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const override;
     std::string        getExportedName(const ast::Function *function) const override;
     bool               fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const override;
 
