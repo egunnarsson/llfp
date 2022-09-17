@@ -65,7 +65,7 @@ public:
 
     virtual std::string getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const = 0;
     virtual std::string getMangledName(const ast::Data* data) const = 0;
-    virtual std::string getMangledName(const ast::Data* data, int constructorIndex) const = 0;
+    virtual std::string getMangledName(const ast::Data* data, size_t constructorIndex) const = 0;
     virtual std::string getMangledName(const char* internalName, const type::TypeInstance* type) const = 0;
     virtual std::string getExportedName(const ast::Function *function) const = 0;
     virtual bool        fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const = 0;

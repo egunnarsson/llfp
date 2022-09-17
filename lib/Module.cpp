@@ -164,7 +164,7 @@ std::string SourceModule::getMangledName(const ast::Data* data) const
     return name() + '_' + data->name;
 }
 
-std::string SourceModule::getMangledName(const ast::Data *data, int constructorIndex) const
+std::string SourceModule::getMangledName(const ast::Data *data, size_t constructorIndex) const
 {
     assert(data->typeVariables.empty());
     assert(data->constructors.size() > 1);

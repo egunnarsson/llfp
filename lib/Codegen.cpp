@@ -9,10 +9,12 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/FormatVariadic.h"
 
 #pragma warning(pop)
 
+#include "Common/Algorithm.h"
 #include "GlobalContext.h"
 #include "Error.h"
 #include "Log.h"
@@ -304,33 +306,30 @@ bool typeVarEqual(const std::string& typeVar, const ast::TypeIdentifier& type)
         type.identifier.name == typeVar;
 }
 
-std::stack<int> findTypeVariableIndex(const std::string &typeVar, const ast::TypeIdentifier& type)
+std::stack<size_t> findTypeVariableIndex(const std::string &typeVar, const ast::TypeIdentifier& type)
 {
-    int paramIndex = 0;
-    for (auto& param : type.parameters)
+    for (auto& [paramIndex, param] : llfp::enumerate(type.parameters))
     {
-        if (typeVarEqual(typeVar, param))
+        if (typeVarEqual(typeVar, *param))
         {
-            std::stack<int> typeVarIndex;
+            std::stack<size_t> typeVarIndex;
             typeVarIndex.push(paramIndex);
             return typeVarIndex;
         }
 
         {
-            auto typeVarIndex = findTypeVariableIndex(typeVar, param);
+            auto typeVarIndex = findTypeVariableIndex(typeVar, *param);
             if (!typeVarIndex.empty())
             {
                 typeVarIndex.push(paramIndex);
                 return typeVarIndex;
             }
         }
-
-        ++paramIndex;
     }
     return {};
 }
 
-type::Identifier getTypeByIndex(std::stack<int> index, const type::TypeInstance& type)
+type::Identifier getTypeByIndex(std::stack<size_t> index, const type::TypeInstance& type)
 {
     if (index.empty())
     {
@@ -348,13 +347,14 @@ type::Identifier findInstanceType(const ast::Class* classDecl, const ast::Functi
 {
     auto& typeVar = classDecl->typeVariable;
 
-    int first = -1;
+    constexpr size_t notFound = static_cast<size_t>(-1);
+    size_t first = notFound;
     auto typeVariableIndex = findTypeVariableIndex(typeVar, funDecl->type);
     if (typeVariableIndex.empty() && !typeVarEqual(typeVar, funDecl->type))
     {
-        for (int paramIndex = 0; paramIndex < funDecl->parameters.size(); ++paramIndex)
+        for (auto [paramIndex, param] : llfp::enumerate(funDecl->parameters))
         {
-            auto& paramTypeId = funDecl->parameters[paramIndex]->type;
+            auto& paramTypeId = (*param)->type;
             typeVariableIndex = findTypeVariableIndex(typeVar, paramTypeId);
             if (!typeVariableIndex.empty() || typeVarEqual(typeVar, paramTypeId))
             {
@@ -368,7 +368,7 @@ type::Identifier findInstanceType(const ast::Class* classDecl, const ast::Functi
         first = 0;
     }
 
-    if (first == -1)
+    if (first == notFound)
     {
         return {};
     }
@@ -610,11 +610,11 @@ public:
 
     void visit(ast::ConstructorPattern& pattern) override
     {
-        const auto count = static_cast<unsigned int>(pattern.arguments.size());
+        const auto count = pattern.arguments.size();
         assert(count != 0);
 
         std::vector<llvm::BasicBlock*> blocks;
-        for (unsigned int i = 0; i < count; ++i)
+        for (size_t i = 0; i < count; ++i)
         {
             blocks.push_back(llvm::BasicBlock::Create(context.irBuilder.getContext()));
         }
@@ -622,13 +622,12 @@ public:
         auto originalBlock = context.irBuilder.GetInsertBlock();
         auto function = originalBlock->getParent();
 
-        for (unsigned int index = 0; index < count; ++index)
+        for (auto [index, branchBlock] : llfp::enumerate(blocks))
         {
-            auto branchBlock = blocks[index];
-            function->getBasicBlockList().push_back(branchBlock);
-            context.irBuilder.SetInsertPoint(branchBlock);
+            function->getBasicBlockList().push_back(*branchBlock);
+            context.irBuilder.SetInsertPoint(*branchBlock);
 
-            auto argValue = context.irBuilder.CreateExtractValue(value, { index });
+            auto argValue = context.irBuilder.CreateExtractValue(value, { static_cast<unsigned int>(index) });
 
             auto branchNextBlock = index == blocks.size() - 1 ? nextBlock : blocks[static_cast<size_t>(index) + 1];
             PatternCodeGenerator gen{ context, argValue, branchNextBlock };
@@ -1321,10 +1320,10 @@ void generateVariantSwitch(llvm::IRBuilder<>& llvmBuilder, llvm::Value* value, t
 
     auto numBits = variantTypeValue->getType()->getIntegerBitWidth();
     auto enumIntType = llvm::IntegerType::get(llvmBuilder.getContext(), numBits);
-    auto switchInst = llvmBuilder.CreateSwitch(variantTypeValue, failBB, variantBlocks.size());
-    for (size_t index = 0; index < variantBlocks.size(); ++index)
+    auto switchInst = llvmBuilder.CreateSwitch(variantTypeValue, failBB, static_cast<unsigned int>(variantBlocks.size()));
+    for (auto [index, variantBlock] : llfp::enumerate(variantBlocks))
     {
-        switchInst->addCase(llvm::ConstantInt::get(enumIntType, index), variantBlocks[index]);
+        switchInst->addCase(llvm::ConstantInt::get(enumIntType, index), *variantBlock);
     }
 }
 
@@ -1369,24 +1368,22 @@ llvm::Function* CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type)
     auto retBB = llvm::BasicBlock::Create(*llvmContext, "return", llvmFunction);
     llvmBuilder.SetInsertPoint(entryBB);
 
-    // call malloc
-    auto intPtrType = llvmModule->getDataLayout().getIntPtrType(*llvmContext);
-    auto returnTypeSize = type->getSize(llvmModule);
-    auto sizeValue = llvm::ConstantInt::get(intPtrType, returnTypeSize.getFixedSize());
-    auto dstValue = llvm::CallInst::CreateMalloc(llvmBuilder.GetInsertBlock(), intPtrType, returnType/*wrong type?*/, sizeValue, nullptr, nullptr, "new");
-
     std::vector<llvm::BasicBlock*> constructorBlocks;
-    for (auto& constructor : type->getConstructors())
+    std::vector<llvm::Value*> constructorValues;
+    for (auto [index, constructor] : llfp::enumerate(type->getConstructors()))
     {
-        // TODO: move malloc here to malloc size of variant instead
-
-        auto block = llvm::BasicBlock::Create(*llvmContext, llvm::Twine{ "constructor" } + llvm::Twine{ constructorBlocks.size() }, llvmFunction);
+        auto block = llvm::BasicBlock::Create(*llvmContext, llvm::Twine{ "constructor" } + llvm::Twine{ index }, llvmFunction);
         llvmBuilder.SetInsertPoint(block);
 
-        auto variantType = constructor.llvmType_;
+        // call malloc
+        auto intPtrType = llvmModule->getDataLayout().getIntPtrType(*llvmContext);
+        auto returnTypeSize = type->getSize(llvmModule, index);
+        auto sizeValue = llvm::ConstantInt::get(intPtrType, returnTypeSize.getFixedSize());
+        auto dstValue = llvm::CallInst::CreateMalloc(llvmBuilder.GetInsertBlock(), intPtrType, returnType/*wrong type?*/, sizeValue, nullptr, nullptr, "new");
 
-        const size_t fieldCount = constructor.fields.size();
-        for (size_t fieldIndex = 0; fieldIndex < fieldCount; ++fieldIndex)
+        auto variantType = constructor->llvmType_;
+
+        for (auto [fieldIndex, fieldType] : llfp::enumerate(constructor->fields))
         {
             std::array<llvm::Value*, 2> idxList =
             {
@@ -1396,11 +1393,10 @@ llvm::Function* CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type)
             auto fieldPtr = llvmBuilder.CreateGEP(variantType, srcValue, idxList, "");
             auto dstPtr = llvmBuilder.CreateGEP(variantType, dstValue, idxList, "");
 
-            auto fieldType = constructor.fields[fieldIndex];
-            auto fieldValue = llvmBuilder.CreateLoad(fieldType->llvmType(), fieldPtr);
-            if (fieldType->isRefType())
+            auto fieldValue = llvmBuilder.CreateLoad((*fieldType)->llvmType(), fieldPtr);
+            if ((*fieldType)->isRefType())
             {
-                auto copyFunction = getCopyFunction(fieldType);
+                auto copyFunction = getCopyFunction(*fieldType);
                 std::array<llvm::Value*, 1> arguments{ fieldValue };
                 auto fieldDstValue = llvmBuilder.CreateCall(copyFunction, arguments, "");
                 llvmBuilder.CreateStore(fieldDstValue, dstPtr);
@@ -1414,13 +1410,18 @@ llvm::Function* CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type)
         llvmBuilder.CreateBr(retBB);
 
         constructorBlocks.push_back(block);
+        constructorValues.push_back(dstValue);
     }
 
     llvmBuilder.SetInsertPoint(entryBB);
     generateVariantSwitch(llvmBuilder, srcValue, type, constructorBlocks);
 
     llvmBuilder.SetInsertPoint(retBB);
-    llvmBuilder.CreateRet(dstValue);
+    auto phiValue = llvmBuilder.CreatePHI(returnType, 2, "copyPhi");
+    for (const auto& [value, block] : llvm::zip(constructorValues, constructorBlocks)) {
+        phiValue->addIncoming(value, block);
+    }
+    llvmBuilder.CreateRet(phiValue);
 
     return llvmFunction;
 }

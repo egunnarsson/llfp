@@ -119,9 +119,9 @@ public:
     virtual llvm::Type* llvmType() const = 0;
     virtual bool        isStructType() const = 0;
     virtual bool        isRefType() const = 0;
-    virtual TypeInstPtr getTypeParameter(int index) const;
+    virtual TypeInstPtr getTypeParameter(size_t index) const;
 
-    virtual llvm::TypeSize getSize(const llvm::Module* llvmModule) const = 0;
+    virtual llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const = 0;
 
     bool isNum() const;
     bool isInteger() const;
@@ -154,7 +154,7 @@ public:
     llvm::Type*    llvmType() const override;
     bool           isStructType() const override;
     bool           isRefType() const override;
-    llvm::TypeSize getSize(const llvm::Module* llvmModule) const override;
+    llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
 };
 
 class TypeInstanceStruct : public TypeInstance
@@ -175,7 +175,9 @@ public:
     llvm::Type*    llvmType() const override;
     bool           isStructType() const override;
     bool           isRefType() const override;
-    llvm::TypeSize getSize(const llvm::Module* llvmModule) const override;
+    TypeInstPtr    getTypeParameter(size_t index) const override;
+
+    llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
 
     unsigned int   getFieldIndex(const std::string& fieldIdentifier) const override;
     unsigned int   getFieldIndex(const std::string& constructor, const std::string& fieldIdentifier) const override;
@@ -186,6 +188,7 @@ public:
 
     void           setFields(FieldList fieldTypes);
 };
+
 
 class TypeInstanceVariant : public TypeInstance
 {
@@ -209,7 +212,9 @@ public:
     llvm::Type*    llvmType() const override;
     bool           isStructType() const override;
     bool           isRefType() const override;
-    llvm::TypeSize getSize(const llvm::Module* llvmModule) const override;
+    TypeInstPtr    getTypeParameter(size_t index) const override;
+
+    llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
 
     const ConstructorList& getConstructors() const override;
 

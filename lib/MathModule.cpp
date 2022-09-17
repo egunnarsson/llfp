@@ -181,7 +181,7 @@ std::string MathModule::getMangledName(const ast::Data* data) const
     return "";
 }
 
-std::string MathModule::getMangledName(const ast::Data* data, int constructorIndex) const
+std::string MathModule::getMangledName(const ast::Data* data, size_t constructorIndex) const
 {
     assert(false);
     return "";

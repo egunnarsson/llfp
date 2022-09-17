@@ -5,6 +5,7 @@
 
 #pragma warning(push, 0)
 
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/IR/Constants.h"
 
@@ -105,7 +106,7 @@ const Identifier& TypeInstance::identifier() const
     return identifier_;
 }
 
-TypeInstPtr TypeInstance::getTypeParameter(int) const
+TypeInstPtr TypeInstance::getTypeParameter(size_t) const
 {
     assert(false);
     return nullptr;
@@ -172,8 +173,9 @@ llvm::Type* TypeInstanceBasic::llvmType() const { return llvmType_; }
 bool TypeInstanceBasic::isStructType() const { return false; }
 bool TypeInstanceBasic::isRefType() const { return false; }
 
-llvm::TypeSize TypeInstanceBasic::getSize(const llvm::Module* llvmModule) const
+llvm::TypeSize TypeInstanceBasic::getSize(const llvm::Module* llvmModule, size_t constructorIndex) const
 {
+    assert(constructorIndex == 0);
     return llvmModule->getDataLayout().getTypeAllocSize(llvmType_);
 }
 
@@ -201,8 +203,14 @@ llvm::Type* TypeInstanceStruct::llvmType() const { return llvmType_; }
 bool TypeInstanceStruct::isStructType() const { return true; }
 bool TypeInstanceStruct::isRefType() const { return false; }
 
-llvm::TypeSize TypeInstanceStruct::getSize(const llvm::Module* llvmModule) const
+TypeInstPtr TypeInstanceStruct::getTypeParameter(size_t index) const
 {
+    return parameters.at(index);
+}
+
+llvm::TypeSize TypeInstanceStruct::getSize(const llvm::Module* llvmModule, size_t constructorIndex) const
+{
+    assert(constructorIndex == 0);
     return llvmModule->getDataLayout().getTypeAllocSize(llvmType_);
 }
 
@@ -332,17 +340,13 @@ TypeInstanceVariant::TypeInstanceVariant(
 std::shared_ptr<hm::TypeConstant> TypeInstanceVariant::getType() const
 {
     auto type = TypeInstance::getType();
-    size_t constructorIndex = 0;
-    for (const auto& constructor : ast->constructors)
+    for (auto [astConstructor, constructor] : llvm::zip(ast->constructors, constructors))
     {
-        type->constructors.push_back(constructor.name);
-        size_t fieldIndex = 0;
-        for (const auto& field : constructors[constructorIndex].fields)
+        type->constructors.push_back(astConstructor.name);
+        for (auto [astField, field] : llvm::zip(astConstructor.fields, constructor.fields))
         {
-            type->fields.insert({ constructor.fields[fieldIndex].name, field->getType() });
-            ++fieldIndex;
+            type->fields.insert({ astField.name, field->getType() });
         }
-        ++constructorIndex;
     }
     assert(!(!type->fields.empty() && type->constructors.size() > 1));
     return type;
@@ -352,18 +356,15 @@ llvm::Type* TypeInstanceVariant::llvmType() const { return llvmType_; }
 bool TypeInstanceVariant::isStructType() const { return true; }
 bool TypeInstanceVariant::isRefType() const { return true; }
 
-llvm::TypeSize TypeInstanceVariant::getSize(const llvm::Module* llvmModule) const
+TypeInstPtr TypeInstanceVariant::getTypeParameter(size_t index) const
 {
-    llvm::TypeSize size = llvm::TypeSize::getFixed(0);
-    for (auto& constructor : constructors)
-    {
-        auto variantSize = llvmModule->getDataLayout().getTypeAllocSize(constructor.llvmType_);
-        if (variantSize.getFixedSize() > size.getFixedSize())
-        {
-            size = variantSize;
-        }
-    }
-    return size;
+    return parameters.at(index);
+}
+
+llvm::TypeSize TypeInstanceVariant::getSize(const llvm::Module* llvmModule, size_t constructorIndex) const
+{
+    auto& constructor = constructors.at(constructorIndex);
+    return llvmModule->getDataLayout().getTypeAllocSize(constructor.llvmType_);
 }
 
 const ConstructorList& TypeInstanceVariant::getConstructors() const

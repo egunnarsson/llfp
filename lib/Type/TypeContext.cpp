@@ -223,12 +223,11 @@ TypeInstPtr TypeContext::makeTypeInstanceVariant(const Identifier& identifier, l
     auto it2 = types.insert({ identifier, std::move(tmpPtr) });
     assert(it2.second);
 
-    int index = 0;
     std::vector<TypeConstructor> constructors;
-    for (auto& astConstructor : ast.data->constructors)
+    for (auto [index, astConstructor] : llfp::enumerate(ast.data->constructors))
     {
         auto llvmType = llvm::StructType::create(llvmContext, "");
-        auto fieldTypes = getFieldTypes(ast, astConstructor.fields, typeVariables);
+        auto fieldTypes = getFieldTypes(ast, astConstructor->fields, typeVariables);
 
         llvmType->setName(ast.importedModule->getMangledName(ast.data, index));
 
@@ -239,8 +238,6 @@ TypeInstPtr TypeContext::makeTypeInstanceVariant(const Identifier& identifier, l
         llvmType->setBody(llvmTypes);
 
         constructors.push_back(TypeConstructor{ std::move(fieldTypes), llvmType });
-
-        ++index;
     }
     typePtr->setConstructors(std::move(constructors));
 
