@@ -1392,6 +1392,8 @@ llvm::Function* CodeGenerator::generateCopyFunctionBodyStruct(type::TypeInstPtr 
     {
         generateFieldCopy(type->llvmType(), fieldIndex, *fieldType, dstValue, srcValue);
     }
+
+    return llvmFunction;
 }
 
 llvm::Function* CodeGenerator::generateCopyFunctionBodyVariant(type::TypeInstPtr type) // for variant
