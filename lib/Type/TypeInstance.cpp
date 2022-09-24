@@ -21,6 +21,19 @@
 #include "Type/TypeInstance.h"
 
 
+namespace
+{
+
+template<typename List>
+const List& assertFalse()
+{
+    static List emptyList;
+    assert(false);
+    return emptyList;
+}
+
+} // namespace
+
 namespace llfp::type
 {
 
@@ -139,29 +152,14 @@ bool TypeInstance::isSigned()const
 
 const ConstructorList& TypeInstance::getConstructors() const
 {
-    static ConstructorList empty;
-    assert(false);
-    return empty;
+    return assertFalse<ConstructorList>();
 }
 
 unsigned int TypeInstance::getFieldIndex(const std::string&) const { return InvalidIndex; }
 unsigned int TypeInstance::getFieldIndex(const std::string&, const std::string&) const { return InvalidIndex; }
 
-TypeInstPtr TypeInstance::getFieldType(unsigned int) const
-{
-    assert(false);
-    throw Error("internal error (TypeInstance::getFieldType)");
-}
-
-TypeInstPtr TypeInstance::getFieldType(const std::string&, unsigned int) const
-{
-    assert(false);
-    throw Error("internal error (TypeInstance::getFieldType)");
-}
-
-unsigned int TypeInstance::getFieldCount() const { return 0; }
-unsigned int TypeInstance::getFieldCount(const std::string&) const { return 0; }
-
+const FieldList& TypeInstance::getFields() const { return assertFalse<FieldList>(); }
+const FieldList& TypeInstance::getFields(const std::string& constructor) const { return assertFalse<FieldList>(); }
 
 TypeInstanceBasic::TypeInstanceBasic(llvm::StringLiteral name, llvm::Type* llvmType, std::vector<std::string> typeClasses_) :
     TypeInstance({ {"", name.str()}, {} }, std::move(typeClasses_)),
@@ -172,6 +170,7 @@ TypeInstanceBasic::TypeInstanceBasic(llvm::StringLiteral name, llvm::Type* llvmT
 llvm::Type* TypeInstanceBasic::llvmType() const { return llvmType_; }
 bool TypeInstanceBasic::isStructType() const { return false; }
 bool TypeInstanceBasic::isRefType() const { return false; }
+bool TypeInstanceBasic::containsRefTypes() const { return false; }
 
 llvm::TypeSize TypeInstanceBasic::getSize(const llvm::Module* llvmModule, size_t constructorIndex) const
 {
@@ -202,6 +201,18 @@ std::shared_ptr<hm::TypeConstant> TypeInstanceStruct::getType() const
 llvm::Type* TypeInstanceStruct::llvmType() const { return llvmType_; }
 bool TypeInstanceStruct::isStructType() const { return true; }
 bool TypeInstanceStruct::isRefType() const { return false; }
+
+bool TypeInstanceStruct::containsRefTypes() const
+{
+    for (auto& field : fields)
+    {
+        if (field->isRefType() || field->containsRefTypes())
+        {
+            return true;
+        }
+    }
+    return false;
+}
 
 TypeInstPtr TypeInstanceStruct::getTypeParameter(size_t index) const
 {
@@ -240,30 +251,11 @@ unsigned int TypeInstanceStruct::getFieldIndex(const std::string& constructorNam
     return InvalidIndex;
 }
 
-TypeInstPtr TypeInstanceStruct::getFieldType(unsigned int index) const
-{
-    assert(ast->constructors.size() == 1);
-    assert(index < fields.size());
-    return fields[index];
-}
-
-TypeInstPtr TypeInstanceStruct::getFieldType(const std::string& constructorName, unsigned int index) const
+const FieldList& TypeInstanceStruct::getFields() const { return fields; }
+const FieldList& TypeInstanceStruct::getFields(const std::string& constructorName) const
 {
     if (ast->constructors.front().name != constructorName) { throw Error("unknown constructor"); }
-    assert(index < fields.size());
-    return fields[index];
-}
-
-unsigned int TypeInstanceStruct::getFieldCount() const
-{
-    assert(ast->constructors.size() == 1);
-    return static_cast<unsigned int>(fields.size());
-}
-
-unsigned int TypeInstanceStruct::getFieldCount(const std::string& constructorName) const
-{
-    if (ast->constructors.front().name != constructorName) { throw Error("unknown constructor"); }
-    return static_cast<unsigned int>(fields.size());
+    return fields;
 }
 
 namespace {
@@ -356,6 +348,21 @@ llvm::Type* TypeInstanceVariant::llvmType() const { return llvmType_; }
 bool TypeInstanceVariant::isStructType() const { return true; }
 bool TypeInstanceVariant::isRefType() const { return true; }
 
+bool TypeInstanceVariant::containsRefTypes() const
+{
+    for (auto& constructor : constructors)
+    {
+        for (auto& field : constructor.fields)
+        {
+            if (field->isRefType() || field->containsRefTypes())
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 TypeInstPtr TypeInstanceVariant::getTypeParameter(size_t index) const
 {
     return parameters.at(index);
@@ -387,30 +394,16 @@ unsigned int TypeInstanceVariant::getFieldIndex(const std::string& constructor, 
     return static_cast<unsigned int>(j);
 }
 
-const TypeInstance* TypeInstanceVariant::getFieldType(unsigned int) const
+const FieldList& TypeInstanceVariant::getFields() const
 {
-    assert(false);
-    return nullptr;
+    return assertFalse<FieldList>();
 }
 
-const TypeInstance* TypeInstanceVariant::getFieldType(const std::string& constructor, unsigned int index) const
+const FieldList& TypeInstanceVariant::getFields(const std::string& constructor) const
 {
     auto i = findIndex(ast->constructors, [&constructor](const ast::DataConstructor& c) { return c.name == constructor; });
     if (!checkIndex(i)) { throw Error("unknown constructor"); }
-    return constructors[i].fields[index];
-}
-
-unsigned int TypeInstanceVariant::getFieldCount() const
-{
-    assert(false);
-    return 0;
-}
-
-unsigned int TypeInstanceVariant::getFieldCount(const std::string& constructor) const
-{
-    auto i = findIndex(ast->constructors, [&constructor](const ast::DataConstructor& c) { return c.name == constructor; });
-    if (!checkIndex(i)) { throw Error("unknown constructor"); }
-    return static_cast<unsigned int>(constructors[i].fields.size());
+    return constructors[i].fields;
 }
 
 void TypeInstanceVariant::setConstructors(ConstructorList constructors_)

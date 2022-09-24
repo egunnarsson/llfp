@@ -80,7 +80,8 @@ class TypeInstance;
 typedef const TypeInstance* TypeInstPtr;
 typedef std::vector<TypeInstPtr> FieldList;
 
-struct TypeConstructor {
+struct TypeConstructor
+{
     // name?
     // ast?
     FieldList         fields;
@@ -117,8 +118,9 @@ public:
     const Identifier&                         identifier() const;
 
     virtual llvm::Type* llvmType() const = 0;
-    virtual bool        isStructType() const = 0;
+    virtual bool        isStructType() const = 0; // rename basic?
     virtual bool        isRefType() const = 0;
+    virtual bool        containsRefTypes() const = 0; // or bool canValueCopy() const;
     virtual TypeInstPtr getTypeParameter(size_t index) const;
 
     virtual llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const = 0;
@@ -133,12 +135,10 @@ public:
     //const std::string& getConstructor(unsigned int index) const;
     virtual const ConstructorList& getConstructors() const;
 
-    virtual unsigned int getFieldIndex(const std::string& fieldIdentifier) const;
-    virtual unsigned int getFieldIndex(const std::string& constructor, const std::string& fieldIdentifier) const;
-    virtual TypeInstPtr  getFieldType(unsigned int index) const;
-    virtual TypeInstPtr  getFieldType(const std::string& constructor, unsigned int index) const;
-    virtual unsigned int getFieldCount() const;
-    virtual unsigned int getFieldCount(const std::string& constructor) const;
+    virtual unsigned int     getFieldIndex(const std::string& fieldIdentifier) const;
+    virtual unsigned int     getFieldIndex(const std::string& constructor, const std::string& fieldIdentifier) const;
+    virtual const FieldList& getFields() const;
+    virtual const FieldList& getFields(const std::string& constructor) const;
 };
 
 
@@ -154,6 +154,7 @@ public:
     llvm::Type*    llvmType() const override;
     bool           isStructType() const override;
     bool           isRefType() const override;
+    bool           containsRefTypes() const override;
     llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
 };
 
@@ -172,21 +173,20 @@ public:
 
     std::shared_ptr<hm::TypeConstant> getType() const override;
 
-    llvm::Type*    llvmType() const override;
-    bool           isStructType() const override;
-    bool           isRefType() const override;
-    TypeInstPtr    getTypeParameter(size_t index) const override;
+    llvm::Type*      llvmType() const override;
+    bool             isStructType() const override;
+    bool             isRefType() const override;
+    bool             containsRefTypes() const override;
+    TypeInstPtr      getTypeParameter(size_t index) const override;
 
-    llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
+    llvm::TypeSize   getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
 
-    unsigned int   getFieldIndex(const std::string& fieldIdentifier) const override;
-    unsigned int   getFieldIndex(const std::string& constructor, const std::string& fieldIdentifier) const override;
-    TypeInstPtr    getFieldType(unsigned int index) const override;
-    TypeInstPtr    getFieldType(const std::string& constructor, unsigned int index) const override;
-    unsigned int   getFieldCount() const override;
-    unsigned int   getFieldCount(const std::string& constructor) const override;
+    unsigned int     getFieldIndex(const std::string& fieldIdentifier) const override;
+    unsigned int     getFieldIndex(const std::string& constructor, const std::string& fieldIdentifier) const override;
+    const FieldList& getFields() const override;
+    const FieldList& getFields(const std::string& constructor) const override;
 
-    void           setFields(FieldList fieldTypes);
+    void             setFields(FieldList fieldTypes);
 };
 
 
@@ -209,23 +209,22 @@ public:
 
     std::shared_ptr<hm::TypeConstant> getType() const override;
 
-    llvm::Type*    llvmType() const override;
-    bool           isStructType() const override;
-    bool           isRefType() const override;
-    TypeInstPtr    getTypeParameter(size_t index) const override;
+    llvm::Type*      llvmType() const override;
+    bool             isStructType() const override;
+    bool             isRefType() const override;
+    bool             containsRefTypes() const override;
+    TypeInstPtr      getTypeParameter(size_t index) const override;
 
-    llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
+    llvm::TypeSize   getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
 
     const ConstructorList& getConstructors() const override;
 
-    unsigned int   getFieldIndex(const std::string& fieldIdentifier) const override;
-    unsigned int   getFieldIndex(const std::string& constructor, const std::string& fieldIdentifier) const override;
-    TypeInstPtr    getFieldType(unsigned int index) const override;
-    TypeInstPtr    getFieldType(const std::string& constructor, unsigned int index) const override;
-    unsigned int   getFieldCount() const override;
-    unsigned int   getFieldCount(const std::string& constructor) const override;
+    unsigned int     getFieldIndex(const std::string& fieldIdentifier) const override;
+    unsigned int     getFieldIndex(const std::string& constructor, const std::string& fieldIdentifier) const override;
+    const FieldList& getFields() const override;
+    const FieldList& getFields(const std::string& constructor) const override;
 
-    void           setConstructors(ConstructorList constructors);
+    void             setConstructors(ConstructorList constructors);
 };
 
 } // namespace type

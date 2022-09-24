@@ -1175,7 +1175,7 @@ void ExpCodeGenerator::visit(ast::FieldExp &exp)
         }
 
         // type check
-        auto fieldType = lhsType->getFieldType(index);
+        auto fieldType = lhsType->getFields()[index];
         if (fieldType != expectedType)
         {
             Log(exp.location, "Failed to unify types ", fieldType->identifier().str(), " and ", expectedType->identifier().str());
@@ -1205,7 +1205,7 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
     {
         getTypeContext()->check(*typeAnnotation, expectedType, typeAnnotation->get(&exp));
 
-        const auto size = expectedType->getFieldCount(exp.identifier.name);
+        const auto size = expectedType->getFields(exp.identifier.name).size();
         if (size != exp.arguments.size())
         {
             Log(exp.location, "incorrect number of arguments");
@@ -1214,15 +1214,15 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
 
         bool fail = false;
         llvm::Value* value = llvm::UndefValue::get(expectedType->llvmType());
-        for (unsigned int i = 0; i < size; ++i)
+        for (auto [fieldIndex, fieldType] : llfp::enumerate(expectedType->getFields()))
         {
-            auto& arg = exp.arguments[i];
+            auto& arg = exp.arguments[fieldIndex];
 
             // at the moment name is only used to check correctness
             if (!arg.name.empty())
             {
                 auto index = expectedType->getFieldIndex(exp.identifier.name, arg.name);
-                if (index != i)
+                if (index != fieldIndex)
                 {
                     Log(arg.location, index == type::TypeInstance::InvalidIndex
                         ? "unknown field name"
@@ -1231,10 +1231,10 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
                 }
             }
 
-            auto argValue = ExpCodeGenerator::generate(*arg.exp, expectedType->getFieldType(exp.identifier.name, i), this);
+            auto argValue = ExpCodeGenerator::generate(*arg.exp, *fieldType, this);
             if (argValue != nullptr)
             {
-                value = llvmBuilder().CreateInsertValue(value, argValue, { i });
+                value = llvmBuilder().CreateInsertValue(value, argValue, { static_cast<unsigned int>(fieldIndex) });
             }
             else
             {
@@ -1350,8 +1350,51 @@ T* copy(T* src) {
     }
     return dst;
 }
+
+struct S {
+    int i;
+    T t;
+};
+
+void copy(S* dst, S* src) {
+    dst->i = src->i;
+    dst->t = copy(src->t);
+}
 */
-llvm::Function* CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type)
+
+llvm::Function* CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type) // for struct
+{
+    assert(type->isStructType());
+    if (type->isRefType())
+    {
+        return generateCopyFunctionBodyVariant(type);
+    }
+    return generateCopyFunctionBodyStruct(type);
+}
+
+llvm::Function* CodeGenerator::generateCopyFunctionBodyStruct(type::TypeInstPtr type) // for struct
+{
+    auto name = sourceModule->getMangledName("copy", type);
+
+    llvm::Type* returnType = llvm::Type::getVoidTy(*llvmContext);
+    llvm::Type* typePtrType = type->llvmType()->getPointerTo();
+    std::array<llvm::Type*, 2> parameterTypes = { typePtrType, typePtrType };
+
+    auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
+    auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
+    auto dstValue = llvmFunction->arg_begin();
+    auto srcValue = llvmFunction->arg_begin() + 1;
+
+    auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
+    llvmBuilder.SetInsertPoint(entryBB);
+
+    for (auto [fieldIndex, fieldType] : llfp::enumerate(type->getFields()))
+    {
+        generateFieldCopy(type->llvmType(), fieldIndex, *fieldType, dstValue, srcValue);
+    }
+}
+
+llvm::Function* CodeGenerator::generateCopyFunctionBodyVariant(type::TypeInstPtr type) // for variant
 {
     if (!type->isStructType()) { return nullptr; }
 
@@ -1385,26 +1428,7 @@ llvm::Function* CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type)
 
         for (auto [fieldIndex, fieldType] : llfp::enumerate(constructor->fields))
         {
-            std::array<llvm::Value*, 2> idxList =
-            {
-                llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), 0),
-                llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), fieldIndex + 1)
-            };
-            auto fieldPtr = llvmBuilder.CreateGEP(variantType, srcValue, idxList, "");
-            auto dstPtr = llvmBuilder.CreateGEP(variantType, dstValue, idxList, "");
-
-            auto fieldValue = llvmBuilder.CreateLoad((*fieldType)->llvmType(), fieldPtr);
-            if ((*fieldType)->isRefType())
-            {
-                auto copyFunction = getCopyFunction(*fieldType);
-                std::array<llvm::Value*, 1> arguments{ fieldValue };
-                auto fieldDstValue = llvmBuilder.CreateCall(copyFunction, arguments, "");
-                llvmBuilder.CreateStore(fieldDstValue, dstPtr);
-            }
-            else
-            {
-                llvmBuilder.CreateStore(fieldValue, dstPtr);
-            }
+            generateFieldCopy(variantType, fieldIndex, *fieldType, dstValue, srcValue);
         }
 
         llvmBuilder.CreateBr(retBB);
@@ -1424,6 +1448,39 @@ llvm::Function* CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type)
     llvmBuilder.CreateRet(phiValue);
 
     return llvmFunction;
+}
+
+void CodeGenerator::generateFieldCopy(llvm::Type* parentType, size_t fieldIndex, type::TypeInstPtr fieldType, llvm::Value* dstValue, llvm::Value* srcValue)
+{
+    std::array<llvm::Value*, 2> idxList =
+    {
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), 0),
+        llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), fieldIndex + 1)
+    };
+    auto fieldPtr = llvmBuilder.CreateGEP(parentType, srcValue, idxList, "");
+    auto dstPtr = llvmBuilder.CreateGEP(parentType, dstValue, idxList, "");
+
+    auto fieldValue = llvmBuilder.CreateLoad(fieldType->llvmType(), fieldPtr);
+    if (fieldType->isRefType())
+    {
+        auto copyFunction = getCopyFunction(fieldType);
+        std::array<llvm::Value*, 1> arguments{ fieldValue };
+        auto fieldDstValue = llvmBuilder.CreateCall(copyFunction, arguments, "");
+        llvmBuilder.CreateStore(fieldDstValue, dstPtr);
+    }
+    else if (fieldType->containsRefTypes())
+    {
+        auto copyFunction = getCopyFunction(fieldType);
+        auto allocaValue = llvmBuilder.CreateAlloca(fieldType->llvmType());
+        std::array<llvm::Value*, 2> arguments{ allocaValue, fieldPtr };
+        /*auto fieldDstValue =*/ llvmBuilder.CreateCall(copyFunction, arguments, "");
+        auto fieldDstValue = llvmBuilder.CreateLoad(allocaValue);
+        llvmBuilder.CreateStore(fieldDstValue, dstPtr);
+    }
+    else
+    {
+        llvmBuilder.CreateStore(fieldValue, dstPtr);
+    }
 }
 
 llvm::Function* CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type)

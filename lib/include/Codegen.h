@@ -81,6 +81,9 @@ private:
     Function*          getFunction(const GlobalIdentifier& identifier, std::vector<const type::TypeInstance*> types);
 
     llvm::Function*    generateCopyFunctionBody(type::TypeInstPtr type);
+    llvm::Function*    generateCopyFunctionBodyStruct(type::TypeInstPtr type);
+    llvm::Function*    generateCopyFunctionBodyVariant(type::TypeInstPtr type);
+    void               generateFieldCopy(llvm::Type* parentType, size_t fieldIndex, type::TypeInstPtr fieldType, llvm::Value* dstValue, llvm::Value* srcValue);
     llvm::Function*    generateDeleteFunctionBody(type::TypeInstPtr type);
     llvm::Function*    getCopyFunction(type::TypeInstPtr type) const;
     llvm::Function*    getDeleteFunction(type::TypeInstPtr type) const;
