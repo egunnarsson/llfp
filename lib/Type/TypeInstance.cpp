@@ -114,6 +114,12 @@ std::shared_ptr<hm::TypeConstant> TypeInstance::getType() const
     return type;
 }
 
+const ImportedModule* TypeInstance::getModule() const
+{
+    return nullptr;
+}
+
+
 const Identifier& TypeInstance::identifier() const
 {
     return identifier_;
@@ -196,6 +202,11 @@ std::shared_ptr<hm::TypeConstant> TypeInstanceStruct::getType() const
         ++i;
     }
     return type;
+}
+
+const ImportedModule* TypeInstanceStruct::getModule() const
+{
+    return module;
 }
 
 llvm::Type* TypeInstanceStruct::llvmType() const { return llvmType_; }
@@ -342,6 +353,11 @@ std::shared_ptr<hm::TypeConstant> TypeInstanceVariant::getType() const
     }
     assert(!(!type->fields.empty() && type->constructors.size() > 1));
     return type;
+}
+
+const ImportedModule* TypeInstanceVariant::getModule() const
+{
+    return module;
 }
 
 llvm::Type* TypeInstanceVariant::llvmType() const { return llvmType_; }

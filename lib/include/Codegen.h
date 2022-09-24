@@ -55,6 +55,8 @@ class CodeGenerator
     // mangled name as id
     std::unordered_map<std::string, Function> functions; // unique_ptr<Function>? value probably not moved because hm::TypeAnnotation
     type::TypeContext  typeContext; // move to source module (if it should create types it needs the llvmContext)
+    std::unordered_map<type::TypeInstPtr, llvm::Function*> copyFunctions;
+    std::unordered_map<type::TypeInstPtr, llvm::Function*> deleteFunctions;
 
 public:
 
@@ -68,6 +70,9 @@ public:
     bool               generateFunction(const ast::Function*ast);
     bool               generateFunction(const ast::Function*ast, std::vector<const type::TypeInstance*> types);
 
+    bool               generateCopyFunctionBody(type::TypeInstPtr type);
+    bool               generateDeleteFunctionBody(type::TypeInstPtr type);
+
     type::TypeContext* getTypeContext() { return &typeContext; }
 
 private:
@@ -80,13 +85,11 @@ private:
     // lookup, global functions, generate llvmFunction if first external reference
     Function*          getFunction(const GlobalIdentifier& identifier, std::vector<const type::TypeInstance*> types);
 
-    llvm::Function*    generateCopyFunctionBody(type::TypeInstPtr type);
-    llvm::Function*    generateCopyFunctionBodyStruct(type::TypeInstPtr type);
-    llvm::Function*    generateCopyFunctionBodyVariant(type::TypeInstPtr type);
+    bool               generateCopyFunctionBodyStruct(type::TypeInstPtr type);
+    bool               generateCopyFunctionBodyVariant(type::TypeInstPtr type);
     void               generateFieldCopy(llvm::Type* parentType, size_t fieldIndex, type::TypeInstPtr fieldType, llvm::Value* dstValue, llvm::Value* srcValue);
-    llvm::Function*    generateDeleteFunctionBody(type::TypeInstPtr type);
-    llvm::Function*    getCopyFunction(type::TypeInstPtr type) const;
-    llvm::Function*    getDeleteFunction(type::TypeInstPtr type) const;
+    llvm::Function*    getCopyFunction(type::TypeInstPtr type);
+    llvm::Function*    getDeleteFunction(type::TypeInstPtr type);
 
     friend ExpCodeGenerator;
 };

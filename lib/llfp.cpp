@@ -77,19 +77,30 @@ bool generateExportedFunctions(codegen::CodeGenerator* codeGenerator, SourceModu
     return true;
 }
 
-bool generateNextFunction(std::vector<CompiledModule> &result, FunctionIdentifier functionId)
+codegen::CodeGenerator* getCodeGenerator(std::vector<CompiledModule>& result, const ImportedModule* m)
 {
-    auto ast = functionId.ast.function;
-    auto m = functionId.ast.importedModule;
-
     auto predicate = [m](const CompiledModule& u) { return static_cast<ImportedModule*>(u.sourceModule.get()) == m; };
     auto it = std::find_if(result.begin(), result.end(), predicate);
     if (it == result.end())
     {
         // standard module
+        //return functionId.ast.function->functionBody == nullptr;
+        return nullptr;
+    }
+    return it->codeGenerator.get();
+}
+
+bool generateNextFunction(std::vector<CompiledModule> &result, FunctionIdentifier functionId)
+{
+    auto ast = functionId.ast.function;
+    auto m = functionId.ast.importedModule;
+    auto codeGenerator = getCodeGenerator(result, m);
+
+    if (codeGenerator == nullptr)
+    {
+        // standard module
         return functionId.ast.function->functionBody == nullptr;
     }
-    auto codeGenerator = it->codeGenerator.get();
 
     std::vector<type::TypeInstPtr> types;
     for (auto t : *functionId.types)
@@ -107,6 +118,22 @@ bool generateNextFunction(std::vector<CompiledModule> &result, FunctionIdentifie
     }
 
     return codeGenerator->generateFunction(ast, std::move(types));
+}
+
+bool generateTypeFunctions(std::vector<CompiledModule>& result, type::TypeInstPtr origType)
+{
+    auto m = origType->getModule();
+    auto codeGenerator = getCodeGenerator(result, m);
+    if (codeGenerator == nullptr)
+    {
+        // or standard module? Should be ok to generator memory functions for those types...
+        Log({}, "generating memory functions for basic type? ", origType->identifier().str());
+        return false;
+    }
+    auto moduleType = codeGenerator->getTypeContext()->getType(origType->identifier());
+    auto copyOk = codeGenerator->generateCopyFunctionBody(moduleType);
+    auto deleteOk = codeGenerator->generateDeleteFunctionBody(moduleType);
+    return copyOk && deleteOk;
 }
 
 } // namespace
@@ -199,6 +226,15 @@ std::vector<CompiledModule> compile(const std::vector<std::unique_ptr<lex::Input
     {
         auto funId = driver.pop();
         if (!generateNextFunction(result, funId))
+        {
+            throw ReturnCode::TypeOrCodeGenerationError;
+        }
+    }
+
+    // Generate malloc/delete functions
+    while (auto type = driver.popType())
+    {
+        if (!generateTypeFunctions(result, type))
         {
             throw ReturnCode::TypeOrCodeGenerationError;
         }

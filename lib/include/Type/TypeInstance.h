@@ -116,6 +116,7 @@ public:
     // creates a new hm type
     virtual std::shared_ptr<hm::TypeConstant> getType() const;
     const Identifier&                         identifier() const;
+    virtual const ImportedModule*             getModule() const;
 
     virtual llvm::Type* llvmType() const = 0;
     virtual bool        isStructType() const = 0; // rename basic?
@@ -158,6 +159,7 @@ public:
     llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
 };
 
+
 class TypeInstanceStruct : public TypeInstance
 {
     llvm::StructType*        llvmType_;
@@ -172,6 +174,7 @@ public:
     virtual ~TypeInstanceStruct() = default;
 
     std::shared_ptr<hm::TypeConstant> getType() const override;
+    const ImportedModule*             getModule() const override;
 
     llvm::Type*      llvmType() const override;
     bool             isStructType() const override;
@@ -208,6 +211,7 @@ public:
     virtual ~TypeInstanceVariant() = default;
 
     std::shared_ptr<hm::TypeConstant> getType() const override;
+    const ImportedModule*             getModule() const override;
 
     llvm::Type*      llvmType() const override;
     bool             isStructType() const override;

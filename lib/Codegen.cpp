@@ -1276,19 +1276,59 @@ llvm::Value* ExpCodeGenerator::getResult()
     return result;
 }
 
-llvm::Function* CodeGenerator::getCopyFunction(type::TypeInstPtr type) const
+llvm::Function* CodeGenerator::getCopyFunction(type::TypeInstPtr type)
 {
-    assert(false);
-    return nullptr;
+    auto it = copyFunctions.find(type);
+    if (it != copyFunctions.end())
+    {
+        return it->second;
+    }
+
+    driver->push(type);
+
+    llvm::FunctionType* functionType = nullptr;
+    if (type->isRefType())
+    {
+        llvm::Type* returnType = type->llvmType();
+        std::array<llvm::Type*, 1> parameterTypes = { type->llvmType() };
+        functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
+    }
+    else
+    {
+        llvm::Type* returnType = llvm::Type::getVoidTy(*llvmContext);
+        llvm::Type* typePtrType = type->llvmType()->getPointerTo();
+        std::array<llvm::Type*, 2> parameterTypes = { typePtrType, typePtrType };
+        functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
+    }
+
+    auto name = sourceModule->getMangledName("copy", type);
+    auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
+    copyFunctions.insert({ type, llvmFunction });
+    return llvmFunction;
 }
 
-llvm::Function* CodeGenerator::getDeleteFunction(type::TypeInstPtr type) const
+llvm::Function* CodeGenerator::getDeleteFunction(type::TypeInstPtr type)
 {
-    assert(false);
-    return nullptr;
+    auto it = deleteFunctions.find(type);
+    if (it != deleteFunctions.end())
+    {
+        return it->second;
+    }
+
+    driver->push(type);
+
+    auto name = sourceModule->getMangledName("delete", type);
+
+    llvm::Type* returnType = llvm::Type::getVoidTy(*llvmContext);
+    std::array<llvm::Type*, 1> parameterTypes = { type->llvmType() };
+
+    auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
+    auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
+    deleteFunctions.insert({ type, llvmFunction });
+    return llvmFunction;
 }
 
-namespace 
+namespace
 {
 
 void generateVariantSwitch(llvm::IRBuilder<>& llvmBuilder, llvm::Value* value, type::TypeInstPtr type, const std::vector<llvm::BasicBlock*>& variantBlocks)
@@ -1362,7 +1402,7 @@ void copy(S* dst, S* src) {
 }
 */
 
-llvm::Function* CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type) // for struct
+bool CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type) // for struct
 {
     assert(type->isStructType());
     if (type->isRefType())
@@ -1372,16 +1412,9 @@ llvm::Function* CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type) 
     return generateCopyFunctionBodyStruct(type);
 }
 
-llvm::Function* CodeGenerator::generateCopyFunctionBodyStruct(type::TypeInstPtr type) // for struct
+bool CodeGenerator::generateCopyFunctionBodyStruct(type::TypeInstPtr type) // for struct
 {
-    auto name = sourceModule->getMangledName("copy", type);
-
-    llvm::Type* returnType = llvm::Type::getVoidTy(*llvmContext);
-    llvm::Type* typePtrType = type->llvmType()->getPointerTo();
-    std::array<llvm::Type*, 2> parameterTypes = { typePtrType, typePtrType };
-
-    auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
-    auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
+    auto llvmFunction = getCopyFunction(type);
     auto dstValue = llvmFunction->arg_begin();
     auto srcValue = llvmFunction->arg_begin() + 1;
 
@@ -1393,20 +1426,16 @@ llvm::Function* CodeGenerator::generateCopyFunctionBodyStruct(type::TypeInstPtr 
         generateFieldCopy(type->llvmType(), fieldIndex, *fieldType, dstValue, srcValue);
     }
 
-    return llvmFunction;
+    llvmBuilder.CreateRetVoid();
+
+    return true;
 }
 
-llvm::Function* CodeGenerator::generateCopyFunctionBodyVariant(type::TypeInstPtr type) // for variant
+bool CodeGenerator::generateCopyFunctionBodyVariant(type::TypeInstPtr type) // for variant
 {
-    if (!type->isStructType()) { return nullptr; }
+    if (!type->isStructType()) { return false; }
 
-    auto name = sourceModule->getMangledName("copy", type);
-
-    llvm::Type* returnType = type->llvmType();
-    std::array<llvm::Type*, 1> parameterTypes = { type->llvmType() };
-
-    auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
-    auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
+    auto llvmFunction = getCopyFunction(type);
     auto srcValue = llvmFunction->arg_begin();
 
     auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
@@ -1424,7 +1453,7 @@ llvm::Function* CodeGenerator::generateCopyFunctionBodyVariant(type::TypeInstPtr
         auto intPtrType = llvmModule->getDataLayout().getIntPtrType(*llvmContext);
         auto returnTypeSize = type->getSize(llvmModule, index);
         auto sizeValue = llvm::ConstantInt::get(intPtrType, returnTypeSize.getFixedSize());
-        auto dstValue = llvm::CallInst::CreateMalloc(llvmBuilder.GetInsertBlock(), intPtrType, returnType/*wrong type?*/, sizeValue, nullptr, nullptr, "new");
+        auto dstValue = llvm::CallInst::CreateMalloc(llvmBuilder.GetInsertBlock(), intPtrType, constructor->llvmType_, sizeValue, nullptr, nullptr, "new");
 
         auto variantType = constructor->llvmType_;
 
@@ -1443,13 +1472,14 @@ llvm::Function* CodeGenerator::generateCopyFunctionBodyVariant(type::TypeInstPtr
     generateVariantSwitch(llvmBuilder, srcValue, type, constructorBlocks);
 
     llvmBuilder.SetInsertPoint(retBB);
-    auto phiValue = llvmBuilder.CreatePHI(returnType, 2, "copyPhi");
-    for (const auto& [value, block] : llvm::zip(constructorValues, constructorBlocks)) {
+    auto phiValue = llvmBuilder.CreatePHI(llvmFunction->getReturnType(), 2, "copyPhi");
+    for (const auto& [value, block] : llvm::zip(constructorValues, constructorBlocks))
+    {
         phiValue->addIncoming(value, block);
     }
     llvmBuilder.CreateRet(phiValue);
 
-    return llvmFunction;
+    return true;
 }
 
 void CodeGenerator::generateFieldCopy(llvm::Type* parentType, size_t fieldIndex, type::TypeInstPtr fieldType, llvm::Value* dstValue, llvm::Value* srcValue)
@@ -1476,7 +1506,7 @@ void CodeGenerator::generateFieldCopy(llvm::Type* parentType, size_t fieldIndex,
         auto allocaValue = llvmBuilder.CreateAlloca(fieldType->llvmType());
         std::array<llvm::Value*, 2> arguments{ allocaValue, fieldPtr };
         /*auto fieldDstValue =*/ llvmBuilder.CreateCall(copyFunction, arguments, "");
-        auto fieldDstValue = llvmBuilder.CreateLoad(allocaValue);
+        auto fieldDstValue = llvmBuilder.CreateLoad(fieldType->llvmType(), allocaValue);
         llvmBuilder.CreateStore(fieldDstValue, dstPtr);
     }
     else
@@ -1485,15 +1515,11 @@ void CodeGenerator::generateFieldCopy(llvm::Type* parentType, size_t fieldIndex,
     }
 }
 
-llvm::Function* CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type)
+bool CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type) // for variant types
 {
-    auto name = sourceModule->getMangledName("delete", type);
+    assert(type->isRefType());
 
-    llvm::Type* returnType = llvm::Type::getVoidTy(*llvmContext);
-    std::array<llvm::Type*, 1> parameterTypes = { type->llvmType() };
-
-    auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
-    auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
+    auto llvmFunction = getDeleteFunction(type);
     auto argValue = llvmFunction->arg_begin();
 
     auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
@@ -1511,20 +1537,26 @@ llvm::Function* CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type
         for (size_t fieldIndex = 0; fieldIndex < fieldCount; ++fieldIndex)
         {
             auto fieldType = constructor.fields[fieldIndex];
-            if (fieldType->isRefType())
+            if (fieldType->isRefType() || type->containsRefTypes())
             {
                 std::array<llvm::Value*, 2> idxList =
                 {
                     llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), 0),
                     llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), fieldIndex + 1)
                 };
-                auto fieldPtr = llvmBuilder.CreateGEP(variantType, argValue, idxList, "");
-                auto fieldValue = llvmBuilder.CreateLoad(fieldType->llvmType(), fieldPtr);
+                llvm::Value* callArgValue = nullptr;
+                auto fieldPtr = llvmBuilder.CreateGEP(variantType, callArgValue, idxList, "");
+                if (fieldType->isRefType())
+                {
+                    callArgValue = llvmBuilder.CreateLoad(fieldType->llvmType(), fieldPtr);
+                }
+                else
+                {
+                    callArgValue = fieldPtr;
+                }
                 auto deleteFunction = getDeleteFunction(fieldType);
-                std::array<llvm::Value*, 1> argList = { fieldValue };
-                llvmBuilder.CreateCall(deleteFunction, argList);
+                llvmBuilder.CreateCall(deleteFunction, callArgValue);
             }
-            // else if (type->containsRefTypes()) {} !!!
         }
 
         llvmBuilder.CreateBr(retBB);
@@ -1538,7 +1570,7 @@ llvm::Function* CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type
     llvm::CallInst::CreateFree(argValue, llvmBuilder.GetInsertBlock());
     llvmBuilder.CreateRetVoid();
 
-    return llvmFunction;
+    return true;
 }
 
 } // namespace llfp::codegen
