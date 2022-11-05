@@ -1,12 +1,13 @@
 
 #pragma warning(push, 0)
 
-#include "llvm/Support/TargetSelect.h"
-#include "llvm/Support/TargetRegistry.h"
-#include "llvm/Support/Host.h"
+#include <llvm/MC/TargetRegistry.h>
 
-#include "llvm/Target/TargetOptions.h"
-#include "llvm/Target/TargetMachine.h"
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/Host.h>
+
+#include <llvm/Target/TargetOptions.h>
+#include <llvm/Target/TargetMachine.h>
 
 #pragma warning(pop)
 

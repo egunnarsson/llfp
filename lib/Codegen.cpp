@@ -210,7 +210,7 @@ bool CodeGenerator::generateFunctionBody(Function *function)
     auto ast = function->ast;
     auto& types = function->types;
 
-    llvmFunction->addAttribute(0, llvm::Attribute::get(*llvmContext, "frame-pointer", "all"));
+    llvmFunction->addFnAttr(llvm::Attribute::get(*llvmContext, "frame-pointer", "all"));
 
     auto bb = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
     llvmBuilder.SetInsertPoint(bb);
