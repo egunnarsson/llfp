@@ -56,6 +56,33 @@ Constant(End, "end");
 Constant(True, "true");
 Constant(False, "false");
 
+/*
+
+"where"
+
+"or"
+"and"
+"not"
+
+"public"
+"protected"
+"private"
+
+"alias"
+"fun"
+"as"
+"using"
+
+"default"
+"do"
+"deriving"
+"requires"
+"return"
+
+"void"
+
+*/
+
 #undef Constant
 
 } // namespace llfp::id
