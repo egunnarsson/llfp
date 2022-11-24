@@ -1,10 +1,10 @@
 
 // https://rosettacode.org/wiki/Compiler/lexical_analyzer
 
+#include "Lexer.h"
+
 #include "Error.h"
 #include "String/StringConstants.h"
-
-#include "Lexer.h"
 
 
 namespace llfp::lex
@@ -30,13 +30,13 @@ int StdinInput::getCharInt()
     return getchar();
 }
 
-FileInput::FileInput(const char* fileName) :
-    Input(fileName)
+FileInput::FileInput(const char* fileName)
+    : Input(fileName)
 {
     file = fopen(fileName, "r");
     if (file == nullptr)
     {
-        throw llfp::Error(std::string{ std::strerror(errno) } + " (" + fileName + ')' );
+        throw llfp::Error(std::string{ std::strerror(errno) } + " (" + fileName + ')');
     }
 }
 
@@ -50,9 +50,9 @@ int FileInput::getCharInt()
     return fgetc(file);
 }
 
-Lexer::Lexer(Input *input) :
-    input(input),
-    currentToken(Token::Invalid)
+Lexer::Lexer(Input* input)
+    : input(input),
+      currentToken(Token::Invalid)
 {
     lastChar = input->getChar();
     nextToken();
@@ -93,7 +93,7 @@ constexpr bool isoperator(int _C)
     case '^': return true;
     case '|': return true;
     case '~': return true;
-    default:return false;
+    default: return false;
     }
 }
 
@@ -148,7 +148,7 @@ Token Lexer::parseToken()
     {
         return currentToken;
     }
-    
+
     // Skip any whitespace.
     while (isspace(lastChar))
     {
@@ -211,9 +211,9 @@ Token Lexer::parseToken()
     return error("unknown token");
 }
 
-Token Lexer::error(const char *msg)
+Token Lexer::error(const char* msg)
 {
-    tokenString = msg;
+    tokenString         = msg;
     return currentToken = Token::Error;
 }
 
@@ -286,7 +286,6 @@ Token Lexer::parseNumber()
         }
         if (lastChar == 'e')
         {
-
         }
         if (tokenString == ".")
         {
@@ -329,7 +328,7 @@ Token Lexer::parseChar()
     else
     {
         tokenString = static_cast<char>(lastChar);
-        lastChar = input->getChar();
+        lastChar    = input->getChar();
     }
 
     if (lastChar != '\'')
@@ -407,11 +406,11 @@ Token Lexer::parseComment()
 
     // multiline could be any char you choose?
     // if this how do you single line?
-    //int commentChar = lastChar;
+    // int commentChar = lastChar;
 
     if (lastChar == '{') // multiline comment
     {
-        lastChar = input->getChar();
+        lastChar      = input->getChar();
         char exitChar = '}';
         while (true)
         {

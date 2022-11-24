@@ -1,13 +1,5 @@
 
-#include <algorithm>
-#include <iterator>
-#include <utility>
-
-#pragma warning(push, 0)
-
-#include "llvm/Support/FormatVariadic.h"
-
-#pragma warning(pop)
+#include "Type/TypeContext.h"
 
 #include "Common/Algorithm.h"
 #include "Error.h"
@@ -15,7 +7,15 @@
 #include "Log.h"
 #include "Module.h"
 
-#include "Type/TypeContext.h"
+#pragma warning(push, 0)
+
+#include "llvm/Support/FormatVariadic.h"
+
+#pragma warning(pop)
+
+#include <algorithm>
+#include <iterator>
+#include <utility>
 
 
 namespace llfp::type
@@ -30,13 +30,15 @@ class NaiveTypeConstructor : public hm::TypeVisitor
 public:
 
     TypeContext* context;
-    TypeInstPtr result = nullptr;
+    TypeInstPtr  result = nullptr;
 
-    NaiveTypeConstructor(TypeContext* context_) : context{ context_ } {}
+    NaiveTypeConstructor(TypeContext* context_)
+        : context{ context_ }
+    {}
 
     void visit(hm::TypeVar& t) override
     {
-        //assert(t.fields.empty());
+        // assert(t.fields.empty());
 
         if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == id::Floating; }))
         {
@@ -69,30 +71,30 @@ public:
 
 #define LLVM_TYPE(func) llvm::Type::get##func##Ty(llvmContext)
 
-TypeContext::TypeContext(llvm::LLVMContext& llvmContext_, SourceModule* sourceModule_, GlobalContext* globalContext_) :
-    llvmContext{ llvmContext_ },
-    sourceModule{ sourceModule_ },
-    globalContext{ globalContext_ }
+TypeContext::TypeContext(llvm::LLVMContext& llvmContext_, SourceModule* sourceModule_, GlobalContext* globalContext_)
+    : llvmContext{ llvmContext_ },
+      sourceModule{ sourceModule_ },
+      globalContext{ globalContext_ }
 {
-    boolType      = addType(id::Bool,    LLVM_TYPE(Int1), { id::Eq });
+    boolType = addType(id::Bool, LLVM_TYPE(Int1), { id::Eq });
 
-    /*i8Type    =*/ addType(id::I8,      LLVM_TYPE(Int8),   { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
-    /*i16Type   =*/ addType(id::I16,     LLVM_TYPE(Int16),  { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
-    /*i32Type   =*/ addType(id::I32,     LLVM_TYPE(Int32),  { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
-    i64Type       = addType(id::I64,     LLVM_TYPE(Int64),  { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
-    /*i128Type  =*/ addType(id::I128,    LLVM_TYPE(Int128), { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
+    /*i8Type    =*/addType(id::I8, LLVM_TYPE(Int8), { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
+    /*i16Type   =*/addType(id::I16, LLVM_TYPE(Int16), { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
+    /*i32Type   =*/addType(id::I32, LLVM_TYPE(Int32), { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
+    i64Type = addType(id::I64, LLVM_TYPE(Int64), { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
+    /*i128Type  =*/addType(id::I128, LLVM_TYPE(Int128), { id::Eq, id::Ord, id::Num, id::Integer, id::Signed });
 
-    /*u8Type    =*/ addType(id::U8,      LLVM_TYPE(Int8),   { id::Eq, id::Ord, id::Num, id::Integer });
-    /*u16Type   =*/ addType(id::U16,     LLVM_TYPE(Int16),  { id::Eq, id::Ord, id::Num, id::Integer });
-    /*u32Type   =*/ addType(id::U32,     LLVM_TYPE(Int32),  { id::Eq, id::Ord, id::Num, id::Integer });
-    u64Type       = addType(id::U64,     LLVM_TYPE(Int64),  { id::Eq, id::Ord, id::Num, id::Integer });
-    /*u128Type  =*/ addType(id::U128,    LLVM_TYPE(Int128), { id::Eq, id::Ord, id::Num, id::Integer });
+    /*u8Type    =*/addType(id::U8, LLVM_TYPE(Int8), { id::Eq, id::Ord, id::Num, id::Integer });
+    /*u16Type   =*/addType(id::U16, LLVM_TYPE(Int16), { id::Eq, id::Ord, id::Num, id::Integer });
+    /*u32Type   =*/addType(id::U32, LLVM_TYPE(Int32), { id::Eq, id::Ord, id::Num, id::Integer });
+    u64Type = addType(id::U64, LLVM_TYPE(Int64), { id::Eq, id::Ord, id::Num, id::Integer });
+    /*u128Type  =*/addType(id::U128, LLVM_TYPE(Int128), { id::Eq, id::Ord, id::Num, id::Integer });
 
-    /*halfType  =*/ addType(id::Half,   LLVM_TYPE(Half),    { id::Eq, id::Ord, id::Num, id::Floating, id::Signed });
-    /*floatType =*/ addType(id::Float,  LLVM_TYPE(Float),   { id::Eq, id::Ord, id::Num, id::Floating, id::Signed });
-    doubleType    = addType(id::Double, LLVM_TYPE(Double),  { id::Eq, id::Ord, id::Num, id::Floating, id::Signed });
+    /*halfType  =*/addType(id::Half, LLVM_TYPE(Half), { id::Eq, id::Ord, id::Num, id::Floating, id::Signed });
+    /*floatType =*/addType(id::Float, LLVM_TYPE(Float), { id::Eq, id::Ord, id::Num, id::Floating, id::Signed });
+    doubleType = addType(id::Double, LLVM_TYPE(Double), { id::Eq, id::Ord, id::Num, id::Floating, id::Signed });
 
-    charType      = addType(id::Char,   LLVM_TYPE(Int8), { id::Eq, id::Ord });
+    charType = addType(id::Char, LLVM_TYPE(Int8), { id::Eq, id::Ord });
 }
 
 #undef LLVM_TYPE
@@ -112,13 +114,13 @@ const hm::TypeAnnotation& TypeContext::getAnnotation(const ImportedModule* modul
 // will throw on error, return not needed?
 bool TypeContext::check(hm::TypeAnnotation& context, TypeInstPtr typeInstance, const hm::TypePtr& t)
 {
-    auto t2 = typeInstance->getType();
-    auto subs = hm::TypeUnifier::unify(t, t2); //TODO: order? always keep t2
+    auto t2   = typeInstance->getType();
+    auto subs = hm::TypeUnifier::unify(t, t2); // TODO: order? always keep t2
     for (auto& sub : subs)
     {
         context.substitute(sub);
-        //TODO;// also sub in subs!!!
-        // TODO; use some function in hm namespace
+        // TODO;// also sub in subs!!!
+        //  TODO; use some function in hm namespace
     }
     return true;
 }
@@ -144,9 +146,8 @@ TypeInstance* TypeContext::addType(llvm::StringLiteral name, llvm::Type* llvmTyp
 {
     std::vector<std::string> typeClasses;
     for (const auto ref : typeClassesRef) { typeClasses.push_back(ref.str()); }
-    auto it = types.insert({
-        Identifier{ {"", name.str()}, {} },
-        std::make_unique<TypeInstanceBasic>(name, llvmType, std::move(typeClasses)) });
+    auto it = types.insert({ Identifier{ { "", name.str() }, {} },
+                             std::make_unique<TypeInstanceBasic>(name, llvmType, std::move(typeClasses)) });
     return it.first->second.get();
 }
 
@@ -198,16 +199,16 @@ std::vector<TypeInstPtr> TypeContext::getFieldTypes(llfp::DataAst ast, const std
     return result;
 }
 
-TypeInstPtr TypeContext::makeTypeInstanceStruct(const Identifier& identifier, llfp::DataAst ast, std::vector<std::string> typeClasses, const std::map<std::string, Identifier> &typeVariables)
+TypeInstPtr TypeContext::makeTypeInstanceStruct(const Identifier& identifier, llfp::DataAst ast, std::vector<std::string> typeClasses, const std::map<std::string, Identifier>& typeVariables)
 {
     auto llvmType = llvm::StructType::create(llvmContext, "");
-    auto tmpPtr = std::make_unique<TypeInstanceStruct>(identifier, ast.importedModule, ast.data, llvmType, typeClasses);
-    auto typePtr = tmpPtr.get();
-    auto it2 = types.insert({ identifier, std::move(tmpPtr) });
+    auto tmpPtr   = std::make_unique<TypeInstanceStruct>(identifier, ast.importedModule, ast.data, llvmType, typeClasses);
+    auto typePtr  = tmpPtr.get();
+    auto it2      = types.insert({ identifier, std::move(tmpPtr) });
     assert(it2.second);
 
     auto& constructor = ast.data->constructors.front();
-    auto fieldTypes = getFieldTypes(ast, constructor.fields, typeVariables);
+    auto  fieldTypes  = getFieldTypes(ast, constructor.fields, typeVariables);
 
     llvmType->setName(ast.importedModule->getMangledName(ast.data, 0)); // should be type variables
     typePtr->setFields(std::move(fieldTypes));
@@ -218,15 +219,15 @@ TypeInstPtr TypeContext::makeTypeInstanceStruct(const Identifier& identifier, ll
 TypeInstPtr TypeContext::makeTypeInstanceVariant(const Identifier& identifier, llfp::DataAst ast, std::vector<std::string> typeClasses, const std::map<std::string, Identifier>& typeVariables)
 {
     auto llvmPtrType = llvm::Type::getInt8PtrTy(llvmContext);
-    auto tmpPtr = std::make_unique<TypeInstanceVariant>(identifier, llvmPtrType, ast.importedModule, ast.data, std::move(typeClasses));
-    auto typePtr = tmpPtr.get();
-    auto it2 = types.insert({ identifier, std::move(tmpPtr) });
+    auto tmpPtr      = std::make_unique<TypeInstanceVariant>(identifier, llvmPtrType, ast.importedModule, ast.data, std::move(typeClasses));
+    auto typePtr     = tmpPtr.get();
+    auto it2         = types.insert({ identifier, std::move(tmpPtr) });
     assert(it2.second);
 
     std::vector<TypeConstructor> constructors;
     for (auto [index, astConstructor] : llfp::enumerate(ast.data->constructors))
     {
-        auto llvmType = llvm::StructType::create(llvmContext, "");
+        auto llvmType   = llvm::StructType::create(llvmContext, "");
         auto fieldTypes = getFieldTypes(ast, astConstructor->fields, typeVariables);
 
         llvmType->setName(ast.importedModule->getMangledName(ast.data, index));
@@ -234,7 +235,7 @@ TypeInstPtr TypeContext::makeTypeInstanceVariant(const Identifier& identifier, l
         std::vector<llvm::Type*> llvmTypes;
         llvmTypes.push_back(llvm::Type::getInt32Ty(llvmContext)); // variant type
         std::transform(fieldTypes.begin(), fieldTypes.end(), std::back_inserter(llvmTypes),
-            [](const TypeInstPtr& type) { return type->llvmType(); });
+                       [](const TypeInstPtr& type) { return type->llvmType(); });
         llvmType->setBody(llvmTypes);
 
         constructors.push_back(TypeConstructor{ std::move(fieldTypes), llvmType });

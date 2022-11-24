@@ -1,7 +1,5 @@
 
-#include <algorithm>
-#include <memory>
-#include <string>
+#include "ResolveIdentifiers.h"
 
 #include "Ast.h"
 #include "Common/Algorithm.h"
@@ -10,7 +8,9 @@
 #include "Module.h"
 #include "Type/TypeContext.h"
 
-#include "ResolveIdentifiers.h"
+#include <algorithm>
+#include <memory>
+#include <string>
 
 
 namespace llfp
@@ -29,9 +29,7 @@ struct Context
 template<class Check>
 void resolveType(Context& context, const SourceLocation& location, ast::TypeIdentifier& type, Check checkFun, bool allowEmpty)
 {
-    if (type.empty() && allowEmpty
-        || type::isPrimitive(type)
-        || checkFun(type))
+    if (type.empty() && allowEmpty || type::isPrimitive(type) || checkFun(type))
     {
         return;
     }
@@ -69,6 +67,7 @@ void resolveConstructor(Context& context, const SourceLocation& location, Global
 class Scope
 {
 public:
+
     virtual bool isLocal(const std::string& id) const = 0;
 };
 
@@ -87,9 +86,9 @@ protected:
 
 public:
 
-    BaseExpVisitor(Context& context_, const Scope* parentScope_) :
-        context{ context_ },
-        parentScope{ parentScope_ }
+    BaseExpVisitor(Context& context_, const Scope* parentScope_)
+        : context{ context_ },
+          parentScope{ parentScope_ }
     {}
 
     void resolve(const SourceLocation& location, GlobalIdentifier& id)
@@ -100,7 +99,7 @@ public:
         }
 
         auto funDeclAst = context.srcModule.lookupFunctionDecl(id);
-        auto funAst = context.srcModule.lookupFunction(id);
+        auto funAst     = context.srcModule.lookupFunction(id);
 
         if (!funDeclAst.empty())
         {
@@ -165,7 +164,7 @@ public:
     {
         resolve(exp.location, exp.identifier);
 
-        for (auto& arg: exp.arguments)
+        for (auto& arg : exp.arguments)
         {
             arg->accept(this);
         }
@@ -204,15 +203,15 @@ class FunctionExpVisitor final : public BaseExpVisitor
 
 public:
 
-    FunctionExpVisitor(Context& context, const ast::Function& function_, const Scope* parentScope) :
-        BaseExpVisitor(context, parentScope),
-        function{ function_ }
+    FunctionExpVisitor(Context& context, const ast::Function& function_, const Scope* parentScope)
+        : BaseExpVisitor(context, parentScope),
+          function{ function_ }
     {}
 
     bool isLocal(const std::string& id) const override
     {
         if (std::any_of(function.parameters.begin(), function.parameters.end(),
-            [&id](const std::unique_ptr<ast::Parameter>& param) { return param->identifier == id; }))
+                        [&id](const std::unique_ptr<ast::Parameter>& param) { return param->identifier == id; }))
         {
             return true;
         }
@@ -226,9 +225,9 @@ class LetExpVisitor final : public BaseExpVisitor
     const ast::LetExp& letExp;
     size_t             letIndex = 0;
 
-    LetExpVisitor(Context& context, const ast::LetExp& letExp_, const Scope* parentScope) :
-        BaseExpVisitor(context, parentScope),
-        letExp{ letExp_ }
+    LetExpVisitor(Context& context, const ast::LetExp& letExp_, const Scope* parentScope)
+        : BaseExpVisitor(context, parentScope),
+          letExp{ letExp_ }
     {}
 
 public:
@@ -267,7 +266,9 @@ class PatternVisitor final : public ast::PatternVisitor
 
 public:
 
-    PatternVisitor(Context& context_) : context{ context_ } {}
+    PatternVisitor(Context& context_)
+        : context{ context_ }
+    {}
 
     void visit(ast::BoolPattern&) override {}
     void visit(ast::IdentifierPattern&) override {}
@@ -296,7 +297,9 @@ class ClauseExpVisitor final : public BaseExpVisitor
         const std::string& identifier;
         bool               found = false;
 
-        IdentifierLookupVisitor(const std::string& identifier_) : identifier{ identifier_ } {}
+        IdentifierLookupVisitor(const std::string& identifier_)
+            : identifier{ identifier_ }
+        {}
 
         void visit(ast::BoolPattern&) override {}
         void visit(ast::IdentifierPattern& exp) override { found = exp.value == identifier; }
@@ -318,16 +321,16 @@ class ClauseExpVisitor final : public BaseExpVisitor
 
 public:
 
-    ClauseExpVisitor(Context& srcModule_, const ast::Clause& clause_, const Scope* parentScope_):
-        BaseExpVisitor(srcModule_, parentScope_),
-        clause{ clause_ }
+    ClauseExpVisitor(Context& srcModule_, const ast::Clause& clause_, const Scope* parentScope_)
+        : BaseExpVisitor(srcModule_, parentScope_),
+          clause{ clause_ }
     {}
 
     static void resolve(Context& srcModule, const ast::Clause& clause, const Scope* parentScope)
     {
         PatternVisitor patternVisitor{ srcModule };
         clause.pattern->accept(&patternVisitor);
-        ClauseExpVisitor expVisitor{ srcModule , clause , parentScope };
+        ClauseExpVisitor expVisitor{ srcModule, clause, parentScope };
         clause.exp->accept(&expVisitor);
     }
 
@@ -373,7 +376,7 @@ void resolveFunction(Context& context, ast::Function& function)
 bool resolveIdentifiers(SourceModule& srcModule)
 {
     std::string errorStr;
-    Context context {
+    Context     context{
         srcModule,
         llvm::raw_string_ostream{ errorStr }
     };
@@ -382,8 +385,7 @@ bool resolveIdentifiers(SourceModule& srcModule)
 
     for (const auto& data : ast->datas)
     {
-        auto checkLocalFun = [&data](const ast::TypeIdentifier& type)
-        {
+        auto checkLocalFun = [&data](const ast::TypeIdentifier& type) {
             if (type.parameters.empty() && type.identifier.moduleName.empty())
             {
                 return contains(data->typeVariables, type.identifier.name);
@@ -407,8 +409,7 @@ bool resolveIdentifiers(SourceModule& srcModule)
 
     for (const auto& class_ : ast->classes)
     {
-        auto checkLocalFun = [&class_](ast::TypeIdentifier& type)
-        {
+        auto checkLocalFun = [&class_](ast::TypeIdentifier& type) {
             if (type.parameters.empty() && type.identifier.moduleName.empty())
             {
                 return class_->typeVariable == type.identifier.name;

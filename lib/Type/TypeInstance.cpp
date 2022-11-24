@@ -1,15 +1,5 @@
 
-#include <algorithm>
-#include <iterator>
-#include <utility>
-
-#pragma warning(push, 0)
-
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/Support/FormatVariadic.h"
-#include "llvm/IR/Constants.h"
-
-#pragma warning(pop)
+#include "Type/TypeInstance.h"
 
 #include "Common/Algorithm.h"
 #include "Error.h"
@@ -18,7 +8,17 @@
 #include "Module.h"
 #include "Type/TypeContext.h"
 
-#include "Type/TypeInstance.h"
+#pragma warning(push, 0)
+
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/Support/FormatVariadic.h"
+
+#pragma warning(pop)
+
+#include <algorithm>
+#include <iterator>
+#include <utility>
 
 
 namespace
@@ -92,9 +92,9 @@ std::string Identifier::str() const
 }
 
 
-TypeInstance::TypeInstance(Identifier identifier, std::vector<std::string> typeClasses_) :
-    identifier_{ std::move(identifier) },
-    typeClasses{ std::move(typeClasses_) }
+TypeInstance::TypeInstance(Identifier identifier, std::vector<std::string> typeClasses_)
+    : identifier_{ std::move(identifier) },
+      typeClasses{ std::move(typeClasses_) }
 {
 }
 
@@ -138,7 +138,7 @@ bool TypeInstance::isNum() const
 
 bool TypeInstance::isInteger() const
 {
-    return llfp::contains(typeClasses,  id::Integer.str());
+    return llfp::contains(typeClasses, id::Integer.str());
 }
 
 bool TypeInstance::isBool() const
@@ -151,7 +151,7 @@ bool TypeInstance::isFloating() const
     return llfp::contains(typeClasses, id::Floating.str());
 }
 
-bool TypeInstance::isSigned()const
+bool TypeInstance::isSigned() const
 {
     return llfp::contains(typeClasses, id::Signed.str());
 }
@@ -167,16 +167,16 @@ unsigned int TypeInstance::getFieldIndex(const std::string&, const std::string&)
 const FieldList& TypeInstance::getFields() const { return assertFalse<FieldList>(); }
 const FieldList& TypeInstance::getFields(const std::string& constructor) const { return assertFalse<FieldList>(); }
 
-TypeInstanceBasic::TypeInstanceBasic(llvm::StringLiteral name, llvm::Type* llvmType, std::vector<std::string> typeClasses_) :
-    TypeInstance({ {"", name.str()}, {} }, std::move(typeClasses_)),
-    llvmType_{ llvmType }
+TypeInstanceBasic::TypeInstanceBasic(llvm::StringLiteral name, llvm::Type* llvmType, std::vector<std::string> typeClasses_)
+    : TypeInstance({ { "", name.str() }, {} }, std::move(typeClasses_)),
+      llvmType_{ llvmType }
 {
 }
 
 llvm::Type* TypeInstanceBasic::llvmType() const { return llvmType_; }
-bool TypeInstanceBasic::isStructType() const { return false; }
-bool TypeInstanceBasic::isRefType() const { return false; }
-bool TypeInstanceBasic::containsRefTypes() const { return false; }
+bool        TypeInstanceBasic::isStructType() const { return false; }
+bool        TypeInstanceBasic::isRefType() const { return false; }
+bool        TypeInstanceBasic::containsRefTypes() const { return false; }
 
 llvm::TypeSize TypeInstanceBasic::getSize(const llvm::Module* llvmModule, size_t constructorIndex) const
 {
@@ -184,21 +184,21 @@ llvm::TypeSize TypeInstanceBasic::getSize(const llvm::Module* llvmModule, size_t
     return llvmModule->getDataLayout().getTypeAllocSize(llvmType_);
 }
 
-TypeInstanceStruct::TypeInstanceStruct(Identifier identifier, const ImportedModule* module_, const ast::Data* ast_, llvm::StructType* llvmType, std::vector<std::string> typeClasses) :
-    TypeInstance(std::move(identifier), std::move(typeClasses)),
-    llvmType_{ llvmType },
-    module{ module_ },
-    ast{ ast_ }
+TypeInstanceStruct::TypeInstanceStruct(Identifier identifier, const ImportedModule* module_, const ast::Data* ast_, llvm::StructType* llvmType, std::vector<std::string> typeClasses)
+    : TypeInstance(std::move(identifier), std::move(typeClasses)),
+      llvmType_{ llvmType },
+      module{ module_ },
+      ast{ ast_ }
 {
 }
 
 std::shared_ptr<hm::TypeConstant> TypeInstanceStruct::getType() const
 {
-    auto type = TypeInstance::getType();
-    size_t i = 0;
+    auto   type = TypeInstance::getType();
+    size_t i    = 0;
     for (const auto& field : fields)
     {
-        type->fields.insert({ast->constructors.front().fields[i].name, field->getType()});
+        type->fields.insert({ ast->constructors.front().fields[i].name, field->getType() });
         ++i;
     }
     return type;
@@ -210,8 +210,8 @@ const ImportedModule* TypeInstanceStruct::getModule() const
 }
 
 llvm::Type* TypeInstanceStruct::llvmType() const { return llvmType_; }
-bool TypeInstanceStruct::isStructType() const { return true; }
-bool TypeInstanceStruct::isRefType() const { return false; }
+bool        TypeInstanceStruct::isStructType() const { return true; }
+bool        TypeInstanceStruct::isRefType() const { return false; }
 
 bool TypeInstanceStruct::containsRefTypes() const
 {
@@ -269,19 +269,19 @@ const FieldList& TypeInstanceStruct::getFields(const std::string& constructorNam
     return fields;
 }
 
-namespace {
+namespace
+{
 
 TypeInstPtr findTypeOfTypeVar(const std::string& typeVar, const ast::TypeIdentifier& typeId, TypeInstPtr type)
 {
-    auto findType_impl = [&typeVar](const ast::TypeIdentifier& typeId, TypeInstPtr type, auto& find_ref) -> TypeInstPtr
-    {
+    auto findType_impl = [&typeVar](const ast::TypeIdentifier& typeId, TypeInstPtr type, auto& find_ref) -> TypeInstPtr {
         if (typeId.identifier.moduleName.empty() && typeId.identifier.name == typeVar)
         {
             assert(typeId.parameters.empty());
             return type;
         }
 
-        //assert(typeId.parameters.size() == type->getTypeParameterCount());
+        // assert(typeId.parameters.size() == type->getTypeParameterCount());
         for (unsigned int i = 0; i < typeId.parameters.size(); ++i)
         {
             auto result = find_ref(typeId.parameters[i], type->getTypeParameter(i), find_ref);
@@ -319,7 +319,7 @@ void TypeInstanceStruct::setFields(FieldList fieldTypes)
     {
         std::vector<llvm::Type*> llvmTypes;
         std::transform(fieldTypes.begin(), fieldTypes.end(), std::back_inserter(llvmTypes),
-            [](const TypeInstPtr& type) {return type->llvmType(); });
+                       [](const TypeInstPtr& type) { return type->llvmType(); });
 
         llvmType_->setBody(llvmTypes);
     }
@@ -328,15 +328,15 @@ void TypeInstanceStruct::setFields(FieldList fieldTypes)
 
 
 TypeInstanceVariant::TypeInstanceVariant(
-    Identifier identifier,
-    llvm::PointerType* llvmType,
-    const ImportedModule* module_,
-    const ast::Data* ast_,
-    std::vector<std::string> typeClasses) :
-    TypeInstance(std::move(identifier), std::move(typeClasses)),
-    llvmType_{ llvmType },
-    module{ module_ },
-    ast{ ast_ }
+    Identifier               identifier,
+    llvm::PointerType*       llvmType,
+    const ImportedModule*    module_,
+    const ast::Data*         ast_,
+    std::vector<std::string> typeClasses)
+    : TypeInstance(std::move(identifier), std::move(typeClasses)),
+      llvmType_{ llvmType },
+      module{ module_ },
+      ast{ ast_ }
 {
 }
 
@@ -361,8 +361,8 @@ const ImportedModule* TypeInstanceVariant::getModule() const
 }
 
 llvm::Type* TypeInstanceVariant::llvmType() const { return llvmType_; }
-bool TypeInstanceVariant::isStructType() const { return true; }
-bool TypeInstanceVariant::isRefType() const { return true; }
+bool        TypeInstanceVariant::isStructType() const { return true; }
+bool        TypeInstanceVariant::isRefType() const { return true; }
 
 bool TypeInstanceVariant::containsRefTypes() const
 {
@@ -429,7 +429,7 @@ void TypeInstanceVariant::setConstructors(ConstructorList constructors_)
         TypeInstPtr result = nullptr;
         for (unsigned int constructorIndex = 0; constructorIndex < constructors_.size(); ++constructorIndex)
         {
-            const auto& astFields = ast->constructors[constructorIndex].fields;
+            const auto& astFields   = ast->constructors[constructorIndex].fields;
             const auto& constructor = constructors_[constructorIndex];
 
             assert(astFields.size() == constructor.fields.size());

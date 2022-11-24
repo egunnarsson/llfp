@@ -1,10 +1,10 @@
 
+#include "Module.h"
+
 #include "Codegen.h"
 #include "Common/Algorithm.h"
 #include "GlobalContext.h"
 #include "Log.h"
-
-#include "Module.h"
 
 
 namespace llfp
@@ -17,7 +17,7 @@ std::unique_ptr<SourceModule> SourceModule::create(std::unique_ptr<ast::Module> 
 {
     std::unique_ptr<SourceModule> sourceModule = std::make_unique<SourceModule>();
 
-    for (auto &function : astModule->functions)
+    for (auto& function : astModule->functions)
     {
         auto insert = sourceModule->functions.insert((std::make_pair(function->name, function.get())));
         if (!insert.second)
@@ -27,13 +27,13 @@ std::unique_ptr<SourceModule> SourceModule::create(std::unique_ptr<ast::Module> 
         }
     }
 
-    for (auto &publicDecl : astModule->publics)
+    for (auto& publicDecl : astModule->publics)
     {
-        auto predicate = [&publicDecl](std::unique_ptr<ast::Function> &function) { return publicDecl.name == function->name; };
-        auto it = std::find_if(astModule->functions.begin(), astModule->functions.end(), predicate);
+        auto predicate = [&publicDecl](std::unique_ptr<ast::Function>& function) { return publicDecl.name == function->name; };
+        auto it        = std::find_if(astModule->functions.begin(), astModule->functions.end(), predicate);
         if (it != astModule->functions.end())
         {
-            auto &function = *it;
+            auto& function = *it;
             sourceModule->publicFunctions.insert(std::make_pair(function->name, function.get()));
         }
         else
@@ -54,7 +54,7 @@ std::unique_ptr<SourceModule> SourceModule::create(std::unique_ptr<ast::Module> 
             }
 
             FunDeclAst funAst{ sourceModule.get(), classDecl.get(), funDecl.get() };
-            auto it = sourceModule->functionDeclarations.insert(std::make_pair(funDecl->name, funAst));
+            auto       it = sourceModule->functionDeclarations.insert(std::make_pair(funDecl->name, funAst));
             if (!it.second)
             {
                 Log(funDecl->location, "function declaration already defined");
@@ -63,7 +63,7 @@ std::unique_ptr<SourceModule> SourceModule::create(std::unique_ptr<ast::Module> 
         }
     }
 
-    for (auto &dataDecl : astModule->datas)
+    for (auto& dataDecl : astModule->datas)
     {
         auto insert = sourceModule->dataDeclarations.insert(std::make_pair(dataDecl->name, dataDecl.get()));
         if (!insert.second)
@@ -73,13 +73,13 @@ std::unique_ptr<SourceModule> SourceModule::create(std::unique_ptr<ast::Module> 
         }
 
         // check duplicate fields;
-        for (auto &constructor: dataDecl->constructors)
+        for (auto& constructor : dataDecl->constructors)
         {
             auto end = constructor.fields.end();
             for (auto it = constructor.fields.begin(); it != end; ++it)
             {
                 auto predicate = [it](const llfp::ast::Field& field) { return it->name == field.name; };
-                auto result = std::find_if(it + 1, end, predicate);
+                auto result    = std::find_if(it + 1, end, predicate);
                 if (result != end)
                 {
                     Log(result->location, "duplicate field \"", result->name, '"');
@@ -93,12 +93,12 @@ std::unique_ptr<SourceModule> SourceModule::create(std::unique_ptr<ast::Module> 
     return sourceModule;
 }
 
-bool SourceModule::addImportedModules(GlobalContext &globalContext)
+bool SourceModule::addImportedModules(GlobalContext& globalContext)
 {
     assert(astModule != nullptr);
     bool result = true;
 
-    for (auto &importDecl : astModule->imports)
+    for (auto& importDecl : astModule->imports)
     {
         auto module = globalContext.getModule(importDecl.name);
         if (module != nullptr)
@@ -120,10 +120,10 @@ const std::string& SourceModule::name() const
     return astModule->name;
 }
 
-FunAst SourceModule::getFunction(const std::string &name)
+FunAst SourceModule::getFunction(const std::string& name)
 {
     auto ast = find(publicFunctions, name);
-    return ast != nullptr ? FunAst{this, ast} : FunAst{};
+    return ast != nullptr ? FunAst{ this, ast } : FunAst{};
 }
 
 FunDeclAst SourceModule::getFunctionDecl(const std::string& name)
@@ -131,14 +131,14 @@ FunDeclAst SourceModule::getFunctionDecl(const std::string& name)
     return find(functionDeclarations, name, { nullptr, nullptr, nullptr });
 }
 
-DataAst SourceModule::getType(const std::string &name) const
+DataAst SourceModule::getType(const std::string& name) const
 {
     auto ast = find(dataDeclarations, name);
     return ast != nullptr ? DataAst{ this, ast } : DataAst{};
 }
 
 // [%@][-a-zA-Z$._][-a-zA-Z$._0-9]*
-std::string SourceModule::getMangledName(const ast::Function*function, const std::vector<const type::TypeInstance*> &types) const
+std::string SourceModule::getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const
 {
     assert(!types.empty());
     if (function->exported)
@@ -164,7 +164,7 @@ std::string SourceModule::getMangledName(const ast::Data* data) const
     return name() + '_' + data->name;
 }
 
-std::string SourceModule::getMangledName(const ast::Data *data, size_t constructorIndex) const
+std::string SourceModule::getMangledName(const ast::Data* data, size_t constructorIndex) const
 {
     assert(data->typeVariables.empty());
     assert(data->constructors.size() > 1);
@@ -177,7 +177,7 @@ std::string SourceModule::getMangledName(const char* internalFunctionName, type:
     return name() + ':' + internalFunctionName + '$' + type->identifier().str();
 }
 
-std::string SourceModule::getExportedName(const ast::Function*function) const
+std::string SourceModule::getExportedName(const ast::Function* function) const
 {
     return name() + '_' + function->name;
 }
@@ -222,9 +222,9 @@ ast::Module* SourceModule::getAST()
 template<class AstNode, class LocalFun, class GlobalFun>
 AstNode SourceModule::lookup(
     const GlobalIdentifier& identifier,
-    LocalFun localLookup,
-    GlobalFun globalLookup,
-    llvm::StringLiteral errorMsg) const
+    LocalFun                localLookup,
+    GlobalFun               globalLookup,
+    llvm::StringLiteral     errorMsg) const
 {
     if (identifier.moduleName.empty())
     {
@@ -236,10 +236,10 @@ AstNode SourceModule::lookup(
             results.push_back(localAst);
         }
 
-        for (auto &itm : importedModules)
+        for (auto& itm : importedModules)
         {
             auto importedModule = itm.second;
-            auto globalAst = globalLookup(importedModule, identifier.name);
+            auto globalAst      = globalLookup(importedModule, identifier.name);
             if (!globalAst.empty())
             {
                 results.push_back(globalAst);
@@ -278,7 +278,7 @@ AstNode SourceModule::lookup(
             if (itm != importedModules.end())
             {
                 auto importedModule = itm->second;
-                auto globalAst = globalLookup(importedModule, identifier.name);
+                auto globalAst      = globalLookup(importedModule, identifier.name);
 
                 if (!globalAst.empty())
                 {
@@ -299,7 +299,8 @@ AstNode SourceModule::lookup(
 
 FunDeclAst SourceModule::lookupFunctionDecl(const GlobalIdentifier& identifier)
 {
-    return lookup<FunDeclAst>(identifier,
+    return lookup<FunDeclAst>(
+        identifier,
         [this](const std::string& id) { return getFunctionDecl(id); },
         [](ImportedModule* module, const std::string& id) { return module->getFunctionDecl(id); },
         "");
@@ -307,9 +308,9 @@ FunDeclAst SourceModule::lookupFunctionDecl(const GlobalIdentifier& identifier)
 
 FunAst SourceModule::lookupFunction(const GlobalIdentifier& identifier)
 {
-    return lookup<FunAst>(identifier,
-        [this](const std::string& id)
-        {
+    return lookup<FunAst>(
+        identifier,
+        [this](const std::string& id) {
             auto ast = find(functions, id);
             return ast != nullptr ? FunAst{ this, ast } : FunAst{};
         },
@@ -319,7 +320,8 @@ FunAst SourceModule::lookupFunction(const GlobalIdentifier& identifier)
 
 DataAst SourceModule::lookupType(const GlobalIdentifier& identifier) const
 {
-    return lookup<DataAst>(identifier,
+    return lookup<DataAst>(
+        identifier,
         [this](const std::string& id) { return getType(id); },
         [](ImportedModule* module, const std::string& id) { return module->getType(id); },
         "undefined data type ");

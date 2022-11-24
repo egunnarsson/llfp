@@ -1,10 +1,8 @@
 #pragma once
 
-#include <algorithm>
-#include <functional>
-#include <memory>
-#include <string>
-#include <vector>
+#include "Ast.h"
+#include "Common/GlobalIdentifier.h"
+#include "Type/TypeInference.h"
 
 #pragma warning(push, 0)
 
@@ -14,9 +12,11 @@
 
 #pragma warning(pop)
 
-#include "Ast.h"
-#include "Common/GlobalIdentifier.h"
-#include "Type/TypeInference.h"
+#include <algorithm>
+#include <functional>
+#include <memory>
+#include <string>
+#include <vector>
 
 
 namespace llvm
@@ -36,12 +36,12 @@ struct Identifier
 
     std::string str() const;
 
-    bool operator ==(const Identifier& id) const
+    bool operator==(const Identifier& id) const
     {
         return name == id.name && parameters == id.parameters;
     }
 
-    bool operator !=(const Identifier& id) const
+    bool operator!=(const Identifier& id) const
     {
         return name != id.name || parameters != id.parameters;
     }
@@ -52,13 +52,14 @@ struct Identifier
 namespace std
 {
 
-template<> struct hash<llfp::type::Identifier>
+template<>
+struct hash<llfp::type::Identifier>
 {
     std::size_t operator()(llfp::type::Identifier const& id) const noexcept
     {
         std::vector<llvm::hash_code> tmp(id.parameters.size(), 0);
         std::transform(id.parameters.begin(), id.parameters.end(), tmp.begin(),
-            [](llfp::type::Identifier const& id) { return hash<llfp::type::Identifier>{}(id); });
+                       [](llfp::type::Identifier const& id) { return hash<llfp::type::Identifier>{}(id); });
 
         return llvm::hash_combine(
             std::hash<llfp::GlobalIdentifier>{}(id.name),
@@ -77,7 +78,7 @@ namespace type
 {
 
 class TypeInstance;
-typedef const TypeInstance* TypeInstPtr;
+typedef const TypeInstance*      TypeInstPtr;
 typedef std::vector<TypeInstPtr> FieldList;
 
 struct TypeConstructor
@@ -98,9 +99,9 @@ bool isPrimitive(const Identifier& id);
 
 class TypeInstance
 {
-    //llfp::hm::TypeConstantPtr  hmType; // maybe instead of creating new ones?
-    Identifier                 identifier_;
-    std::vector<std::string>   typeClasses;
+    // llfp::hm::TypeConstantPtr  hmType; // maybe instead of creating new ones?
+    Identifier               identifier_;
+    std::vector<std::string> typeClasses;
 
 protected:
 
@@ -111,16 +112,16 @@ public:
     static constexpr auto InvalidIndex = (unsigned int)-1;
 
     TypeInstance(const TypeInstance&) = delete;
-    virtual ~TypeInstance() = default;
+    virtual ~TypeInstance()           = default;
 
     // creates a new hm type
     virtual std::shared_ptr<hm::TypeConstant> getType() const;
     const Identifier&                         identifier() const;
     virtual const ImportedModule*             getModule() const;
 
-    virtual llvm::Type* llvmType() const = 0;
-    virtual bool        isStructType() const = 0; // rename basic?
-    virtual bool        isRefType() const = 0;
+    virtual llvm::Type* llvmType() const         = 0;
+    virtual bool        isStructType() const     = 0; // rename basic?
+    virtual bool        isRefType() const        = 0;
     virtual bool        containsRefTypes() const = 0; // or bool canValueCopy() const;
     virtual TypeInstPtr getTypeParameter(size_t index) const;
 
@@ -132,8 +133,8 @@ public:
     bool isFloating() const;
     bool isSigned() const;
 
-    //virtual unsigned int constructorCount() const;
-    //const std::string& getConstructor(unsigned int index) const;
+    // virtual unsigned int constructorCount() const;
+    // const std::string& getConstructor(unsigned int index) const;
     virtual const ConstructorList& getConstructors() const;
 
     virtual unsigned int     getFieldIndex(const std::string& fieldIdentifier) const;
@@ -176,20 +177,20 @@ public:
     std::shared_ptr<hm::TypeConstant> getType() const override;
     const ImportedModule*             getModule() const override;
 
-    llvm::Type*      llvmType() const override;
-    bool             isStructType() const override;
-    bool             isRefType() const override;
-    bool             containsRefTypes() const override;
-    TypeInstPtr      getTypeParameter(size_t index) const override;
+    llvm::Type* llvmType() const override;
+    bool        isStructType() const override;
+    bool        isRefType() const override;
+    bool        containsRefTypes() const override;
+    TypeInstPtr getTypeParameter(size_t index) const override;
 
-    llvm::TypeSize   getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
+    llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
 
     unsigned int     getFieldIndex(const std::string& fieldIdentifier) const override;
     unsigned int     getFieldIndex(const std::string& constructor, const std::string& fieldIdentifier) const override;
     const FieldList& getFields() const override;
     const FieldList& getFields(const std::string& constructor) const override;
 
-    void             setFields(FieldList fieldTypes);
+    void setFields(FieldList fieldTypes);
 };
 
 
@@ -202,24 +203,25 @@ class TypeInstanceVariant : public TypeInstance
     std::vector<TypeInstPtr> parameters;
 
 public:
+
     TypeInstanceVariant(
-        Identifier identifier,
-        llvm::PointerType* llvmType,
-        const ImportedModule* module,
-        const ast::Data* ast,
+        Identifier               identifier,
+        llvm::PointerType*       llvmType,
+        const ImportedModule*    module,
+        const ast::Data*         ast,
         std::vector<std::string> typeClasses);
     virtual ~TypeInstanceVariant() = default;
 
     std::shared_ptr<hm::TypeConstant> getType() const override;
     const ImportedModule*             getModule() const override;
 
-    llvm::Type*      llvmType() const override;
-    bool             isStructType() const override;
-    bool             isRefType() const override;
-    bool             containsRefTypes() const override;
-    TypeInstPtr      getTypeParameter(size_t index) const override;
+    llvm::Type* llvmType() const override;
+    bool        isStructType() const override;
+    bool        isRefType() const override;
+    bool        containsRefTypes() const override;
+    TypeInstPtr getTypeParameter(size_t index) const override;
 
-    llvm::TypeSize   getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
+    llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
 
     const ConstructorList& getConstructors() const override;
 
@@ -228,7 +230,7 @@ public:
     const FieldList& getFields() const override;
     const FieldList& getFields(const std::string& constructor) const override;
 
-    void             setConstructors(ConstructorList constructors);
+    void setConstructors(ConstructorList constructors);
 };
 
 } // namespace type

@@ -1,12 +1,12 @@
 
-#include <unordered_map>
+#include "MathModule.h"
 
 #include "GlobalContext.h"
 #include "Parser.h"
-#include "Type/TypeInstance.h"
 #include "String/StringConstants.h"
+#include "Type/TypeInstance.h"
 
-#include "MathModule.h"
+#include <unordered_map>
 
 
 namespace llfp
@@ -61,12 +61,12 @@ class Fractional a
 
 void addInstance(const std::unique_ptr<ast::Module>& astModule, const std::unique_ptr<ast::Class>& classPtr, llvm::StringRef type)
 {
-    auto location = classPtr->location;
+    auto location        = classPtr->location;
     auto classIdentifier = GlobalIdentifier{ "math", classPtr->name };
-    auto typeArgument = ast::TypeIdentifier{ {"", type.str()}, {} };
+    auto typeArgument    = ast::TypeIdentifier{ { "", type.str() }, {} };
 
     std::vector<std::unique_ptr<ast::Function>> functions;
-    for (auto& function: classPtr->functions)
+    for (auto& function : classPtr->functions)
     {
         std::vector<std::unique_ptr<ast::Parameter>> parameters;
         for (auto& param : function->parameters)
@@ -85,20 +85,20 @@ void addInstance(const std::unique_ptr<ast::Module>& astModule, const std::uniqu
 
 MathModule::MathModule()
 {
-    auto input = lex::StringInput(code);
-    auto lexer = lex::Lexer(&input);
+    auto input  = lex::StringInput(code);
+    auto lexer  = lex::Lexer(&input);
     auto parser = parse::Parser(&lexer);
-    astModule = parser.parse();
+    astModule   = parser.parse();
 
     for (auto& classPtr : astModule->classes)
     {
         if (classPtr->name == id::Signed)
         {
-            //addInstance(astModule, classPtr, id::I8);
-            //addInstance(astModule, classPtr, id::I16);
+            // addInstance(astModule, classPtr, id::I8);
+            // addInstance(astModule, classPtr, id::I16);
             addInstance(astModule, classPtr, id::I32);
             addInstance(astModule, classPtr, id::I64);
-            //addInstance(astModule, classPtr, id::I128);
+            // addInstance(astModule, classPtr, id::I128);
         }
         addInstance(astModule, classPtr, id::Float);
         addInstance(astModule, classPtr, id::Double);
@@ -114,7 +114,7 @@ void MathModule::addToGlobalContext(GlobalContext& context)
         for (auto& fun : classInstance->functions)
         {
             type::Identifier typeId{ classInstance->typeArgument.identifier, {} };
-            context.addFunctionInstance(fun->name, std::move(typeId), {this, fun.get()});
+            context.addFunctionInstance(fun->name, std::move(typeId), { this, fun.get() });
         }
     }
 }
@@ -127,7 +127,7 @@ const std::string& MathModule::name() const
 FunAst MathModule::getFunction(const std::string& name)
 {
     // we only have instances
-    return {nullptr, nullptr};
+    return { nullptr, nullptr };
 }
 
 FunDeclAst MathModule::getFunctionDecl(const std::string& name)
@@ -135,7 +135,7 @@ FunDeclAst MathModule::getFunctionDecl(const std::string& name)
     // TODO: make some lookup table
     for (auto& classPtr : astModule->classes)
     {
-        for (auto& fun: classPtr->functions)
+        for (auto& fun : classPtr->functions)
         {
             if (fun->name == name)
             {
@@ -155,9 +155,9 @@ DataAst MathModule::getType(const std::string& name) const
 std::string MathModule::getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const
 {
     assert(types.size() <= 2 && types.size() > 0);
-    auto& typeName = types[0]->identifier().name.name;
-    const bool isFloat = typeName == id::Float;
-    const bool isInt32 = typeName == id::I32;
+    auto&      typeName = types[0]->identifier().name.name;
+    const bool isFloat  = typeName == id::Float;
+    const bool isInt32  = typeName == id::I32;
     if (function->name == "abs")
     {
         if (types[0]->isFloating())
@@ -187,13 +187,13 @@ std::string MathModule::getMangledName(const ast::Data* data, size_t constructor
     return "";
 }
 
-std::string MathModule::getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const
+std::string MathModule::getMangledName(const char* internalFunctionName, const type::TypeInstance* type) const
 {
     assert(false);
     return "";
 }
 
-std::string MathModule::getExportedName(const ast::Function * function) const
+std::string MathModule::getExportedName(const ast::Function* function) const
 {
     assert(false);
     return "";
@@ -208,7 +208,7 @@ bool MathModule::fullyQualifiedName(type::Identifier& identifier, const ast::Typ
 FunAst MathModule::lookupFunction(const GlobalIdentifier& identifier)
 {
     assert(false);
-    return {nullptr, nullptr};
+    return { nullptr, nullptr };
 }
 
 FunDeclAst MathModule::lookupFunctionDecl(const GlobalIdentifier& identifier)

@@ -1,4 +1,6 @@
 
+#include "JIT.h"
+
 #pragma warning(push, 0)
 
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
@@ -7,19 +9,17 @@
 
 #pragma warning(pop)
 
-#include "JIT.h"
-
 
 namespace llfp
 {
 
-JIT::JIT(std::unique_ptr<llvm::orc::ExecutionSession> ES, llvm::orc::JITTargetMachineBuilder JTMB, llvm::DataLayout DL) :
-    ES(std::move(ES)),
-    DL(std::move(DL)),
-    Mangle(*this->ES, this->DL),
-    ObjectLayer(*this->ES, []() { return std::make_unique<llvm::SectionMemoryManager>(); }),
-    CompileLayer(*this->ES, ObjectLayer, std::make_unique<llvm::orc::ConcurrentIRCompiler>(std::move(JTMB))),
-    MainJD(this->ES->createBareJITDylib("<main>"))
+JIT::JIT(std::unique_ptr<llvm::orc::ExecutionSession> ES, llvm::orc::JITTargetMachineBuilder JTMB, llvm::DataLayout DL)
+    : ES(std::move(ES)),
+      DL(std::move(DL)),
+      Mangle(*this->ES, this->DL),
+      ObjectLayer(*this->ES, []() { return std::make_unique<llvm::SectionMemoryManager>(); }),
+      CompileLayer(*this->ES, ObjectLayer, std::make_unique<llvm::orc::ConcurrentIRCompiler>(std::move(JTMB))),
+      MainJD(this->ES->createBareJITDylib("<main>"))
 {
     MainJD.addGenerator(llvm::cantFail(llvm::orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(DL.getGlobalPrefix())));
     ObjectLayer.setOverrideObjectFlagsWithResponsibilityFlags(true);
@@ -48,7 +48,7 @@ llvm::Expected<std::unique_ptr<JIT>> JIT::Create()
         return DL.takeError();
 
     return std::make_unique<JIT>(std::move(ES), std::move(JTMB),
-        std::move(*DL));
+                                 std::move(*DL));
 }
 
 llvm::Error JIT::addModule(llvm::orc::ThreadSafeModule TSM, llvm::orc::ResourceTrackerSP RT)

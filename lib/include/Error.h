@@ -1,8 +1,8 @@
 #pragma once
 
-#include <stdexcept>
-
 #include "Common/SourceLocation.h"
+
+#include <stdexcept>
 
 
 namespace llfp
@@ -11,8 +11,13 @@ namespace llfp
 class Error : public std::runtime_error
 {
 public:
-    Error(const char* msg) : std::runtime_error(msg) {}
-    Error(const std::string& msg) : std::runtime_error(msg) {}
+
+    Error(const char* msg)
+        : std::runtime_error(msg)
+    {}
+    Error(const std::string& msg)
+        : std::runtime_error(msg)
+    {}
 };
 
 class ErrorLocation : public std::runtime_error
@@ -21,13 +26,13 @@ class ErrorLocation : public std::runtime_error
 
 public:
 
-    ErrorLocation(SourceLocation sourceLocation_, const char* msg) :
-        std::runtime_error(msg),
-        sourceLocation{ sourceLocation_ }
+    ErrorLocation(SourceLocation sourceLocation_, const char* msg)
+        : std::runtime_error(msg),
+          sourceLocation{ sourceLocation_ }
     {}
-    ErrorLocation(SourceLocation sourceLocation_, const std::string& msg) :
-        std::runtime_error(msg),
-        sourceLocation{ sourceLocation_ }
+    ErrorLocation(SourceLocation sourceLocation_, const std::string& msg)
+        : std::runtime_error(msg),
+          sourceLocation{ sourceLocation_ }
     {}
 
     const SourceLocation& location() const

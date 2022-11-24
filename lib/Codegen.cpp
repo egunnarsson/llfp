@@ -1,27 +1,27 @@
 
-#include <array>
-#include <stack>
+#include "Codegen.h"
+
+#include "Common/Algorithm.h"
+#include "Error.h"
+#include "GlobalContext.h"
+#include "Log.h"
+#include "Module.h"
+#include "String/StringConstants.h"
 
 #pragma warning(push, 0)
 // C4996 use of function, class member, variable, or typedef that's marked deprecated
 #pragma warning(disable : 4996)
 
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Verifier.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Support/FormatVariadic.h"
 
 #pragma warning(pop)
 
-#include "Common/Algorithm.h"
-#include "GlobalContext.h"
-#include "Error.h"
-#include "Log.h"
-#include "Module.h"
-#include "String/StringConstants.h"
-
-#include "Codegen.h"
+#include <array>
+#include <stack>
 
 
 namespace llfp::codegen
@@ -30,22 +30,22 @@ namespace llfp::codegen
 const Value ExpCodeGenerator::EmptyValue{ nullptr, nullptr };
 
 CodeGenerator::CodeGenerator(
-    Driver* driver_,
-    GlobalContext *globalContext_,
-    SourceModule *sourceModule_,
+    Driver*            driver_,
+    GlobalContext*     globalContext_,
+    SourceModule*      sourceModule_,
     llvm::LLVMContext* llvmContext_,
-    llvm::Module* llvmModule_) :
-    driver{ driver_ },
-    globalContext{ globalContext_ },
-    sourceModule{ sourceModule_ },
-    llvmContext{ llvmContext_ },
-    llvmBuilder(*llvmContext),
-    llvmModule{ llvmModule_ },
-    typeContext(*llvmContext, sourceModule, globalContext_)
+    llvm::Module*      llvmModule_)
+    : driver{ driver_ },
+      globalContext{ globalContext_ },
+      sourceModule{ sourceModule_ },
+      llvmContext{ llvmContext_ },
+      llvmBuilder(*llvmContext),
+      llvmModule{ llvmModule_ },
+      typeContext(*llvmContext, sourceModule, globalContext_)
 {
 }
 
-bool CodeGenerator::generateFunction(const ast::Function*ast)
+bool CodeGenerator::generateFunction(const ast::Function* ast)
 {
     std::vector<type::TypeInstPtr> types;
 
@@ -62,7 +62,7 @@ bool CodeGenerator::generateFunction(const ast::Function*ast)
     }
     types.push_back(retType);
 
-    for (auto &param : ast->parameters)
+    for (auto& param : ast->parameters)
     {
         if (param->type.identifier.name.empty())
         {
@@ -86,7 +86,7 @@ bool CodeGenerator::generateFunction(const ast::Function*ast)
     return f != nullptr;
 }
 
-bool CodeGenerator::generateFunction(const ast::Function*ast, std::vector<const type::TypeInstance*> types)
+bool CodeGenerator::generateFunction(const ast::Function* ast, std::vector<const type::TypeInstance*> types)
 {
     auto f = generatePrototype(sourceModule, ast, std::move(types));
     if (f != nullptr && f->llvm->empty())
@@ -122,7 +122,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
                 continue; // could be typeclass and we dont know the type instance yet
             }
             const auto& funAnnotation = typeContext.getAnnotation(funAst.importedModule, funAst.function);
-            const auto funType = funAnnotation.getFun(funName);
+            const auto  funType       = funAnnotation.getFun(funName);
             typeAnnotation.add(funName, funType);
         }
 
@@ -133,7 +133,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
         }
 
         size_t i = 1;
-        for (auto &arg : ast->parameters)
+        for (auto& arg : ast->parameters)
         {
             typeContext.check(typeAnnotation, types[i++], typeAnnotation.getVar(arg->identifier));
         }
@@ -154,7 +154,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
     auto funIt = functions.find(name);
     if (funIt == functions.end())
     {
-        llvm::Type* returnType = nullptr;
+        llvm::Type*              returnType = nullptr;
         std::vector<llvm::Type*> parameterTypes;
 
         const bool ptrReturn = types.front()->isStructType();
@@ -193,7 +193,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
         }
 
         size_t i = 0;
-        for (auto &arg : argRange)
+        for (auto& arg : argRange)
         {
             arg.setName(ast->parameters[i++]->identifier);
         }
@@ -204,11 +204,11 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
     return &funIt->second;
 }
 
-bool CodeGenerator::generateFunctionBody(Function *function)
+bool CodeGenerator::generateFunctionBody(Function* function)
 {
-    auto llvmFunction = function->llvm;
-    auto ast = function->ast;
-    auto& types = function->types;
+    auto  llvmFunction = function->llvm;
+    auto  ast          = function->ast;
+    auto& types        = function->types;
 
     llvmFunction->addFnAttr(llvm::Attribute::get(*llvmContext, "frame-pointer", "all"));
 
@@ -221,7 +221,7 @@ bool CodeGenerator::generateFunctionBody(Function *function)
     std::map<std::string, Value> namedValues;
     for (size_t i = 0; i < ast->parameters.size(); ++i)
     {
-        auto &param = ast->parameters[i];
+        auto& param = ast->parameters[i];
         if (namedValues.find(param->identifier) != namedValues.end())
         {
             Log(param->location, "duplicate parameter \"", param->identifier, '"');
@@ -286,9 +286,9 @@ void CodeGenerator::AddDllMain()
     parameterTypes.push_back(llvm::Type::getInt8PtrTy(*llvmContext));
     parameterTypes.push_back(llvm::Type::getInt32Ty(*llvmContext));
     parameterTypes.push_back(llvm::Type::getInt8PtrTy(*llvmContext));
-    auto returnType = llvm::Type::getInt32Ty(*llvmContext);
-    llvm::FunctionType *functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
-    auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, "_DllMainCRTStartup", llvmModule);
+    auto                returnType   = llvm::Type::getInt32Ty(*llvmContext);
+    llvm::FunctionType* functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
+    auto                llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, "_DllMainCRTStartup", llvmModule);
     llvmFunction->setCallingConv(llvm::CallingConv::X86_StdCall);
     auto bb = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
     llvmBuilder.SetInsertPoint(bb);
@@ -302,11 +302,11 @@ namespace
 bool typeVarEqual(const std::string& typeVar, const ast::TypeIdentifier& type)
 {
     return type.parameters.empty() &&
-        type.identifier.moduleName.empty() &&
-        type.identifier.name == typeVar;
+           type.identifier.moduleName.empty() &&
+           type.identifier.name == typeVar;
 }
 
-std::stack<size_t> findTypeVariableIndex(const std::string &typeVar, const ast::TypeIdentifier& type)
+std::stack<size_t> findTypeVariableIndex(const std::string& typeVar, const ast::TypeIdentifier& type)
 {
     for (auto& [paramIndex, param] : llfp::enumerate(type.parameters))
     {
@@ -347,9 +347,9 @@ type::Identifier findInstanceType(const ast::Class* classDecl, const ast::Functi
 {
     auto& typeVar = classDecl->typeVariable;
 
-    constexpr size_t notFound = static_cast<size_t>(-1);
-    size_t first = notFound;
-    auto typeVariableIndex = findTypeVariableIndex(typeVar, funDecl->type);
+    constexpr size_t notFound          = static_cast<size_t>(-1);
+    size_t           first             = notFound;
+    auto             typeVariableIndex = findTypeVariableIndex(typeVar, funDecl->type);
     if (typeVariableIndex.empty() && !typeVarEqual(typeVar, funDecl->type))
     {
         for (auto [paramIndex, param] : llfp::enumerate(funDecl->parameters))
@@ -374,7 +374,7 @@ type::Identifier findInstanceType(const ast::Class* classDecl, const ast::Functi
     }
     else
     {
-        //TODO: if this type is not concrete we should try and find another index
+        // TODO: if this type is not concrete we should try and find another index
         return getTypeByIndex(std::move(typeVariableIndex), *types[first]);
     }
 }
@@ -383,7 +383,7 @@ type::Identifier findInstanceType(const ast::Class* classDecl, const ast::Functi
 
 Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::vector<type::TypeInstPtr> types)
 {
-    auto ast = sourceModule->lookupFunction(identifier);
+    auto ast     = sourceModule->lookupFunction(identifier);
     auto astDecl = sourceModule->lookupFunctionDecl(identifier);
 
     if (!astDecl.empty())
@@ -407,7 +407,7 @@ Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::ve
 
     if (ast.function == nullptr)
     {
-        throw Error(std::string{ "undefined function \"" } + identifier.str() +'"');
+        throw Error(std::string{ "undefined function \"" } + identifier.str() + '"');
     }
 
     auto proto = generatePrototype(ast.importedModule, ast.function, std::move(types));
@@ -418,24 +418,24 @@ Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::ve
     return proto;
 }
 
-ExpCodeGenerator::ExpCodeGenerator(type::TypeInstPtr type_, CodeGenerator *generator_, std::map<std::string, Value> parameters_, hm::TypeAnnotation* typeAnnotation_) :
-    parent{ nullptr },
-    generator{ generator_ },
-    expectedType{ type_ },
-    values{ std::move(parameters_) },
-    result{ nullptr },
-    typeAnnotation{ typeAnnotation_ }
+ExpCodeGenerator::ExpCodeGenerator(type::TypeInstPtr type_, CodeGenerator* generator_, std::map<std::string, Value> parameters_, hm::TypeAnnotation* typeAnnotation_)
+    : parent{ nullptr },
+      generator{ generator_ },
+      expectedType{ type_ },
+      values{ std::move(parameters_) },
+      result{ nullptr },
+      typeAnnotation{ typeAnnotation_ }
 {
     assert(expectedType->llvmType() != nullptr);
 }
 
-ExpCodeGenerator::ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGenerator *parent_, std::map<std::string, Value> scope_) :
-    parent{ parent_ },
-    generator{ parent_->generator },
-    expectedType{ type_ },
-    values{ std::move(scope_) },
-    result{ nullptr },
-    typeAnnotation{ parent_->typeAnnotation }
+ExpCodeGenerator::ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGenerator* parent_, std::map<std::string, Value> scope_)
+    : parent{ parent_ },
+      generator{ parent_->generator },
+      expectedType{ type_ },
+      values{ std::move(scope_) },
+      result{ nullptr },
+      typeAnnotation{ parent_->typeAnnotation }
 {
     assert(expectedType->llvmType() != nullptr);
 }
@@ -461,9 +461,9 @@ type::TypeContext* ExpCodeGenerator::getTypeContext()
     return generator->getTypeContext();
 }
 
-void ExpCodeGenerator::visit(ast::LetExp &exp)
+void ExpCodeGenerator::visit(ast::LetExp& exp)
 {
-    for (auto &var : exp.letStatments)
+    for (auto& var : exp.letStatments)
     {
         if (var->parameters.size() != 0)
         {
@@ -471,9 +471,7 @@ void ExpCodeGenerator::visit(ast::LetExp &exp)
             return;
         }
 
-        type::TypeInstPtr varType = var->type.identifier.name.empty() ?
-            getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, exp) :
-            getTypeContext()->getTypeFromAst(var->type);
+        type::TypeInstPtr varType = var->type.identifier.name.empty() ? getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, exp) : getTypeContext()->getTypeFromAst(var->type);
 
         auto value = ExpCodeGenerator::generate(*var->functionBody, varType, this);
 
@@ -495,7 +493,7 @@ void ExpCodeGenerator::visit(ast::LetExp &exp)
     result = ExpCodeGenerator::generate(*exp.exp, expectedType, this);
 }
 
-void ExpCodeGenerator::visit(ast::IfExp &exp)
+void ExpCodeGenerator::visit(ast::IfExp& exp)
 {
     auto condV = ExpCodeGenerator::generate(*exp.condition, getTypeContext()->getBool(), this);
     if (condV == nullptr)
@@ -503,11 +501,11 @@ void ExpCodeGenerator::visit(ast::IfExp &exp)
         return;
     }
 
-    auto& builder = llvmBuilder();
-    auto function = builder.GetInsertBlock()->getParent();
+    auto& builder  = llvmBuilder();
+    auto  function = builder.GetInsertBlock()->getParent();
 
-    auto thenBB = llvm::BasicBlock::Create(llvmContext(), "then", function);
-    auto elseBB = llvm::BasicBlock::Create(llvmContext(), "else");
+    auto thenBB  = llvm::BasicBlock::Create(llvmContext(), "then", function);
+    auto elseBB  = llvm::BasicBlock::Create(llvmContext(), "else");
     auto mergeBB = llvm::BasicBlock::Create(llvmContext(), "ifcont");
 
     builder.CreateCondBr(condV, thenBB, elseBB);
@@ -561,10 +559,10 @@ class PatternCodeGenerator : public ast::PatternVisitor
 
 public:
 
-    PatternCodeGenerator(PatternCodeGeneratorContext& context_, llvm::Value* value_, llvm::BasicBlock* nextBlock_):
-        context{ context_ },
-        value{ value_ },
-        nextBlock{ nextBlock_ }
+    PatternCodeGenerator(PatternCodeGeneratorContext& context_, llvm::Value* value_, llvm::BasicBlock* nextBlock_)
+        : context{ context_ },
+          value{ value_ },
+          nextBlock{ nextBlock_ }
     {}
 
     void visit(ast::BoolPattern& pattern) override
@@ -576,22 +574,22 @@ public:
     void visit(ast::IdentifierPattern& pattern) override
     {
         auto type = context.typeContext->constructTypeUsingAnnotationStuff(*context.typeAnnotation, pattern);
-        context.variables.insert({ pattern.value, {type, value} });
+        context.variables.insert({ pattern.value, { type, value } });
         context.irBuilder.CreateBr(nextBlock);
     }
 
     void visit(ast::IntegerPattern& pattern) override
     {
-        unsigned int numBits = value->getType()->getIntegerBitWidth();
-        auto patternValue = llvm::ConstantInt::get(llvm::IntegerType::get(context.irBuilder.getContext(), numBits), pattern.value, 10);
-        auto condition = context.irBuilder.CreateCmp(llvm::CmpInst::ICMP_EQ, value, patternValue, "integerPattern");
+        unsigned int numBits      = value->getType()->getIntegerBitWidth();
+        auto         patternValue = llvm::ConstantInt::get(llvm::IntegerType::get(context.irBuilder.getContext(), numBits), pattern.value, 10);
+        auto         condition    = context.irBuilder.CreateCmp(llvm::CmpInst::ICMP_EQ, value, patternValue, "integerPattern");
         context.irBuilder.CreateCondBr(condition, nextBlock, context.failBlock);
     }
 
     void visit(ast::FloatPattern& pattern) override
     {
         auto patternValue = llvm::ConstantFP::get(value->getType(), pattern.value);
-        auto condition = context.irBuilder.CreateFCmp(llvm::CmpInst::FCMP_OEQ, value, patternValue, "floatPattern");
+        auto condition    = context.irBuilder.CreateFCmp(llvm::CmpInst::FCMP_OEQ, value, patternValue, "floatPattern");
         context.irBuilder.CreateCondBr(condition, nextBlock, context.failBlock);
     }
 
@@ -599,7 +597,7 @@ public:
     {
         assert(pattern.value.size() == 1);
         auto patternValue = llvm::ConstantInt::get(value->getType(), static_cast<uint8_t>(pattern.value[0]));
-        auto condition = context.irBuilder.CreateCmp(llvm::CmpInst::ICMP_EQ, value, patternValue, "charPattern");
+        auto condition    = context.irBuilder.CreateCmp(llvm::CmpInst::ICMP_EQ, value, patternValue, "charPattern");
         context.irBuilder.CreateCondBr(condition, nextBlock, context.failBlock);
     }
 
@@ -620,7 +618,7 @@ public:
         }
 
         auto originalBlock = context.irBuilder.GetInsertBlock();
-        auto function = originalBlock->getParent();
+        auto function      = originalBlock->getParent();
 
         for (auto [index, branchBlock] : llfp::enumerate(blocks))
         {
@@ -629,7 +627,7 @@ public:
 
             auto argValue = context.irBuilder.CreateExtractValue(value, { static_cast<unsigned int>(index) });
 
-            auto branchNextBlock = index == blocks.size() - 1 ? nextBlock : blocks[static_cast<size_t>(index) + 1];
+            auto                 branchNextBlock = index == blocks.size() - 1 ? nextBlock : blocks[static_cast<size_t>(index) + 1];
             PatternCodeGenerator gen{ context, argValue, branchNextBlock };
             pattern.arguments[index].pattern->accept(&gen);
         }
@@ -641,12 +639,12 @@ public:
     }
 };
 
-void ExpCodeGenerator::visit(ast::CaseExp &exp)
+void ExpCodeGenerator::visit(ast::CaseExp& exp)
 {
     const auto count = exp.clauses.size();
     assert(count != 0);
-    auto& builder = llvmBuilder();
-    auto function = builder.GetInsertBlock()->getParent();
+    auto& builder  = llvmBuilder();
+    auto  function = builder.GetInsertBlock()->getParent();
 
     auto caseT = getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, *exp.caseExp);
     auto caseV = ExpCodeGenerator::generate(*exp.caseExp, caseT, this);
@@ -666,10 +664,10 @@ void ExpCodeGenerator::visit(ast::CaseExp &exp)
     // simplify with -jump-threading?
     for (size_t i = 0; i < count; ++i)
     {
-        auto uglyHack = expBlocks.back(); //TODO: replace with call to abort()
-        auto failBlock = i == count - 1 ? uglyHack : patternBlocks[i + 1];
+        auto                        uglyHack  = expBlocks.back(); // TODO: replace with call to abort()
+        auto                        failBlock = i == count - 1 ? uglyHack : patternBlocks[i + 1];
         PatternCodeGeneratorContext context{ builder, failBlock, getTypeContext(), typeAnnotation };
-        PatternCodeGenerator gen{ context, caseV, expBlocks[i] };
+        PatternCodeGenerator        gen{ context, caseV, expBlocks[i] };
 
         function->getBasicBlockList().push_back(patternBlocks[i]);
         builder.SetInsertPoint(patternBlocks[i]);
@@ -683,7 +681,7 @@ void ExpCodeGenerator::visit(ast::CaseExp &exp)
     {
         function->getBasicBlockList().push_back(expBlocks[i]);
         builder.SetInsertPoint(expBlocks[i]);
-        auto thenV = ExpCodeGenerator::generate(*exp.clauses[i].exp, expectedType, this, std::move(variables[i]));
+        auto thenV   = ExpCodeGenerator::generate(*exp.clauses[i].exp, expectedType, this, std::move(variables[i]));
         // Codegen of 'Clause' can change the current block, update ClauseBB for the PHI.
         expBlocks[i] = builder.GetInsertBlock();
         caseValues.push_back(thenV);
@@ -703,12 +701,12 @@ void ExpCodeGenerator::visit(ast::CaseExp &exp)
 namespace
 {
 
-void typeError(ast::Exp &exp, type::TypeInstPtr expected, llvm::StringRef actual)
+void typeError(ast::Exp& exp, type::TypeInstPtr expected, llvm::StringRef actual)
 {
     Log(exp.location, "type mismatch, expected '", expected->identifier().str(), "' actual '", actual, '\'');
 }
 
-bool checkNum(ast::Exp &exp, type::TypeInstPtr type)
+bool checkNum(ast::Exp& exp, type::TypeInstPtr type)
 {
     if (!type->isNum())
     {
@@ -718,7 +716,7 @@ bool checkNum(ast::Exp &exp, type::TypeInstPtr type)
     return true;
 }
 
-bool checkInteger(ast::Exp &exp, type::TypeInstPtr type)
+bool checkInteger(ast::Exp& exp, type::TypeInstPtr type)
 {
     if (!type->isInteger())
     {
@@ -728,7 +726,7 @@ bool checkInteger(ast::Exp &exp, type::TypeInstPtr type)
     return true;
 }
 
-bool checkBool(ast::Exp &exp, type::TypeInstPtr type)
+bool checkBool(ast::Exp& exp, type::TypeInstPtr type)
 {
     if (!type->isBool())
     {
@@ -740,38 +738,43 @@ bool checkBool(ast::Exp &exp, type::TypeInstPtr type)
 
 } // namespace
 
-void ExpCodeGenerator::visit(ast::BinaryExp &exp)
+void ExpCodeGenerator::visit(ast::BinaryExp& exp)
 {
     // math
-    if (exp.op == "*")// Multiplication
+    if (exp.op == "*") // Multiplication
     {
-        generateBinary(exp, checkNum,
+        generateBinary(
+            exp, checkNum,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFMul(v1, v2, "fmul"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateMul(v1, v2, "mul", false, false); });
     }
     else if (exp.op == "/") // Division
     {
-        generateBinary(exp, checkNum,
+        generateBinary(
+            exp, checkNum,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFDiv(v1, v2, "fdiv"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateSDiv(v1, v2, "sdiv", false); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateUDiv(v1, v2, "udiv", false); });
     }
     else if (exp.op == "%") // Remainder
     {
-        generateBinary(exp, checkNum,
+        generateBinary(
+            exp, checkNum,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFRem(v1, v2, "frem"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateSRem(v1, v2, "srem"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateURem(v1, v2, "urem"); });
     }
     else if (exp.op == "+") // Addition
     {
-        generateBinary(exp, checkNum,
+        generateBinary(
+            exp, checkNum,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFAdd(v1, v2, "fadd"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAdd(v1, v2, "add"); });
     }
     else if (exp.op == "-") // Subtraction
     {
-        generateBinary(exp, checkNum,
+        generateBinary(
+            exp, checkNum,
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateFSub(v1, v2, "fsub"); },
             [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateSub(v1, v2, "sub"); });
     }
@@ -780,22 +783,22 @@ void ExpCodeGenerator::visit(ast::BinaryExp &exp)
     {
         // Both arguments to the 'shl' instruction must be the same integer or vector of integer type. 'op2' is treated as an unsigned value.
         generateBinary(exp, checkInteger,
-            [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateShl(v1, v2, "shl", false, false); });
+                       [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateShl(v1, v2, "shl", false, false); });
     }
     else if (exp.op == ">>") // Signed shift
     {
         generateBinary(exp, checkInteger, // check Signed?
-            [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAShr(v1, v2, "ashr", false); });
+                       [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAShr(v1, v2, "ashr", false); });
     }
     else if (exp.op == ">>>") // Logical shift
     {
         generateBinary(exp, checkInteger,
-            [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateLShr(v1, v2, "lshr", false); });
+                       [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateLShr(v1, v2, "lshr", false); });
     }
     // compare
-    else if (exp.op == ">") { generateCompare(llvm::CmpInst::Predicate::ICMP_UGT, exp); } // Greater than
+    else if (exp.op == ">") { generateCompare(llvm::CmpInst::Predicate::ICMP_UGT, exp); }  // Greater than
     else if (exp.op == ">=") { generateCompare(llvm::CmpInst::Predicate::ICMP_UGE, exp); } // Greater or equal
-    else if (exp.op == "<") { generateCompare(llvm::CmpInst::Predicate::ICMP_ULT, exp); } // Less than
+    else if (exp.op == "<") { generateCompare(llvm::CmpInst::Predicate::ICMP_ULT, exp); }  // Less than
     else if (exp.op == "<=") { generateCompare(llvm::CmpInst::Predicate::ICMP_ULE, exp); } // Less or equal
     else if (exp.op == "==") { generateCompare(llvm::CmpInst::Predicate::ICMP_EQ, exp); }  // Equal
     else if (exp.op == "!=") { generateCompare(llvm::CmpInst::Predicate::ICMP_NE, exp); }  // Not equal
@@ -803,28 +806,28 @@ void ExpCodeGenerator::visit(ast::BinaryExp &exp)
     else if (exp.op == "&")
     {
         generateBinary(exp, checkInteger,
-            [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAnd(v1, v2, "and"); });
+                       [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAnd(v1, v2, "and"); });
     }
     else if (exp.op == "|")
     {
         generateBinary(exp, checkInteger,
-            [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateOr(v1, v2, "or"); });
+                       [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateOr(v1, v2, "or"); });
     }
     else if (exp.op == "^")
     {
         generateBinary(exp, checkInteger,
-            [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateXor(v1, v2, "xor"); });
+                       [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateXor(v1, v2, "xor"); });
     }
     // logical
     else if (exp.op == "&&")
     {
         generateBinary(exp, checkBool,
-            [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAnd(v1, v2, "and"); });
+                       [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateAnd(v1, v2, "and"); });
     }
     else if (exp.op == "||")
     {
         generateBinary(exp, checkBool,
-            [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateOr(v1, v2, "or"); });
+                       [this](llvm::Value* v1, llvm::Value* v2) { return llvmBuilder().CreateOr(v1, v2, "or"); });
     }
     else
     {
@@ -839,8 +842,8 @@ constexpr llvm::CmpInst::Predicate convertToFPredicate(llvm::CmpInst::Predicate 
 {
     switch (predicate)
     {
-    case llvm::CmpInst::ICMP_EQ:  return llvm::CmpInst::FCMP_OEQ;
-    case llvm::CmpInst::ICMP_NE:  return llvm::CmpInst::FCMP_ONE;
+    case llvm::CmpInst::ICMP_EQ: return llvm::CmpInst::FCMP_OEQ;
+    case llvm::CmpInst::ICMP_NE: return llvm::CmpInst::FCMP_ONE;
     case llvm::CmpInst::ICMP_UGT: return llvm::CmpInst::FCMP_OGT;
     case llvm::CmpInst::ICMP_UGE: return llvm::CmpInst::FCMP_OGE;
     case llvm::CmpInst::ICMP_ULT: return llvm::CmpInst::FCMP_OLT;
@@ -853,8 +856,8 @@ constexpr llvm::CmpInst::Predicate convertToSPredicate(llvm::CmpInst::Predicate 
 {
     switch (predicate)
     {
-    case llvm::CmpInst::ICMP_EQ:  return llvm::CmpInst::ICMP_EQ;
-    case llvm::CmpInst::ICMP_NE:  return llvm::CmpInst::ICMP_NE;
+    case llvm::CmpInst::ICMP_EQ: return llvm::CmpInst::ICMP_EQ;
+    case llvm::CmpInst::ICMP_NE: return llvm::CmpInst::ICMP_NE;
     case llvm::CmpInst::ICMP_UGT: return llvm::CmpInst::ICMP_SGT;
     case llvm::CmpInst::ICMP_UGE: return llvm::CmpInst::ICMP_SGE;
     case llvm::CmpInst::ICMP_ULT: return llvm::CmpInst::ICMP_SLT;
@@ -865,7 +868,7 @@ constexpr llvm::CmpInst::Predicate convertToSPredicate(llvm::CmpInst::Predicate 
 
 } // namespace
 
-void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::BinaryExp &exp)
+void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::BinaryExp& exp)
 {
     if (!expectedType->isBool())
     {
@@ -903,7 +906,7 @@ void ExpCodeGenerator::generateCompare(llvm::CmpInst::Predicate predicate, ast::
     }
 }
 
-void ExpCodeGenerator::visit(ast::UnaryExp &exp)
+void ExpCodeGenerator::visit(ast::UnaryExp& exp)
 {
     if (exp.op == "-")
     {
@@ -963,9 +966,9 @@ void ExpCodeGenerator::visit(ast::UnaryExp &exp)
     }
 }
 
-void ExpCodeGenerator::visit(ast::LiteralExp &exp)
+void ExpCodeGenerator::visit(ast::LiteralExp& exp)
 {
-    llvm::Type *type = expectedType->llvmType();
+    llvm::Type* type = expectedType->llvmType();
 
     // TODO: test if value fits in expectedType bit size
 
@@ -1048,7 +1051,7 @@ void ExpCodeGenerator::visit(ast::LiteralExp &exp)
     }
 }
 
-void ExpCodeGenerator::visit(ast::CallExp &exp)
+void ExpCodeGenerator::visit(ast::CallExp& exp)
 {
     try
     {
@@ -1109,13 +1112,13 @@ void ExpCodeGenerator::visit(ast::CallExp &exp)
             }
         }
     }
-    catch (const Error &e)
+    catch (const Error& e)
     {
         Log(exp.location, e.what());
     }
 }
 
-void ExpCodeGenerator::visit(ast::VariableExp &exp)
+void ExpCodeGenerator::visit(ast::VariableExp& exp)
 {
     if (exp.identifier.moduleName.empty())
     {
@@ -1139,7 +1142,7 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
     auto y = getFunction(exp.identifier, std::move(types));
     if (y != nullptr)
     {
-        auto &function = *y;
+        auto& function = *y;
         if (function.ast->parameters.empty())
         {
             // generate call
@@ -1161,7 +1164,7 @@ void ExpCodeGenerator::visit(ast::VariableExp &exp)
     }
 }
 
-void ExpCodeGenerator::visit(ast::FieldExp &exp)
+void ExpCodeGenerator::visit(ast::FieldExp& exp)
 {
     try
     {
@@ -1199,7 +1202,7 @@ void ExpCodeGenerator::visit(ast::FieldExp &exp)
     }
 }
 
-void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
+void ExpCodeGenerator::visit(ast::ConstructorExp& exp)
 {
     try
     {
@@ -1212,7 +1215,7 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
             return;
         }
 
-        bool fail = false;
+        bool         fail  = false;
         llvm::Value* value = llvm::UndefValue::get(expectedType->llvmType());
         for (auto [fieldIndex, fieldType] : llfp::enumerate(expectedType->getFields()))
         {
@@ -1225,8 +1228,8 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
                 if (index != fieldIndex)
                 {
                     Log(arg.location, index == type::TypeInstance::InvalidIndex
-                        ? "unknown field name"
-                        : "incorrect field position");
+                                          ? "unknown field name"
+                                          : "incorrect field position");
                     fail = true;
                 }
             }
@@ -1246,7 +1249,6 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
         {
             result = value;
         }
-
     }
     catch (const Error& error)
     {
@@ -1254,7 +1256,7 @@ void ExpCodeGenerator::visit(ast::ConstructorExp &exp)
     }
 }
 
-const Value& ExpCodeGenerator::getNamedValue(const std::string &name)
+const Value& ExpCodeGenerator::getNamedValue(const std::string& name)
 {
     auto it = values.find(name);
     if (it == values.end())
@@ -1289,19 +1291,19 @@ llvm::Function* CodeGenerator::getCopyFunction(type::TypeInstPtr type)
     llvm::FunctionType* functionType = nullptr;
     if (type->isRefType())
     {
-        llvm::Type* returnType = type->llvmType();
+        llvm::Type*                returnType     = type->llvmType();
         std::array<llvm::Type*, 1> parameterTypes = { type->llvmType() };
-        functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
+        functionType                              = llvm::FunctionType::get(returnType, parameterTypes, false);
     }
     else
     {
-        llvm::Type* returnType = llvm::Type::getVoidTy(*llvmContext);
-        llvm::Type* typePtrType = type->llvmType()->getPointerTo();
+        llvm::Type*                returnType     = llvm::Type::getVoidTy(*llvmContext);
+        llvm::Type*                typePtrType    = type->llvmType()->getPointerTo();
         std::array<llvm::Type*, 2> parameterTypes = { typePtrType, typePtrType };
-        functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
+        functionType                              = llvm::FunctionType::get(returnType, parameterTypes, false);
     }
 
-    auto name = sourceModule->getMangledName("copy", type);
+    auto name         = sourceModule->getMangledName("copy", type);
     auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
     copyFunctions.insert({ type, llvmFunction });
     return llvmFunction;
@@ -1319,7 +1321,7 @@ llvm::Function* CodeGenerator::getDeleteFunction(type::TypeInstPtr type)
 
     auto name = sourceModule->getMangledName("delete", type);
 
-    llvm::Type* returnType = llvm::Type::getVoidTy(*llvmContext);
+    llvm::Type*                returnType     = llvm::Type::getVoidTy(*llvmContext);
     std::array<llvm::Type*, 1> parameterTypes = { type->llvmType() };
 
     auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
@@ -1333,9 +1335,9 @@ namespace
 
 void generateVariantSwitch(llvm::IRBuilder<>& llvmBuilder, llvm::Value* value, type::TypeInstPtr type, const std::vector<llvm::BasicBlock*>& variantBlocks)
 {
-    auto& llvmContext = llvmBuilder.getContext();
-    auto BB = llvmBuilder.GetInsertBlock();
-    auto llvmFunction = BB->getParent();
+    auto& llvmContext  = llvmBuilder.getContext();
+    auto  BB           = llvmBuilder.GetInsertBlock();
+    auto  llvmFunction = BB->getParent();
 
     auto failBB = llvm::BasicBlock::Create(llvmContext, "invalidVariantType", llvmFunction);
     llvmBuilder.SetInsertPoint(failBB);
@@ -1344,8 +1346,7 @@ void generateVariantSwitch(llvm::IRBuilder<>& llvmBuilder, llvm::Value* value, t
 
     llvmBuilder.SetInsertPoint(BB);
 
-    std::array<llvm::Value*, 2> idxList =
-    {
+    std::array<llvm::Value*, 2> idxList = {
         llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvmContext), 0),
         llvm::ConstantInt::get(llvm::Type::getInt32Ty(llvmContext), 0)
     };
@@ -1354,13 +1355,13 @@ void generateVariantSwitch(llvm::IRBuilder<>& llvmBuilder, llvm::Value* value, t
     assert(!type->getConstructors().front().fields.empty());
 
     // just grab first type, doesn't matter, all cases have type enum as first value
-    auto& firstConstructor = type->getConstructors().front();
-    auto variantTypeValuePtr = llvmBuilder.CreateGEP(firstConstructor.llvmType_, value, idxList, "typePtr");
-    auto variantTypeValue = llvmBuilder.CreateLoad(firstConstructor.fields.front()->llvmType(), variantTypeValuePtr, "type");
+    auto& firstConstructor    = type->getConstructors().front();
+    auto  variantTypeValuePtr = llvmBuilder.CreateGEP(firstConstructor.llvmType_, value, idxList, "typePtr");
+    auto  variantTypeValue    = llvmBuilder.CreateLoad(firstConstructor.fields.front()->llvmType(), variantTypeValuePtr, "type");
 
-    auto numBits = variantTypeValue->getType()->getIntegerBitWidth();
+    auto numBits     = variantTypeValue->getType()->getIntegerBitWidth();
     auto enumIntType = llvm::IntegerType::get(llvmBuilder.getContext(), numBits);
-    auto switchInst = llvmBuilder.CreateSwitch(variantTypeValue, failBB, static_cast<unsigned int>(variantBlocks.size()));
+    auto switchInst  = llvmBuilder.CreateSwitch(variantTypeValue, failBB, static_cast<unsigned int>(variantBlocks.size()));
     for (auto [index, variantBlock] : llfp::enumerate(variantBlocks))
     {
         switchInst->addCase(llvm::ConstantInt::get(enumIntType, index), *variantBlock);
@@ -1415,8 +1416,8 @@ bool CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type) // for stru
 bool CodeGenerator::generateCopyFunctionBodyStruct(type::TypeInstPtr type) // for struct
 {
     auto llvmFunction = getCopyFunction(type);
-    auto dstValue = llvmFunction->arg_begin();
-    auto srcValue = llvmFunction->arg_begin() + 1;
+    auto dstValue     = llvmFunction->arg_begin();
+    auto srcValue     = llvmFunction->arg_begin() + 1;
 
     auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
     llvmBuilder.SetInsertPoint(entryBB);
@@ -1436,24 +1437,24 @@ bool CodeGenerator::generateCopyFunctionBodyVariant(type::TypeInstPtr type) // f
     if (!type->isStructType()) { return false; }
 
     auto llvmFunction = getCopyFunction(type);
-    auto srcValue = llvmFunction->arg_begin();
+    auto srcValue     = llvmFunction->arg_begin();
 
     auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
-    auto retBB = llvm::BasicBlock::Create(*llvmContext, "return", llvmFunction);
+    auto retBB   = llvm::BasicBlock::Create(*llvmContext, "return", llvmFunction);
     llvmBuilder.SetInsertPoint(entryBB);
 
     std::vector<llvm::BasicBlock*> constructorBlocks;
-    std::vector<llvm::Value*> constructorValues;
+    std::vector<llvm::Value*>      constructorValues;
     for (auto [index, constructor] : llfp::enumerate(type->getConstructors()))
     {
         auto block = llvm::BasicBlock::Create(*llvmContext, llvm::Twine{ "constructor" } + llvm::Twine{ index }, llvmFunction);
         llvmBuilder.SetInsertPoint(block);
 
         // call malloc
-        auto intPtrType = llvmModule->getDataLayout().getIntPtrType(*llvmContext);
+        auto intPtrType     = llvmModule->getDataLayout().getIntPtrType(*llvmContext);
         auto returnTypeSize = type->getSize(llvmModule, index);
-        auto sizeValue = llvm::ConstantInt::get(intPtrType, returnTypeSize.getFixedSize());
-        auto dstValue = llvm::CallInst::CreateMalloc(llvmBuilder.GetInsertBlock(), intPtrType, constructor->llvmType_, sizeValue, nullptr, nullptr, "new");
+        auto sizeValue      = llvm::ConstantInt::get(intPtrType, returnTypeSize.getFixedSize());
+        auto dstValue       = llvm::CallInst::CreateMalloc(llvmBuilder.GetInsertBlock(), intPtrType, constructor->llvmType_, sizeValue, nullptr, nullptr, "new");
 
         auto variantType = constructor->llvmType_;
 
@@ -1484,28 +1485,27 @@ bool CodeGenerator::generateCopyFunctionBodyVariant(type::TypeInstPtr type) // f
 
 void CodeGenerator::generateFieldCopy(llvm::Type* parentType, size_t fieldIndex, type::TypeInstPtr fieldType, llvm::Value* dstValue, llvm::Value* srcValue)
 {
-    std::array<llvm::Value*, 2> idxList =
-    {
+    std::array<llvm::Value*, 2> idxList = {
         llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), 0),
         llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), fieldIndex + 1)
     };
     auto fieldPtr = llvmBuilder.CreateGEP(parentType, srcValue, idxList, "");
-    auto dstPtr = llvmBuilder.CreateGEP(parentType, dstValue, idxList, "");
+    auto dstPtr   = llvmBuilder.CreateGEP(parentType, dstValue, idxList, "");
 
     auto fieldValue = llvmBuilder.CreateLoad(fieldType->llvmType(), fieldPtr);
     if (fieldType->isRefType())
     {
-        auto copyFunction = getCopyFunction(fieldType);
+        auto                        copyFunction = getCopyFunction(fieldType);
         std::array<llvm::Value*, 1> arguments{ fieldValue };
-        auto fieldDstValue = llvmBuilder.CreateCall(copyFunction, arguments, "");
+        auto                        fieldDstValue = llvmBuilder.CreateCall(copyFunction, arguments, "");
         llvmBuilder.CreateStore(fieldDstValue, dstPtr);
     }
     else if (fieldType->containsRefTypes())
     {
-        auto copyFunction = getCopyFunction(fieldType);
-        auto allocaValue = llvmBuilder.CreateAlloca(fieldType->llvmType());
+        auto                        copyFunction = getCopyFunction(fieldType);
+        auto                        allocaValue  = llvmBuilder.CreateAlloca(fieldType->llvmType());
         std::array<llvm::Value*, 2> arguments{ allocaValue, fieldPtr };
-        /*auto fieldDstValue =*/ llvmBuilder.CreateCall(copyFunction, arguments, "");
+        /*auto fieldDstValue =*/llvmBuilder.CreateCall(copyFunction, arguments, "");
         auto fieldDstValue = llvmBuilder.CreateLoad(fieldType->llvmType(), allocaValue);
         llvmBuilder.CreateStore(fieldDstValue, dstPtr);
     }
@@ -1520,10 +1520,10 @@ bool CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type) // for va
     assert(type->isRefType());
 
     auto llvmFunction = getDeleteFunction(type);
-    auto argValue = llvmFunction->arg_begin();
+    auto argValue     = llvmFunction->arg_begin();
 
     auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
-    auto retBB = llvm::BasicBlock::Create(*llvmContext, "return", llvmFunction);
+    auto retBB   = llvm::BasicBlock::Create(*llvmContext, "return", llvmFunction);
 
     std::vector<llvm::BasicBlock*> constructorBlocks;
     for (auto& constructor : type->getConstructors())
@@ -1539,13 +1539,12 @@ bool CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type) // for va
             auto fieldType = constructor.fields[fieldIndex];
             if (fieldType->isRefType() || type->containsRefTypes())
             {
-                std::array<llvm::Value*, 2> idxList =
-                {
+                std::array<llvm::Value*, 2> idxList = {
                     llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), 0),
                     llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), fieldIndex + 1)
                 };
                 llvm::Value* callArgValue = nullptr;
-                auto fieldPtr = llvmBuilder.CreateGEP(variantType, callArgValue, idxList, "");
+                auto         fieldPtr     = llvmBuilder.CreateGEP(variantType, callArgValue, idxList, "");
                 if (fieldType->isRefType())
                 {
                     callArgValue = llvmBuilder.CreateLoad(fieldType->llvmType(), fieldPtr);

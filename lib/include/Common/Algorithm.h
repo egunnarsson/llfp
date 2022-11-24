@@ -1,10 +1,10 @@
 #pragma once
 
 #include <algorithm>
+#include <limits>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <limits>
 
 
 namespace llfp
@@ -48,11 +48,11 @@ typename std::vector<T>::size_type findIndex(const std::vector<T>& list, const P
 namespace detail
 {
 
-template <typename R>
+template<typename R>
 struct enumerator_iter
 {
     using range_iterator = decltype(std::begin(std::declval<R&>()));
-    using value_pointer = typename range_iterator::pointer;
+    using value_pointer  = typename range_iterator::pointer;
 
     struct result_type
     {
@@ -60,13 +60,13 @@ struct enumerator_iter
         value_pointer value = nullptr;
     };
 
-    enumerator_iter(size_t index, range_iterator it) :
-        result_{ index, it.operator->() },
-        it_{ it }
+    enumerator_iter(size_t index, range_iterator it)
+        : result_{ index, it.operator->() },
+          it_{ it }
     {}
-    enumerator_iter(range_iterator it) :
-        result_{ std::numeric_limits<size_t>::max(), nullptr },
-        it_{ it }
+    enumerator_iter(range_iterator it)
+        : result_{ std::numeric_limits<size_t>::max(), nullptr },
+          it_{ it }
     {}
 
     const result_type& operator*() const { return result_; }
@@ -94,10 +94,12 @@ private:
     range_iterator it_;
 };
 
-template <typename R>
+template<typename R>
 struct enumerator
 {
-    explicit enumerator(R&& range) : range_{ std::forward<R>(range) } {}
+    explicit enumerator(R&& range)
+        : range_{ std::forward<R>(range) }
+    {}
 
     enumerator_iter<R> begin() const
     {
@@ -116,7 +118,7 @@ private:
 
 } // namespace detail
 
-template <typename R>
+template<typename R>
 detail::enumerator<R> enumerate(R&& TheRange)
 {
     return detail::enumerator<R>(std::forward<R>(TheRange));

@@ -1,8 +1,8 @@
 
+#include "Type/TypeInference.h"
+
 #include "Error.h"
 #include "String/StringConstants.h"
-
-#include "Type/TypeInference.h"
 
 #include <iostream> //TODO: remove only for debug
 
@@ -33,7 +33,7 @@ std::vector<Substitution> Type::unify(TypeVar& a, FunctionType& b, const TypePtr
 {
     if (a.fields.empty() && a.typeClasses.empty())
     {
-        return { {a.id, ptrB} };
+        return { { a.id, ptrB } };
     }
     else
     {
@@ -109,7 +109,8 @@ void SimpleType::copy(SimpleType* newObj) const
 
 // ----------------------------------------------------------------------------
 
-TypeVar::TypeVar(TypeVarId id_) : id(id_)
+TypeVar::TypeVar(TypeVarId id_)
+    : id(id_)
 {}
 
 std::string TypeVar::str() const
@@ -157,7 +158,8 @@ TypePtr TypeVar::copy() const
 
 // ----------------------------------------------------------------------------
 
-TypeConstant::TypeConstant(std::string id_) : id{ std::move(id_) }
+TypeConstant::TypeConstant(std::string id_)
+    : id{ std::move(id_) }
 {}
 
 std::string TypeConstant::str() const
@@ -199,7 +201,8 @@ TypePtr TypeConstant::copy() const
 
 // ----------------------------------------------------------------------------
 
-FunctionType::FunctionType(std::vector<TypePtr> types_) : types{ std::move(types_) }
+FunctionType::FunctionType(std::vector<TypePtr> types_)
+    : types{ std::move(types_) }
 {}
 
 std::string FunctionType::str() const
@@ -278,12 +281,14 @@ FunTypePtr FunctionType::copyFun() const
 
 // ----------------------------------------------------------------------------
 
-TypeUnifier::TypeUnifier(const TypePtr& a_, const TypePtr& b_) : a(a_), b(b_)
+TypeUnifier::TypeUnifier(const TypePtr& a_, const TypePtr& b_)
+    : a(a_),
+      b(b_)
 {}
 
 std::vector<Substitution> TypeUnifier::unify(const TypePtr& a, const TypePtr& b)
 {
-    TypeUnifier u{ a,b };
+    TypeUnifier u{ a, b };
     a->accept(&u);
     return std::move(u.result);
 }
@@ -296,14 +301,15 @@ void TypeUnifier::visit(FunctionType& self) { visit_(self); }
 
 TypeAnnotation::TypeAnnotation(
     std::map<const ast::Node*, TypePtr> ast_,
-    std::map<std::string, TypePtr> vars_,
-    std::map<std::string, FunTypePtr> functions_,
-    TypeVarId nextFreeVariable_) :
+    std::map<std::string, TypePtr>      vars_,
+    std::map<std::string, FunTypePtr>   functions_,
+    TypeVarId                           nextFreeVariable_)
+    :
 
-    ast{ std::move(ast_) },
-    variables{ std::move(vars_) },
-    functions{ std::move(functions_ ) },
-    nextFreeVariable{ nextFreeVariable_ }
+      ast{ std::move(ast_) },
+      variables{ std::move(vars_) },
+      functions{ std::move(functions_) },
+      nextFreeVariable{ nextFreeVariable_ }
 {}
 
 TypeAnnotation::TypeAnnotation(const TypeAnnotation& other)
@@ -363,19 +369,19 @@ FunTypePtr TypeAnnotation::getFun(const std::string& id) const
 
 void TypeAnnotation::substitute(Substitution sub)
 {
-    for (auto &nodeType : ast)
+    for (auto& nodeType : ast)
     {
         Type::apply(nodeType.second, sub);
     }
-    for (auto &varType : variables)
+    for (auto& varType : variables)
     {
         Type::apply(varType.second, sub);
     }
     for (auto& funType : functions)
     {
         funType.second->apply(sub);
-        //TypePtr ptr = funType.second;
-        //Type::apply(ptr, sub);
+        // TypePtr ptr = funType.second;
+        // Type::apply(ptr, sub);
     }
 }
 
@@ -391,7 +397,8 @@ void TypeAnnotation::print()
     }
 }
 
-namespace {
+namespace
+{
 
 class TypeIdConverter : public TypeVisitor
 {
@@ -400,7 +407,9 @@ class TypeIdConverter : public TypeVisitor
 
 public:
 
-    TypeIdConverter(TypeVarId & nextFreeVariable_) : nextFreeVariable{ nextFreeVariable_ } {}
+    TypeIdConverter(TypeVarId& nextFreeVariable_)
+        : nextFreeVariable{ nextFreeVariable_ }
+    {}
 
     virtual void visit(TypeVar& t)
     {
@@ -418,7 +427,7 @@ public:
 
     virtual void visit(TypeConstant& typeConstant)
     {
-        for (const auto& [n,t] : typeConstant.fields)
+        for (const auto& [n, t] : typeConstant.fields)
         {
             t->accept(this);
         }
@@ -433,14 +442,14 @@ public:
     }
 };
 
-}
+} // namespace
 
 // rename addConstraint?
 void TypeAnnotation::add(const std::string& funName, const TypePtr& inType)
 {
     // moves type ids into this TypeAnnotation
-    auto type = inType->copy();
-    TypeIdConverter converter{nextFreeVariable};
+    auto            type = inType->copy();
+    TypeIdConverter converter{ nextFreeVariable };
     type->accept(&converter);
 
     auto subs = hm::TypeUnifier::unify(getFun(funName), type);
@@ -456,10 +465,10 @@ void TypeAnnotation::add(const std::string& funName, const TypePtr& inType)
 
 // ----------------------------------------------------------------------------
 
-Constraint::Constraint(SourceLocation location_, TypePtr left_, TypePtr right_) :
-    location(location_),
-    left(std::move(left_)),
-    right(std::move(right_))
+Constraint::Constraint(SourceLocation location_, TypePtr left_, TypePtr right_)
+    : location(location_),
+      left(std::move(left_)),
+      right(std::move(right_))
 {}
 
 std::string Constraint::str()
@@ -494,8 +503,8 @@ void Annotator::operator()(const std::string& moduleName, const ast::Function& f
     args.push_back(bodyType);
     for (auto& arg : fun.parameters)
     {
-        auto argTV = arg->type.empty() ? makeVar() : makeConst(arg->type.str()); // Maybe[int], Maybe[bool]... Maybe[a]?
-        auto [it, inserted] = variables.insert({arg->identifier, argTV});
+        auto argTV          = arg->type.empty() ? makeVar() : makeConst(arg->type.str()); // Maybe[int], Maybe[bool]... Maybe[a]?
+        auto [it, inserted] = variables.insert({ arg->identifier, argTV });
         if (!inserted)
         {
             throw ErrorLocation(arg->location, std::string{ "duplicate parameter \"" } + arg->identifier + '"');
@@ -509,7 +518,7 @@ void Annotator::operator()(const std::string& moduleName, const ast::Function& f
     if (fun.functionBody != nullptr)
     {
         fun.functionBody->accept(this);
-        add({fun.location, bodyType, result[fun.functionBody.get()]});
+        add({ fun.location, bodyType, result[fun.functionBody.get()] });
     }
 }
 
@@ -526,7 +535,7 @@ void Annotator::visit(ast::LetExp& exp)
             auto it = variables.find(let->name);
             if (it == variables.end())
             {
-                TypePtr letTV = let->type.empty() ? makeVar() : makeConst(let->type.str());
+                TypePtr letTV        = let->type.empty() ? makeVar() : makeConst(let->type.str());
                 variables[let->name] = letTV;
                 add({ let->location, letTV, tv(let->functionBody) });
             }
@@ -539,7 +548,7 @@ void Annotator::visit(ast::LetExp& exp)
         }
         else // function
         {
-            assert(false); //TODO: implement let functions
+            assert(false); // TODO: implement let functions
         }
     }
 
@@ -555,15 +564,15 @@ void Annotator::visit(ast::IfExp& exp)
     exp.thenExp->accept(this);
     exp.elseExp->accept(this);
 
-    auto &expTV = result[&exp] = makeVar();
+    auto& expTV = result[&exp] = makeVar();
     add({ exp.condition->location, (tv(exp.condition)), makeConst(id::Bool) });
     add({ exp.thenExp->location, expTV, (tv(exp.thenExp)) });
     add({ exp.elseExp->location, expTV, (tv(exp.elseExp)) });
 }
 
 
-PatternTypeVisitor::PatternTypeVisitor(Annotator& annotator_) :
-    annotator{ annotator_ }
+PatternTypeVisitor::PatternTypeVisitor(Annotator& annotator_)
+    : annotator{ annotator_ }
 {}
 
 void PatternTypeVisitor::visit(Annotator& annotator, ast::Pattern& pattern)
@@ -572,15 +581,15 @@ void PatternTypeVisitor::visit(Annotator& annotator, ast::Pattern& pattern)
     pattern.accept(&visitor);
 }
 
-void PatternTypeVisitor::visit(ast::BoolPattern& pattern)    { add(pattern, annotator.makeConst(id::Bool)); }
+void PatternTypeVisitor::visit(ast::BoolPattern& pattern) { add(pattern, annotator.makeConst(id::Bool)); }
 void PatternTypeVisitor::visit(ast::IntegerPattern& pattern) { add(pattern, annotator.makeClass(id::Num)); }
-void PatternTypeVisitor::visit(ast::FloatPattern& pattern)   { add(pattern, annotator.makeClass(id::Floating)); }
-void PatternTypeVisitor::visit(ast::CharPattern& pattern)    { add(pattern, annotator.makeConst(id::Char)); }
-void PatternTypeVisitor::visit(ast::StringPattern& pattern)  { add(pattern, annotator.makeConst(id::String)); }
+void PatternTypeVisitor::visit(ast::FloatPattern& pattern) { add(pattern, annotator.makeClass(id::Floating)); }
+void PatternTypeVisitor::visit(ast::CharPattern& pattern) { add(pattern, annotator.makeConst(id::Char)); }
+void PatternTypeVisitor::visit(ast::StringPattern& pattern) { add(pattern, annotator.makeConst(id::String)); }
 
 void PatternTypeVisitor::visit(ast::IdentifierPattern& pattern)
 {
-    auto var = annotator.makeVar();
+    auto var                           = annotator.makeVar();
     annotator.variables[pattern.value] = var;
     add(pattern, std::move(var));
 }
@@ -590,7 +599,7 @@ void PatternTypeVisitor::visit(ast::ConstructorPattern& pattern)
     add(pattern, annotator.makeConst(pattern.identifier.str()));
     for (auto& arg : pattern.arguments)
     {
-        //TODO: add constraints for fields... by index!
+        // TODO: add constraints for fields... by index!
         arg.pattern->accept(this);
     }
 }
@@ -603,16 +612,16 @@ void PatternTypeVisitor::add(ast::Pattern& pattern, TypePtr type)
 void Annotator::visit(ast::CaseExp& exp)
 {
     exp.caseExp->accept(this);
-    auto caseExpTV = tv(exp.caseExp);
+    auto  caseExpTV = tv(exp.caseExp);
     auto& expTV = result[&exp] = makeVar();
 
     for (auto& c : exp.clauses)
     {
-        //TODO: push/pop variable scope
+        // TODO: push/pop variable scope
         PatternTypeVisitor::visit(*this, *c.pattern);
         add({ c.pattern->location, caseExpTV, result[c.pattern.get()] });
 
-        //TODO: add constraints between clauses
+        // TODO: add constraints between clauses
 
         c.exp->accept(this);
         add({ c.exp->location, expTV, tv(c.exp) });
@@ -624,9 +633,9 @@ void Annotator::visit(ast::BinaryExp& exp)
     exp.lhs->accept(this);
     exp.rhs->accept(this);
 
-    if (exp.op == ">"  ||
+    if (exp.op == ">" ||
         exp.op == ">=" ||
-        exp.op == "<"  ||
+        exp.op == "<" ||
         exp.op == "<=")
     {
         result[&exp] = makeConst(id::Bool);
@@ -685,14 +694,18 @@ void Annotator::visit(ast::LiteralExp& exp)
     {
     case lex::Token::Integer:
         if (exp.value.front() == '-')
-            { expTV = makeClass(id::Signed); }
+        {
+            expTV = makeClass(id::Signed);
+        }
         else
-            { expTV = makeClass(id::Num); }
+        {
+            expTV = makeClass(id::Num);
+        }
         break;
-    case lex::Token::Float:  expTV = makeClass(id::Floating); break;
-    case lex::Token::Char:   expTV = makeConst(id::Char); break;
+    case lex::Token::Float: expTV = makeClass(id::Floating); break;
+    case lex::Token::Char: expTV = makeConst(id::Char); break;
     case lex::Token::String: expTV = makeConst(id::String); break;
-    case lex::Token::Bool:   expTV = makeConst(id::Bool); break;
+    case lex::Token::Bool: expTV = makeConst(id::Bool); break;
     default:
         assert(false);
         break;
@@ -717,9 +730,9 @@ void Annotator::visit(ast::CallExp& exp)
     }
     auto funType = makeFunction(args);
 
-    //TODO: can do lower_bound and hint
+    // TODO: can do lower_bound and hint
     auto funName = exp.identifier.str();
-    auto it = functions.find(funName);
+    auto it      = functions.find(funName);
     if (it == functions.end())
     {
         assert(strchr(funName.c_str(), ':') != nullptr);
@@ -733,14 +746,14 @@ void Annotator::visit(ast::CallExp& exp)
 
 void Annotator::visit(ast::VariableExp& exp)
 {
-    //TODO: can do lower_bound and hint
+    // TODO: can do lower_bound and hint
     auto varName = exp.identifier.str();
-    auto it = variables.find(varName);
+    auto it      = variables.find(varName);
     // if it is a variable it should have been added by arguments or let exp
     if (it == variables.end())
     {
         // so this is something external, i.e. a function
-        auto ptr = makeVar();
+        auto ptr     = makeVar();
         result[&exp] = ptr;
         assert(strchr(varName.c_str(), ':') != nullptr);
         functions[std::move(varName)] = makeFunction({ ptr });
@@ -755,7 +768,7 @@ void Annotator::visit(ast::FieldExp& exp)
 {
     exp.lhs->accept(this);
 
-    auto expTV = makeVar();
+    auto expTV   = makeVar();
     result[&exp] = expTV;
 
     auto t = std::make_shared<TypeVar>(current++);
@@ -785,11 +798,11 @@ TypePtr Annotator::makeVar()
 TypePtr Annotator::makeConst(llvm::StringRef stringRef)
 {
     std::string str{ stringRef.str() };
-    auto it = typeConstants.find(str);
+    auto        it = typeConstants.find(str);
     if (it == typeConstants.end())
     {
-        auto &constant = typeConstants[str];
-        constant = std::make_shared<TypeConstant>(std::move(str));
+        auto& constant = typeConstants[str];
+        constant       = std::make_shared<TypeConstant>(std::move(str));
         return constant;
     }
     else
@@ -837,7 +850,7 @@ std::string test(const std::string& moduleName, ast::Function& fun)
     Annotator annotator{};
     annotator(moduleName, fun);
 
-    TypeAnnotation annotation{ std::move(annotator.result), std::move(annotator.variables), std::move(annotator.functions), annotator.current };
+    TypeAnnotation          annotation{ std::move(annotator.result), std::move(annotator.variables), std::move(annotator.functions), annotator.current };
     std::vector<Constraint> constraints{ std::move(annotator.constraints) };
 
     annotation.print();
@@ -884,7 +897,7 @@ TypeAnnotation inferType(const std::string& moduleName, const ast::Function& fun
     Annotator annotator{};
     annotator(moduleName, fun);
 
-    TypeAnnotation annotation{ std::move(annotator.result), std::move(annotator.variables), std::move(annotator.functions), annotator.current };
+    TypeAnnotation          annotation{ std::move(annotator.result), std::move(annotator.variables), std::move(annotator.functions), annotator.current };
     std::vector<Constraint> constraints{ std::move(annotator.constraints) };
 
     for (size_t i = 0; i < constraints.size(); ++i)

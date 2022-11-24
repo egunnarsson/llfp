@@ -1,7 +1,7 @@
 
-#include <cctype>
-#include <unordered_map>
-#include <string>
+#include "HeaderWriter.h"
+
+#include "Type/TypeContext.h"
 
 #pragma warning(push, 0)
 
@@ -9,9 +9,9 @@
 
 #pragma warning(pop)
 
-#include "Type/TypeContext.h"
-
-#include "HeaderWriter.h"
+#include <cctype>
+#include <string>
+#include <unordered_map>
 
 
 namespace llfp
@@ -20,29 +20,29 @@ namespace llfp
 namespace
 {
 
-std::string convertType(llfp::SourceModule &module, const GlobalIdentifier& type)
+std::string convertType(llfp::SourceModule& module, const GlobalIdentifier& type)
 {
-    static std::unordered_map<std::string, llvm::StringRef> map {
-        {id::Bool.str(), "bool"},
+    static std::unordered_map<std::string, llvm::StringRef> map{
+        { id::Bool.str(), "bool" },
 
-        {id::I8.str(), "int8_t"},
-        {id::I16.str(), "int16_t"},
-        {id::I32.str(), "int32_t"},
-        {id::I64.str(), "int64_t"},
+        { id::I8.str(), "int8_t" },
+        { id::I16.str(), "int16_t" },
+        { id::I32.str(), "int32_t" },
+        { id::I64.str(), "int64_t" },
         // {id::I128, "i128"}, // unsupported
 
-        {id::U8.str(), "uint8_t"},
-        {id::U16.str(), "uint16_t"},
-        {id::U32.str(), "uint32_t"},
-        {id::U64.str(), "uint64_t"},
+        { id::U8.str(), "uint8_t" },
+        { id::U16.str(), "uint16_t" },
+        { id::U32.str(), "uint32_t" },
+        { id::U64.str(), "uint64_t" },
         // {id::U128, "u128"}, // unsupported
 
         // {id::Half, "half"}, // unsupported
-        {id::Float.str(), "float"},
-        {id::Double.str(), "double"},
+        { id::Float.str(), "float" },
+        { id::Double.str(), "double" },
         // long double usually 80 bit?
 
-        {id::Char.str(), "unsigned char"},
+        { id::Char.str(), "unsigned char" },
     };
 
     if (type.moduleName.empty())
@@ -75,7 +75,7 @@ std::string convertType(llfp::SourceModule &module, const GlobalIdentifier& type
     return std::string();
 }
 
-void writeParameter(llvm::raw_ostream &os, llfp::SourceModule &module, std::unique_ptr<ast::Parameter> &param)
+void writeParameter(llvm::raw_ostream& os, llfp::SourceModule& module, std::unique_ptr<ast::Parameter>& param)
 {
     auto type = convertType(module, param->type.identifier);
     if (type.back() == '*')
@@ -87,27 +87,27 @@ void writeParameter(llvm::raw_ostream &os, llfp::SourceModule &module, std::uniq
 
 } // namespace
 
-void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
+void HeaderWriter::write(llvm::raw_ostream& os, llfp::SourceModule& module)
 {
     auto headerGuard = module.name();
-    for (auto &c : headerGuard) c = llvm::toUpper(c);
+    for (auto& c : headerGuard) c = llvm::toUpper(c);
     headerGuard += "_H";
 
-    os <<
-        "#ifndef " << headerGuard << "\n"
-        "#define " << headerGuard << "\n\n"
+    os << "#ifndef " << headerGuard << "\n"
+                                       "#define "
+       << headerGuard << "\n\n"
 
-        "#include <stdint.h>\n"
-        "#include <stdbool.h>\n\n"
+                         "#include <stdint.h>\n"
+                         "#include <stdbool.h>\n\n"
 
-        "#ifdef __cplusplus\n"
-        "extern \"C\" {\n"
-        "#endif\n\n";
+                         "#ifdef __cplusplus\n"
+                         "extern \"C\" {\n"
+                         "#endif\n\n";
 
     // for data used from other modules we need to #include ""
 
     // TODO: C requires these to be in order if they refer to each other
-    for (auto &d : module.getAST()->datas)
+    for (auto& d : module.getAST()->datas)
     {
         // TODO: instead we should mark them as needed?
         // otherwise we need to check recursively if all children are also exported
@@ -123,8 +123,7 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
             continue;
         }
 
-        auto writeStruct = [&module, &os](const std::string& name, const std::vector<ast::Field>& fields)
-        {
+        auto writeStruct = [&module, &os](const std::string& name, const std::vector<ast::Field>& fields) {
             os << "struct " << name << "\n{\n";
             for (auto& f : fields)
             {
@@ -141,17 +140,16 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
             }
 
             // make union struct
-            if (d->constructors.size() > 1) {
-                os <<
-                    "struct " << module.getMangledName(d.get()) << "\n{\n"
-                    "\tint type;\n"
-                    "\tunion {\n";
+            if (d->constructors.size() > 1)
+            {
+                os << "struct " << module.getMangledName(d.get()) << "\n{\n"
+                                                                     "\tint type;\n"
+                                                                     "\tunion {\n";
                 for (int i = 0; i < d->constructors.size(); ++i)
                 {
                     os << "\t\tstruct " << module.getMangledName(d.get(), i) << ' ' << d->constructors[i].name << ";\n";
                 }
-                os <<
-                    "\t};\n";
+                os << "\t};\n";
                 "};\n\n";
             }
         }
@@ -161,13 +159,13 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
         }
     }
 
-    for (auto &f : module.getAST()->functions)
+    for (auto& f : module.getAST()->functions)
     {
         if (!f->exported) { continue; }
 
-        auto retType = convertType(module, f->type.identifier);
-        const bool retUserType = retType.back() == '*';
-        llvm::StringRef funRetType = retUserType ? llvm::StringLiteral("void") : llvm::StringRef(retType);
+        auto            retType     = convertType(module, f->type.identifier);
+        const bool      retUserType = retType.back() == '*';
+        llvm::StringRef funRetType  = retUserType ? llvm::StringLiteral("void") : llvm::StringRef(retType);
 
         os << funRetType << ' ' << module.getExportedName(f.get()) << '(';
 
@@ -193,16 +191,15 @@ void HeaderWriter::write(llvm::raw_ostream &os, llfp::SourceModule &module)
                 }
             }
         }
-        
+
         os << ");\n";
     }
 
-    os <<
-        "\n#ifdef __cplusplus\n"
-        "}\n"
-        "#endif\n\n"
+    os << "\n#ifdef __cplusplus\n"
+          "}\n"
+          "#endif\n\n"
 
-        "#endif\n";
+          "#endif\n";
 }
 
 } // namespace llfp

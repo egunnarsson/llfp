@@ -1,12 +1,12 @@
 #pragma once
 
-#include <memory>
-#include <string>
-#include <vector>
-
 #include "Common/GlobalIdentifier.h"
 #include "Common/SourceLocation.h"
 #include "Lexer.h"
+
+#include <memory>
+#include <string>
+#include <vector>
 
 
 namespace llfp::ast
@@ -39,16 +39,16 @@ class ExpVisitor
 {
 public:
 
-    virtual void visit(LetExp &exp) = 0;
-    virtual void visit(IfExp &exp) = 0;
-    virtual void visit(CaseExp &exp) = 0;
-    virtual void visit(BinaryExp &exp) = 0;
-    virtual void visit(UnaryExp &exp) = 0;
-    virtual void visit(LiteralExp &exp) = 0;
-    virtual void visit(CallExp &exp) = 0;
-    virtual void visit(VariableExp &exp) = 0;
-    virtual void visit(FieldExp &exp) = 0;
-    virtual void visit(ConstructorExp &exp) = 0;
+    virtual void visit(LetExp& exp)         = 0;
+    virtual void visit(IfExp& exp)          = 0;
+    virtual void visit(CaseExp& exp)        = 0;
+    virtual void visit(BinaryExp& exp)      = 0;
+    virtual void visit(UnaryExp& exp)       = 0;
+    virtual void visit(LiteralExp& exp)     = 0;
+    virtual void visit(CallExp& exp)        = 0;
+    virtual void visit(VariableExp& exp)    = 0;
+    virtual void visit(FieldExp& exp)       = 0;
+    virtual void visit(ConstructorExp& exp) = 0;
 
 protected:
 
@@ -67,12 +67,12 @@ class PatternVisitor
 {
 public:
 
-    virtual void visit(BoolPattern& pattern) = 0;
-    virtual void visit(IdentifierPattern& pattern) = 0;
-    virtual void visit(IntegerPattern& pattern) = 0;
-    virtual void visit(FloatPattern& pattern) = 0;
-    virtual void visit(CharPattern& pattern) = 0;
-    virtual void visit(StringPattern& pattern) = 0;
+    virtual void visit(BoolPattern& pattern)        = 0;
+    virtual void visit(IdentifierPattern& pattern)  = 0;
+    virtual void visit(IntegerPattern& pattern)     = 0;
+    virtual void visit(FloatPattern& pattern)       = 0;
+    virtual void visit(CharPattern& pattern)        = 0;
+    virtual void visit(StringPattern& pattern)      = 0;
     virtual void visit(ConstructorPattern& pattern) = 0;
 
 protected:
@@ -105,8 +105,8 @@ struct DataConstructor final : public Node
     std::vector<Field> fields;
 
     DataConstructor(
-        SourceLocation location_,
-        std::string name_,
+        SourceLocation     location_,
+        std::string        name_,
         std::vector<Field> fields_);
     virtual ~DataConstructor();
 };
@@ -119,11 +119,11 @@ struct Data final : public Node
     bool                         exported;
 
     Data(
-        SourceLocation location_,
-        std::string name_,
-        std::vector<std::string> typeVariables_,
+        SourceLocation               location_,
+        std::string                  name_,
+        std::vector<std::string>     typeVariables_,
         std::vector<DataConstructor> constructors_,
-        bool exported_);
+        bool                         exported_);
     virtual ~Data();
 };
 
@@ -156,60 +156,60 @@ enum FunctionType
 */
 struct Function final : public Node
 {
-    std::string          name;
-    TypeIdentifier       type;
+    std::string                             name;
+    TypeIdentifier                          type;
     std::vector<std::unique_ptr<Parameter>> parameters;
-    std::unique_ptr<Exp> functionBody; // rename body
-    bool                 exported;
+    std::unique_ptr<Exp>                    functionBody; // rename body
+    bool                                    exported;
 
     Function(
-        SourceLocation location_,
-        std::string name_,
-        TypeIdentifier type_,
+        SourceLocation                          location_,
+        std::string                             name_,
+        TypeIdentifier                          type_,
         std::vector<std::unique_ptr<Parameter>> parameters_,
-        std::unique_ptr<Exp> functionBody_,
-        bool exported);
+        std::unique_ptr<Exp>                    functionBody_,
+        bool                                    exported);
     virtual ~Function();
 };
 
 struct FunctionDeclaration final : public Node
 {
-    std::string    name;
-    TypeIdentifier type;
+    std::string                             name;
+    TypeIdentifier                          type;
     std::vector<std::unique_ptr<Parameter>> parameters;
 
     FunctionDeclaration(
-        SourceLocation location_,
-        std::string name_,
-        TypeIdentifier type_,
+        SourceLocation                          location_,
+        std::string                             name_,
+        TypeIdentifier                          type_,
         std::vector<std::unique_ptr<Parameter>> parameters_);
     virtual ~FunctionDeclaration();
 };
 
 struct Class final : public Node
 {
-    std::string name;
-    std::string typeVariable;
+    std::string                                       name;
+    std::string                                       typeVariable;
     std::vector<std::unique_ptr<FunctionDeclaration>> functions;
 
     Class(
-        SourceLocation location_,
-        std::string name_,
-        std::string typeVariable_,
+        SourceLocation                                    location_,
+        std::string                                       name_,
+        std::string                                       typeVariable_,
         std::vector<std::unique_ptr<FunctionDeclaration>> functions_);
     virtual ~Class();
 };
 
 struct ClassInstance final : public Node
 {
-    GlobalIdentifier classIdentifier;
-    TypeIdentifier   typeArgument;
+    GlobalIdentifier                       classIdentifier;
+    TypeIdentifier                         typeArgument;
     std::vector<std::unique_ptr<Function>> functions;
 
     ClassInstance(
-        SourceLocation location_,
-        GlobalIdentifier classIdentifier_,
-        TypeIdentifier typeArgument_,
+        SourceLocation                         location_,
+        GlobalIdentifier                       classIdentifier_,
+        TypeIdentifier                         typeArgument_,
         std::vector<std::unique_ptr<Function>> functions_);
     virtual ~ClassInstance();
 };
@@ -247,12 +247,12 @@ struct Module final : public Node
 struct LetExp final : public Exp
 {
     std::vector<std::unique_ptr<Function>> letStatments;
-    std::unique_ptr<Exp> exp;
+    std::unique_ptr<Exp>                   exp;
 
     LetExp(SourceLocation location_, std::vector<std::unique_ptr<Function>> letStatments_, std::unique_ptr<Exp> exp_);
     virtual ~LetExp();
 
-    void accept(ExpVisitor *visitor) override;
+    void accept(ExpVisitor* visitor) override;
 };
 
 struct IfExp final : public Exp
@@ -264,7 +264,7 @@ struct IfExp final : public Exp
     IfExp(SourceLocation location_, std::unique_ptr<Exp> condition_, std::unique_ptr<Exp> thenExp_, std::unique_ptr<Exp> elseExp_);
     virtual ~IfExp();
 
-    void accept(ExpVisitor *visitor) override;
+    void accept(ExpVisitor* visitor) override;
 };
 
 struct Pattern : public Node
@@ -370,7 +370,7 @@ struct CaseExp final : public Exp
     CaseExp(SourceLocation location_, std::unique_ptr<Exp> caseExp_, std::vector<Clause> clauses_);
     virtual ~CaseExp();
 
-    void accept(ExpVisitor *visitor) override;
+    void accept(ExpVisitor* visitor) override;
 };
 
 struct BinaryExp final : public Exp
@@ -382,7 +382,7 @@ struct BinaryExp final : public Exp
     BinaryExp(SourceLocation location_, std::string op_, std::unique_ptr<Exp> lhs_, std::unique_ptr<Exp> rhs_);
     virtual ~BinaryExp();
 
-    void accept(ExpVisitor *visitor) override;
+    void accept(ExpVisitor* visitor) override;
 };
 
 struct UnaryExp final : public Exp
@@ -393,7 +393,7 @@ struct UnaryExp final : public Exp
     UnaryExp(SourceLocation location_, std::string op_, std::unique_ptr<Exp> operand_);
     virtual ~UnaryExp();
 
-    void accept(ExpVisitor *visitor) override;
+    void accept(ExpVisitor* visitor) override;
 };
 
 struct LiteralExp final : public Exp
@@ -404,7 +404,7 @@ struct LiteralExp final : public Exp
     LiteralExp(SourceLocation location_, lex::Token tokenType_, std::string value_);
     virtual ~LiteralExp();
 
-    void accept(ExpVisitor *visitor) override;
+    void accept(ExpVisitor* visitor) override;
 };
 
 struct VariableExp final : public Exp
@@ -414,7 +414,7 @@ struct VariableExp final : public Exp
     VariableExp(SourceLocation location_, GlobalIdentifier identifier_);
     virtual ~VariableExp();
 
-    void accept(ExpVisitor *visitor) override;
+    void accept(ExpVisitor* visitor) override;
 };
 
 struct CallExp final : public Exp
@@ -425,7 +425,7 @@ struct CallExp final : public Exp
     CallExp(SourceLocation location_, GlobalIdentifier identifier_, std::vector<std::unique_ptr<Exp>> args);
     virtual ~CallExp();
 
-    void accept(ExpVisitor *visitor) override;
+    void accept(ExpVisitor* visitor) override;
 };
 
 struct FieldExp final : public Exp
@@ -436,7 +436,7 @@ struct FieldExp final : public Exp
     FieldExp(SourceLocation location_, std::unique_ptr<Exp> lhs_, std::string fieldIdentifier_);
     virtual ~FieldExp();
 
-    void accept(ExpVisitor *visitor) override;
+    void accept(ExpVisitor* visitor) override;
 };
 
 struct NamedArgument final : public Node
@@ -457,7 +457,7 @@ struct ConstructorExp final : public Exp
     ConstructorExp(SourceLocation location_, GlobalIdentifier identifier_, std::vector<NamedArgument> arguments_);
     virtual ~ConstructorExp();
 
-    void accept(ExpVisitor *visitor) override;
+    void accept(ExpVisitor* visitor) override;
 };
 
 } // namespace llfp::ast

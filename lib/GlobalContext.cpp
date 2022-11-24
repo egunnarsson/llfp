@@ -15,7 +15,7 @@ void GlobalContext::addModule(ImportedModule* srcModule)
 bool GlobalContext::buildFunctionInstances(SourceModule* sourceModule)
 {
     bool result = true;
-    auto ast = sourceModule->getAST();
+    auto ast    = sourceModule->getAST();
 
     for (auto& instance : ast->classInstances)
     {
@@ -26,7 +26,7 @@ bool GlobalContext::buildFunctionInstances(SourceModule* sourceModule)
         {
             for (auto& function : instance->functions)
             {
-                auto predicate = [&function](std::unique_ptr<ast::Function>& f) {return f->name == function->name; };
+                auto predicate = [&function](std::unique_ptr<ast::Function>& f) { return f->name == function->name; };
                 if (std::find_if(ast->functions.begin(), ast->functions.end(), predicate) != ast->functions.end())
                 {
                     Log(function->location, "function already defined");
@@ -35,7 +35,7 @@ bool GlobalContext::buildFunctionInstances(SourceModule* sourceModule)
                 else
                 {
                     auto& map = functionInstances[function->name];
-                    auto it = map.insert({ std::move(id), FunAst{ sourceModule, function.get()} });
+                    auto  it  = map.insert({ std::move(id), FunAst{ sourceModule, function.get() } });
                     if (!it.second)
                     {
                         auto& typeKey = it.first->first;
@@ -59,7 +59,7 @@ bool GlobalContext::buildFunctionInstances(SourceModule* sourceModule)
 void GlobalContext::addFunctionInstance(const std::string& name, type::Identifier type, FunAst fun)
 {
     auto& map = functionInstances[name];
-    auto it = map.insert({ std::move(type), fun });
+    auto  it  = map.insert({ std::move(type), fun });
     assert(it.second);
 }
 
@@ -74,7 +74,7 @@ FunAst GlobalContext::lookupInstance(const std::string& funIdentifier, const typ
             return it2->second;
         }
     }
-    return {nullptr, nullptr};
+    return { nullptr, nullptr };
 }
 
 DataAst GlobalContext::lookupTypeGlobal(const GlobalIdentifier& identifier) const
@@ -95,7 +95,7 @@ DataAst GlobalContext::lookupTypeGlobal(const GlobalIdentifier& identifier) cons
     return { nullptr, nullptr };
 }
 
-ImportedModule* GlobalContext::getModule(const std::string &name) const
+ImportedModule* GlobalContext::getModule(const std::string& name) const
 {
     return allModules.at(name);
 }

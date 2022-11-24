@@ -13,11 +13,7 @@ constructor? possible typevars?
 
 */
 
-#include <map>
-#include <memory>
-#include <set>
-#include <string>
-#include <vector>
+#include "Ast.h"
 
 #pragma warning(push, 0)
 
@@ -25,7 +21,11 @@ constructor? possible typevars?
 
 #pragma warning(pop)
 
-#include "Ast.h"
+#include <map>
+#include <memory>
+#include <set>
+#include <string>
+#include <vector>
 
 
 namespace llfp::hm
@@ -39,7 +39,7 @@ class TypeVar;
 class TypeConstant;
 class FunctionType;
 
-typedef std::shared_ptr<Type> TypePtr;
+typedef std::shared_ptr<Type>         TypePtr;
 typedef std::shared_ptr<FunctionType> FunTypePtr;
 
 
@@ -54,7 +54,7 @@ class TypeVisitor
 {
 public:
 
-    virtual void visit(TypeVar& t) = 0;
+    virtual void visit(TypeVar& t)      = 0;
     virtual void visit(TypeConstant& t) = 0;
     virtual void visit(FunctionType& t) = 0;
 };
@@ -66,14 +66,14 @@ public:
 
     virtual std::string str() const = 0;
 
-    virtual bool        equals(TypeVarId) const { return false; }
+    virtual bool equals(TypeVarId) const { return false; }
 
-    static void         apply(TypePtr& ptr, Substitution s);
-    virtual void        apply(Substitution s) = 0;
+    static void  apply(TypePtr& ptr, Substitution s);
+    virtual void apply(Substitution s) = 0;
 
-    virtual void        accept(TypeVisitor* visitor) = 0;
+    virtual void accept(TypeVisitor* visitor) = 0;
 
-    virtual TypePtr     copy() const = 0;
+    virtual TypePtr copy() const = 0;
 
 protected:
 
@@ -98,7 +98,7 @@ public:
 
 protected:
 
-    void                      copy(SimpleType* newObj) const;
+    void copy(SimpleType* newObj) const;
 };
 
 
@@ -110,19 +110,19 @@ public:
 
     TypeVar(TypeVarId id_);
 
-    std::string                      str() const override;
+    std::string str() const override;
 
-    bool                             equals(TypeVarId t) const override;
+    bool equals(TypeVarId t) const override;
 
     static std::vector<Substitution> unify(TypeVar& a, TypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
     static std::vector<Substitution> unify(TypeVar& a, TypeConstant& b, const TypePtr& ptrA, const TypePtr& ptrB);
     static std::vector<Substitution> unify(TypeVar& a, FunctionType& b, const TypePtr& ptrA, const TypePtr& ptrB);
 
-    void                             apply(Substitution s) override;
+    void apply(Substitution s) override;
 
-    void                             accept(TypeVisitor* visitor) override;
+    void accept(TypeVisitor* visitor) override;
 
-    TypePtr                          copy() const override;
+    TypePtr copy() const override;
 };
 
 
@@ -134,15 +134,15 @@ public:
 
     TypeConstant(std::string id);
 
-    std::string                      str() const override;
+    std::string str() const override;
 
     static std::vector<Substitution> unify(TypeConstant& a, TypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
     static std::vector<Substitution> unify(TypeConstant& a, TypeConstant& b, const TypePtr& ptrA, const TypePtr& ptrB);
     static std::vector<Substitution> unify(TypeConstant& a, FunctionType& b, const TypePtr& ptrA, const TypePtr& ptrB);
 
-    void                             accept(TypeVisitor* visitor) override;
+    void accept(TypeVisitor* visitor) override;
 
-    TypePtr                          copy() const override;
+    TypePtr copy() const override;
 };
 
 
@@ -154,18 +154,18 @@ public:
 
     FunctionType(std::vector<TypePtr> types);
 
-    std::string                      str() const override;
+    std::string str() const override;
 
     static std::vector<Substitution> unify(FunctionType& a, TypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
     static std::vector<Substitution> unify(FunctionType& a, TypeConstant& b, const TypePtr& ptrA, const TypePtr& ptrB);
     static std::vector<Substitution> unify(FunctionType& a, FunctionType& b, const TypePtr& ptrA, const TypePtr& ptrB);
 
-    void                             apply(Substitution s) override;
+    void apply(Substitution s) override;
 
-    void                             accept(TypeVisitor* visitor) override;
+    void accept(TypeVisitor* visitor) override;
 
-    TypePtr                          copy() const override;
-    FunTypePtr                       copyFun() const;
+    TypePtr    copy() const override;
+    FunTypePtr copyFun() const;
 };
 
 
@@ -179,7 +179,11 @@ public:
     const TypePtr&            b;
     std::vector<Substitution> result;
 
-    TypeUnifierT(T& self_, const TypePtr& a_, const TypePtr& b_) :self(self_), a(a_), b(b_) {}
+    TypeUnifierT(T& self_, const TypePtr& a_, const TypePtr& b_)
+        : self(self_),
+          a(a_),
+          b(b_)
+    {}
 
     template<class V>
     void visit_(V& other)
@@ -208,7 +212,11 @@ public:
     template<class T>
     void visit_(T& self)
     {
-        TypeUnifierT<T> u{ self, a, b, };
+        TypeUnifierT<T> u{
+            self,
+            a,
+            b,
+        };
         b->accept(&u);
         result = std::move(u.result);
     }
@@ -224,7 +232,7 @@ class Constraint
 public:
 
     SourceLocation location;
-    //const char* explanation?
+    // const char* explanation?
     TypePtr        left;
     TypePtr        right;
 
@@ -239,7 +247,7 @@ public:
 class TypeAnnotation
 {
     std::map<const ast::Node*, TypePtr> ast;
-    //std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
+    // std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
     std::map<std::string, TypePtr>      variables;
     std::map<std::string, FunTypePtr>   functions;
     TypeVarId                           nextFreeVariable = 0;
@@ -249,31 +257,30 @@ public:
     TypeAnnotation() = default;
     TypeAnnotation(
         std::map<const ast::Node*, TypePtr> ast_,
-        std::map<std::string, TypePtr> vars_,
-        std::map<std::string, FunTypePtr> functions_,
-        TypeVarId nextFreeVariable_);
+        std::map<std::string, TypePtr>      vars_,
+        std::map<std::string, FunTypePtr>   functions_,
+        TypeVarId                           nextFreeVariable_);
     TypeAnnotation(const TypeAnnotation& other);
     TypeAnnotation& operator=(const TypeAnnotation& other);
 
-    TypePtr     get(const ast::Node* n) const;
-    TypePtr     getVar(const std::string& id) const;
-    FunTypePtr  getFun(const std::string& id) const;
+    TypePtr    get(const ast::Node* n) const;
+    TypePtr    getVar(const std::string& id) const;
+    FunTypePtr getFun(const std::string& id) const;
 
     const auto& getFunctions() { return functions; }
     void        substitute(Substitution sub);
     // more like update
     void        add(const std::string& var, const TypePtr& type);
 
-    void        print();
-
+    void print();
 };
 
 class PatternTypeVisitor;
 
 class Annotator : public ast::ExpVisitor
 {
-    std::map<std::string, TypePtr>      typeConstants;
-    //std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
+    std::map<std::string, TypePtr> typeConstants;
+    // std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
 
 public:
 
@@ -303,15 +310,15 @@ private:
     TypePtr    makeClass(llvm::StringRef s);
     FunTypePtr makeFunction(std::vector<TypePtr> types);
 
-    TypePtr    tv(const std::string& name);
-    TypePtr    tv(ast::Node& ast);
+    TypePtr tv(const std::string& name);
+    TypePtr tv(ast::Node& ast);
     template<class T>
-    TypePtr    tv(const std::unique_ptr<T>& ast)
+    TypePtr tv(const std::unique_ptr<T>& ast)
     {
         return result.at(ast.get());
     }
 
-    void       add(Constraint c);
+    void add(Constraint c);
 
     friend PatternTypeVisitor;
 };
@@ -319,7 +326,7 @@ private:
 
 class PatternTypeVisitor : public ast::PatternVisitor
 {
-    //std::map<std::string, > variables;
+    // std::map<std::string, > variables;
     Annotator& annotator;
 
 public:

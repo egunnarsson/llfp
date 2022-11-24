@@ -1,7 +1,6 @@
 #pragma once
 
-#include <stdio.h>
-#include <string>
+#include "Common/SourceLocation.h"
 
 #pragma warning(push, 0)
 
@@ -9,8 +8,8 @@
 
 #pragma warning(pop)
 
-#include "Common/SourceLocation.h"
-
+#include <stdio.h>
+#include <string>
 
 namespace llfp::lex
 {
@@ -18,10 +17,10 @@ namespace llfp::lex
 enum class Token
 {
     Invalid = -3,
-    Error = -2,
-    Eof = -1,
+    Error   = -2,
+    Eof     = -1,
 
-    //tok_function, /* "function" */
+    // tok_function, /* "function" */
     Module,
     Import,
     Export,
@@ -66,8 +65,8 @@ class Input
 
 public:
 
-    Input(llvm::StringRef inputFile) :
-        location{ 1, 0, inputFile }
+    Input(llvm::StringRef inputFile)
+        : location{ 1, 0, inputFile }
     {}
     virtual ~Input() {}
 
@@ -83,13 +82,13 @@ protected:
 
 class StringInput : public Input
 {
-    const char *input;
+    const char* input;
 
 public:
 
-    StringInput(const char *_input) :
-        Input("string"),
-        input(_input)
+    StringInput(const char* _input)
+        : Input("string"),
+          input(_input)
     {
     }
     virtual ~StringInput() {}
@@ -111,7 +110,7 @@ protected:
 
 class FileInput : public Input
 {
-    FILE *file;
+    FILE* file;
 
 public:
 
@@ -127,7 +126,9 @@ class StdinInput : public Input
 {
 public:
 
-    StdinInput() : Input("stdin") {}
+    StdinInput()
+        : Input("stdin")
+    {}
     virtual ~StdinInput() {}
 
 protected:
@@ -146,7 +147,7 @@ class Lexer
 
 public:
 
-    Lexer(Input *input);
+    Lexer(Input* input);
 
     // should be llvm::StringLiteral, except testing uses testing::Message << operator
     static constexpr const char* tokenName(Token token)
@@ -199,7 +200,7 @@ public:
 private:
 
     Token parseToken();
-    Token error(const char *msg);
+    Token error(const char* msg);
 
     Token parseIdentifier();
     Token parseNumber();

@@ -1,8 +1,9 @@
 #pragma once
 
-#include <memory>
-#include <string>
-#include <unordered_map>
+#include "Ast.h"
+#include "GlobalContext.h"
+#include "IModule.h"
+#include "Type/TypeInstance.h"
 
 #pragma warning(push, 0)
 
@@ -11,10 +12,9 @@
 
 #pragma warning(pop)
 
-#include "Ast.h"
-#include "IModule.h"
-#include "GlobalContext.h"
-#include "Type/TypeInstance.h"
+#include <memory>
+#include <string>
+#include <unordered_map>
 
 
 namespace llfp
@@ -34,22 +34,22 @@ class SourceModule : public ImportedModule
 public:
 
     static std::unique_ptr<SourceModule> create(std::unique_ptr<ast::Module> astModule_);
-    bool addImportedModules(GlobalContext &globalContext);
+    bool                                 addImportedModules(GlobalContext& globalContext);
 
     const std::string& name() const override;
 
-    FunAst             getFunction(const std::string &name) override; // lookup public function
-    FunDeclAst         getFunctionDecl(const std::string &name) override;
-    DataAst            getType(const std::string &name) const override;
+    FunAst     getFunction(const std::string& name) override; // lookup public function
+    FunDeclAst getFunctionDecl(const std::string& name) override;
+    DataAst    getType(const std::string& name) const override;
 
-    std::string        getMangledName(const ast::Function *function, const std::vector<const type::TypeInstance*> &types) const override;
-    std::string        getMangledName(const ast::Data* data) const override;
-    std::string        getMangledName(const ast::Data *data, size_t constructorIndex) const override;
-    std::string        getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const override;
-    std::string        getExportedName(const ast::Function *function) const override;
-    bool               fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const override;
+    std::string getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const override;
+    std::string getMangledName(const ast::Data* data) const override;
+    std::string getMangledName(const ast::Data* data, size_t constructorIndex) const override;
+    std::string getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const override;
+    std::string getExportedName(const ast::Function* function) const override;
+    bool        fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const override;
 
-    ast::Module*       getAST();
+    ast::Module* getAST();
 
     // lookup local function or global from imported modules
     FunAst     lookupFunction(const GlobalIdentifier& identifier) override;
@@ -69,13 +69,13 @@ class StandardModule : public ImportedModule
 public:
 
     const std::string& name() const override;
-    FunAst             getFunction(const std::string &name) override;
-    FunDeclAst         getFunctionDecl(const std::string &name) override;
+    FunAst             getFunction(const std::string& name) override;
+    FunDeclAst         getFunctionDecl(const std::string& name) override;
 
-    std::string        getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const override;
-    std::string        getMangledName(const ast::Data* data) const override;
-    std::string        getMangledName(const ast::Data* data, size_t constructorIndex) const override;
-    std::string        getExportedName(const ast::Function*function) const override;
+    std::string getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const override;
+    std::string getMangledName(const ast::Data* data) const override;
+    std::string getMangledName(const ast::Data* data, size_t constructorIndex) const override;
+    std::string getExportedName(const ast::Function* function) const override;
 };
 
 } // namespace llfp

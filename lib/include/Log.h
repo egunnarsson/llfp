@@ -1,12 +1,12 @@
 #pragma once
 
+#include "Common/SourceLocation.h"
+
 #pragma warning(push, 0)
 
 #include <llvm/Support/raw_ostream.h>
 
 #pragma warning(pop)
-
-#include "Common/SourceLocation.h"
 
 
 namespace llfp
@@ -46,7 +46,7 @@ void Log(llvm::raw_ostream& out, const SourceLocation& location, Args&&... args)
 }
 
 template<class... Args>
-void Log(const SourceLocation &location, Args&&... args)
+void Log(const SourceLocation& location, Args&&... args)
 {
     Log(llvm::errs(), location, std::forward<Args>(args)...);
 }

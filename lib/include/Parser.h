@@ -1,7 +1,8 @@
 #pragma once
 
-#include <memory>
-#include <optional>
+#include "Ast.h"
+#include "Lexer.h"
+#include "Log.h"
 
 #pragma warning(push, 0)
 
@@ -9,9 +10,8 @@
 
 #pragma warning(pop)
 
-#include "Ast.h"
-#include "Lexer.h"
-#include "Log.h"
+#include <memory>
+#include <optional>
 
 
 namespace llfp::parse
@@ -19,12 +19,12 @@ namespace llfp::parse
 
 class Parser
 {
-    lex::Lexer *lexer;
+    lex::Lexer* lexer;
 
 public:
 
-    Parser(lex::Lexer *lexer_):
-        lexer{ lexer_ }
+    Parser(lex::Lexer* lexer_)
+        : lexer{ lexer_ }
     {}
 
     std::unique_ptr<ast::Module> parse();
@@ -39,14 +39,14 @@ private:
     };
 
     template<class T>
-    std::unique_ptr<T>        error(const char *msg);
-    bool                      expect(lex::Token token);
+    std::unique_ptr<T> error(const char* msg);
+    bool               expect(lex::Token token);
 
     template<llfp::lex::Token StartToken = llfp::lex::Token::Open_parenthesis,
-             llfp::lex::Token EndToken = llfp::lex::Token::Close_parenthesis,
+             llfp::lex::Token EndToken   = llfp::lex::Token::Close_parenthesis,
              class F>
-    bool                      parseList(F parseElement);
-    bool                      parseDeclaration(const std::unique_ptr<ast::Module> &module);
+    bool parseList(F parseElement);
+    bool parseDeclaration(const std::unique_ptr<ast::Module>& module);
 
     std::unique_ptr<ast::Data>                parseData(bool exported);
     std::unique_ptr<ast::Function>            parseFunction(FunctionType funType);
@@ -54,7 +54,7 @@ private:
     std::unique_ptr<ast::ClassInstance>       parseInstance();
     std::unique_ptr<ast::FunctionDeclaration> parseFunctionDeclaration();
 
-    std::optional<ast::DataConstructor>       parseDataConstructor();
+    std::optional<ast::DataConstructor> parseDataConstructor();
 
     std::unique_ptr<ast::Exp> parseLiteralExp();
     std::unique_ptr<ast::Exp> parseParenthesizedExp();
@@ -68,14 +68,14 @@ private:
     std::unique_ptr<ast::Exp> parseBinaryExp(int exprPrec, std::unique_ptr<ast::Exp> LHS);
     std::unique_ptr<ast::Exp> parseExp();
 
-    std::optional<ast::NamedArgument>         parseNamedArgument();
+    std::optional<ast::NamedArgument> parseNamedArgument();
 
-    std::unique_ptr<ast::Pattern>             parsePattern();
-    std::optional<ast::NamedArgumentPattern>  parseNamedArgumentPattern();
-    std::unique_ptr<ast::ConstructorPattern>  parseConstructorPattern(GlobalIdentifier gid);
+    std::unique_ptr<ast::Pattern>            parsePattern();
+    std::optional<ast::NamedArgumentPattern> parseNamedArgumentPattern();
+    std::unique_ptr<ast::ConstructorPattern> parseConstructorPattern(GlobalIdentifier gid);
 
-    bool                      parseGlobalIdentifier(GlobalIdentifier&);
-    bool                      parseType(ast::TypeIdentifier&);
+    bool parseGlobalIdentifier(GlobalIdentifier&);
+    bool parseType(ast::TypeIdentifier&);
 };
 
 } // namespace llfp::parse

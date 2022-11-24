@@ -1,13 +1,5 @@
 
-#include <memory>
-#include <string>
-#include <utility>
-
-#pragma warning(push, 0)
-
-#include "llvm/Support/FormatVariadic.h"
-
-#pragma warning(pop)
+#include "Parser.h"
 
 #include "Ast.h"
 #include "Error.h"
@@ -15,19 +7,27 @@
 #include "Log.h"
 #include "String/StringConstants.h"
 
-#include "Parser.h"
+#pragma warning(push, 0)
+
+#include "llvm/Support/FormatVariadic.h"
+
+#pragma warning(pop)
+
+#include <memory>
+#include <string>
+#include <utility>
 
 
 namespace
 {
 
 // TODO: This is going to be unmaintainable, depending on how many operators we will have and so on...
-int precedence(const std::string &op)
+int precedence(const std::string& op)
 {
     constexpr int invalid = -1;
-    const auto size = op.size();
+    const auto    size    = op.size();
 
-    //uint32_t hash = op[0] | op[1] << 8 | op[2] << 16;
+    // uint32_t hash = op[0] | op[1] << 8 | op[2] << 16;
 
     if (size == 1)
     {
@@ -78,7 +78,7 @@ namespace llfp::parse
 {
 
 template<class T>
-std::unique_ptr<T> Parser::error(const char *msg)
+std::unique_ptr<T> Parser::error(const char* msg)
 {
     Log(lexer->getLocation(), msg);
     return nullptr;
@@ -134,8 +134,7 @@ std::unique_ptr<ast::Module> Parser::parse()
 
     if (lexer->getToken() == lex::Token::Open_parenthesis)
     {
-        auto parseElement = [this, &module]()
-        {
+        auto parseElement = [this, &module]() {
             if (lexer->getToken() == lex::Token::Identifier)
             {
                 module->publics.push_back(ast::Public(lexer->getLocation(), lexer->getString()));
@@ -176,7 +175,7 @@ std::unique_ptr<ast::Module> Parser::parse()
     return std::move(module);
 }
 
-bool Parser::parseDeclaration(const std::unique_ptr<ast::Module> &module)
+bool Parser::parseDeclaration(const std::unique_ptr<ast::Module>& module)
 {
     bool exported = false;
     if (lexer->getToken() == lex::Token::Export)
@@ -292,8 +291,7 @@ std::unique_ptr<ast::Data> Parser::parseData(bool exported)
     std::vector<std::string> typeVariables;
     if (lexer->getToken() == lex::Token::Open_bracket)
     {
-        auto parseVariable = [this, &typeVariables]()
-        {
+        auto parseVariable = [this, &typeVariables]() {
             if (lexer->getToken() != lex::Token::Identifier) { return false; }
             typeVariables.push_back(lexer->getString());
             lexer->nextToken();
@@ -304,8 +302,7 @@ std::unique_ptr<ast::Data> Parser::parseData(bool exported)
     }
 
     std::vector<ast::DataConstructor> constructors;
-    auto parseConstructor = [this, &constructors]()
-    {
+    auto                              parseConstructor = [this, &constructors]() {
         if (auto constructor = parseDataConstructor())
         {
             constructors.push_back(std::move(constructor.value()));
@@ -364,8 +361,7 @@ std::unique_ptr<ast::Function> Parser::parseFunction(FunctionType funType)
     std::vector<std::unique_ptr<ast::Parameter>> parameters;
     if (lexer->getToken() == lex::Token::Open_parenthesis)
     {
-        auto parseElement = [this, &parameters]()
-        {
+        auto parseElement = [this, &parameters]() {
             auto paramLocation = lexer->getLocation();
 
             ast::TypeIdentifier argTypeName;
@@ -526,9 +522,8 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunctionDeclaration()
     std::vector<std::unique_ptr<ast::Parameter>> args;
     if (lexer->getToken() == lex::Token::Open_parenthesis)
     {
-        auto parseArg = [this, &args]()
-        {
-            auto paramLocation = lexer->getLocation();
+        auto parseArg = [this, &args]() {
+            auto                paramLocation = lexer->getLocation();
             ast::TypeIdentifier argTypeName;
             if (!parseType(argTypeName)) { return false; }
             if (argTypeName.identifier.name.empty())
@@ -561,9 +556,9 @@ std::unique_ptr<ast::FunctionDeclaration> Parser::parseFunctionDeclaration()
 
 std::unique_ptr<ast::Exp> Parser::parseLiteralExp()
 {
-    auto location = lexer->getLocation();
-    lex::Token token = lexer->getToken();
-    std::string value = lexer->getString();
+    auto        location = lexer->getLocation();
+    lex::Token  token    = lexer->getToken();
+    std::string value    = lexer->getString();
     lexer->nextToken();
     return std::make_unique<ast::LiteralExp>(location, token, std::move(value));
 }
@@ -621,8 +616,7 @@ std::unique_ptr<ast::Exp> Parser::parseCallExp(SourceLocation location, GlobalId
     {
         // call
         std::vector<std::unique_ptr<ast::Exp>> args;
-        auto parseElement = [this, &args]()
-        {
+        auto                                   parseElement = [this, &args]() {
             if (auto arg = parseExp())
             {
                 args.push_back(std::move(arg));
@@ -643,8 +637,7 @@ std::unique_ptr<ast::Exp> Parser::parseCallExp(SourceLocation location, GlobalId
     {
         // constructor
         std::vector<ast::NamedArgument> args;
-        auto parseElement = [this, &args]()
-        {
+        auto                            parseElement = [this, &args]() {
             if (auto arg = parseNamedArgument())
             {
                 args.push_back(std::move(arg.value()));
@@ -731,11 +724,10 @@ std::unique_ptr<ast::Exp> Parser::parseLetExp()
 // <gid> "{" [ [<id> "=" ] <pattern> { "," [ <id> "="] <pattern> } ] "}"
 std::unique_ptr<ast::ConstructorPattern> Parser::parseConstructorPattern(GlobalIdentifier gid)
 {
-    auto location = lexer->getLocation();
+    auto                                   location = lexer->getLocation();
     std::vector<ast::NamedArgumentPattern> arguments;
 
-    auto parseElement = [this, &arguments]()
-    {
+    auto parseElement = [this, &arguments]() {
         if (auto arg = parseNamedArgumentPattern())
         {
             arguments.push_back(std::move(arg.value()));
@@ -762,7 +754,7 @@ std::optional<ast::NamedArgumentPattern> Parser::parseNamedArgumentPattern()
 {
     auto location = lexer->getLocation();
 
-    std::string name;
+    std::string                   name;
     std::unique_ptr<ast::Pattern> arg;
     if (lexer->getToken() == lex::Token::Identifier)
     {
@@ -777,7 +769,7 @@ std::optional<ast::NamedArgumentPattern> Parser::parseNamedArgumentPattern()
             // " = pattern"
             lexer->nextToken(); // eat '='
             name = std::move(ident.name);
-            arg = parsePattern();
+            arg  = parsePattern();
         }
         else if (token == lex::Token::Open_brace)
         {
@@ -808,8 +800,8 @@ std::optional<ast::NamedArgumentPattern> Parser::parseNamedArgumentPattern()
 // <bool> | <string> | <char> | <float> | <int> | <id> | <constructor_pattern>
 std::unique_ptr<ast::Pattern> Parser::parsePattern()
 {
-    auto  location = lexer->getLocation();
-    const auto token = lexer->getToken();
+    auto       location = lexer->getLocation();
+    const auto token    = lexer->getToken();
 
     if (token == lex::Token::Identifier)
     {
@@ -839,9 +831,9 @@ std::unique_ptr<ast::Pattern> Parser::parsePattern()
         {
         case lex::Token::Identifier: assert(false); return nullptr;
         case lex::Token::Integer: return std::make_unique<ast::IntegerPattern>(location, std::move(string));
-        case lex::Token::Float:   return std::make_unique<ast::FloatPattern>(location, std::move(string));
-        case lex::Token::Char:    return std::make_unique<ast::CharPattern>(location, std::move(string));
-        case lex::Token::String:  return std::make_unique<ast::StringPattern>(location, std::move(string));
+        case lex::Token::Float: return std::make_unique<ast::FloatPattern>(location, std::move(string));
+        case lex::Token::Char: return std::make_unique<ast::CharPattern>(location, std::move(string));
+        case lex::Token::String: return std::make_unique<ast::StringPattern>(location, std::move(string));
         case lex::Token::Bool:
             if (string == id::True)
             {
@@ -874,7 +866,7 @@ std::unique_ptr<ast::Exp> Parser::parseCaseExp()
         auto pattern = parsePattern();
         if (!pattern) { return nullptr; }
 
-        if (lexer->getToken()  != lex::Token::Operator ||
+        if (lexer->getToken() != lex::Token::Operator ||
             lexer->getString() != "->")
         {
             return error<ast::Exp>("expected '->'");
@@ -885,7 +877,7 @@ std::unique_ptr<ast::Exp> Parser::parseCaseExp()
         auto exp = parseExp();
         if (!exp) { return nullptr; }
 
-        clauses.push_back({std::move(pattern), std::move(exp)});
+        clauses.push_back({ std::move(pattern), std::move(exp) });
 
         if (lexer->getToken() == lex::Token::Comma)
         {
@@ -911,10 +903,10 @@ std::unique_ptr<ast::Exp> Parser::parsePrimaryExp()
     case lex::Token::Float:
     case lex::Token::Char:
     case lex::Token::String:
-    case lex::Token::Bool:       return parseLiteralExp();
-    case lex::Token::If:         return parseIfExp();
-    case lex::Token::Let:        return parseLetExp();
-    case lex::Token::Case:       return parseCaseExp();
+    case lex::Token::Bool: return parseLiteralExp();
+    case lex::Token::If: return parseIfExp();
+    case lex::Token::Let: return parseLetExp();
+    case lex::Token::Case: return parseCaseExp();
     case lex::Token::Open_parenthesis: return parseParenthesizedExp();
     default: return error<ast::Exp>("expected an expression");
     }
@@ -949,8 +941,8 @@ std::unique_ptr<ast::Exp> Parser::parseBinaryExp(int exprPrec, std::unique_ptr<a
             return LHS;
         }
 
-        auto location = lexer->getLocation();
-        std::string op = lexer->getString();
+        auto        location = lexer->getLocation();
+        std::string op       = lexer->getString();
         lexer->nextToken();
 
         if (op == ".")
@@ -1003,7 +995,7 @@ std::optional<ast::NamedArgument> Parser::parseNamedArgument()
 {
     auto location = lexer->getLocation();
 
-    std::string name;
+    std::string               name;
     std::unique_ptr<ast::Exp> exp;
     if (lexer->getToken() == lex::Token::Identifier)
     {
@@ -1017,7 +1009,7 @@ std::optional<ast::NamedArgument> Parser::parseNamedArgument()
             // " = exp"
             lexer->nextToken(); // eat '='
             name = std::move(ident.name);
-            exp = parseExp();
+            exp  = parseExp();
         }
         else
         {
@@ -1043,7 +1035,7 @@ std::optional<ast::NamedArgument> Parser::parseNamedArgument()
 }
 
 // <id> [ ":" <id> ]
-bool Parser::parseGlobalIdentifier(GlobalIdentifier &identifier)
+bool Parser::parseGlobalIdentifier(GlobalIdentifier& identifier)
 {
     if (lexer->getToken() == lex::Token::Identifier)
     {
@@ -1057,7 +1049,7 @@ bool Parser::parseGlobalIdentifier(GlobalIdentifier &identifier)
                 return false;
             }
             identifier.moduleName = std::move(identifier.name);
-            identifier.name = lexer->getString();
+            identifier.name       = lexer->getString();
             lexer->nextToken();
         }
     }
@@ -1066,7 +1058,7 @@ bool Parser::parseGlobalIdentifier(GlobalIdentifier &identifier)
 }
 
 // <gid> [ "[" { <tid> ","} <tid> "]" ]
-bool Parser::parseType(ast::TypeIdentifier &type)
+bool Parser::parseType(ast::TypeIdentifier& type)
 {
     if (lexer->getToken() == lex::Token::Identifier)
     {
@@ -1082,8 +1074,7 @@ bool Parser::parseType(ast::TypeIdentifier &type)
         {
             auto location = lexer->getLocation();
 
-            auto parseTypeParameter = [this, &type]()
-            {
+            auto parseTypeParameter = [this, &type]() {
                 ast::TypeIdentifier param;
                 if (!parseType(param)) { return false; }
                 if (param.identifier.name.empty())

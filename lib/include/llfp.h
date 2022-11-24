@@ -1,7 +1,8 @@
 #pragma once
 
-#include <memory>
-#include <vector>
+#include "Codegen.h"
+#include "Lexer.h"
+#include "Module.h"
 
 #pragma warning(push, 0)
 
@@ -10,10 +11,8 @@
 
 #pragma warning(pop)
 
-#include "Codegen.h"
-#include "Lexer.h"
-#include "Module.h"
-
+#include <memory>
+#include <vector>
 
 namespace llfp
 {

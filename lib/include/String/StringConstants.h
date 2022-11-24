@@ -6,7 +6,7 @@
 namespace llfp::id
 {
 
-#define Constant(var, name) inline constexpr llvm::StringLiteral var{name};
+#define Constant(var, name) inline constexpr llvm::StringLiteral var{ name };
 
 // Primitive types
 Constant(Bool, "bool");

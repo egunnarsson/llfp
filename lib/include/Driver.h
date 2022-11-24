@@ -1,9 +1,9 @@
 #pragma once
 
-#include <vector>
-
 #include "IModule.h"
 #include "Type/TypeInstance.h"
+
+#include <vector>
 
 
 namespace llfp
@@ -11,7 +11,7 @@ namespace llfp
 
 struct FunctionIdentifier
 {
-    FunAst ast;
+    FunAst                          ast;
     std::vector<type::TypeInstPtr>* types;
 };
 
@@ -27,7 +27,6 @@ public:
     void               push(type::TypeInstPtr type);
     FunctionIdentifier pop();
     type::TypeInstPtr  popType();
-
 };
 
 } // namespace llfp

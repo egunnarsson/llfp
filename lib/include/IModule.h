@@ -1,9 +1,9 @@
 #pragma once
 
+#include "Ast.h"
+
 #include <memory>
 #include <string>
-
-#include "Ast.h"
 
 
 namespace llfp
@@ -19,13 +19,13 @@ namespace type
 class TypeInstance;
 struct Identifier;
 
-}
+} // namespace type
 
 // Structs
 
 struct FunAst
 {
-    ImportedModule* importedModule;
+    ImportedModule*      importedModule;
     const ast::Function* function;
 
     bool empty() const { return importedModule == nullptr && function == nullptr; }
@@ -33,8 +33,8 @@ struct FunAst
 
 struct FunDeclAst
 {
-    ImportedModule* importedModule;
-    const ast::Class* class_;
+    ImportedModule*                 importedModule;
+    const ast::Class*               class_;
     const ast::FunctionDeclaration* function;
 
     bool empty() const { return importedModule == nullptr && class_ == nullptr && function == nullptr; }
@@ -43,7 +43,7 @@ struct FunDeclAst
 struct DataAst
 {
     const ImportedModule* importedModule;
-    const ast::Data* data;
+    const ast::Data*      data;
 
     bool empty() const { return importedModule == nullptr && data == nullptr; }
 };
@@ -59,21 +59,21 @@ public:
     virtual const std::string& name() const = 0;
 
     // Get public
-    virtual FunAst      getFunction(const std::string &name) = 0;
-    virtual FunDeclAst  getFunctionDecl(const std::string &name) = 0;
-    virtual DataAst     getType(const std::string &name) const = 0;
+    virtual FunAst     getFunction(const std::string& name)     = 0;
+    virtual FunDeclAst getFunctionDecl(const std::string& name) = 0;
+    virtual DataAst    getType(const std::string& name) const   = 0;
 
     virtual std::string getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const = 0;
-    virtual std::string getMangledName(const ast::Data* data) const = 0;
-    virtual std::string getMangledName(const ast::Data* data, size_t constructorIndex) const = 0;
-    virtual std::string getMangledName(const char* internalName, const type::TypeInstance* type) const = 0;
-    virtual std::string getExportedName(const ast::Function *function) const = 0;
-    virtual bool        fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const = 0;
+    virtual std::string getMangledName(const ast::Data* data) const                                                              = 0;
+    virtual std::string getMangledName(const ast::Data* data, size_t constructorIndex) const                                     = 0;
+    virtual std::string getMangledName(const char* internalName, const type::TypeInstance* type) const                           = 0;
+    virtual std::string getExportedName(const ast::Function* function) const                                                     = 0;
+    virtual bool        fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const                   = 0;
 
     // Lookup global
-    virtual FunAst      lookupFunction(const GlobalIdentifier& identifier) = 0;
-    virtual FunDeclAst  lookupFunctionDecl(const GlobalIdentifier& identifier) = 0;
-    virtual DataAst     lookupType(const GlobalIdentifier &) const = 0;
+    virtual FunAst     lookupFunction(const GlobalIdentifier& identifier)     = 0;
+    virtual FunDeclAst lookupFunctionDecl(const GlobalIdentifier& identifier) = 0;
+    virtual DataAst    lookupType(const GlobalIdentifier&) const              = 0;
 };
 
 } // namespace llfp
