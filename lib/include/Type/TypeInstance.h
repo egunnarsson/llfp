@@ -6,9 +6,9 @@
 
 #pragma warning(push, 0)
 
-#include "llvm/ADT/Hashing.h"
-#include "llvm/IR/DerivedTypes.h"
-#include "llvm/IR/Type.h"
+#include <llvm/ADT/Hashing.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Type.h>
 
 #pragma warning(pop)
 

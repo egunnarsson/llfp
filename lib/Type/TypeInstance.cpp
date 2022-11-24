@@ -10,9 +10,9 @@
 
 #pragma warning(push, 0)
 
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/IR/Constants.h"
-#include "llvm/Support/FormatVariadic.h"
+#include <llvm/ADT/STLExtras.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/Support/FormatVariadic.h>
 
 #pragma warning(pop)
 

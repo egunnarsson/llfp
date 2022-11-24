@@ -11,11 +11,11 @@
 // C4996 use of function, class member, variable, or typedef that's marked deprecated
 #pragma warning(disable : 4244 4996)
 
-#include "llvm/Bitcode/BitcodeWriter.h"
+#include <llvm/Bitcode/BitcodeWriter.h>
 
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/FormatVariadic.h"
-#include "llvm/Support/Path.h"
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/FormatVariadic.h>
+#include <llvm/Support/Path.h>
 
 #pragma warning(pop)
 

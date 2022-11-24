@@ -2,12 +2,12 @@
 
 #pragma warning(push, 0)
 
-#include "llvm/ExecutionEngine/Orc/Core.h"
-#include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
-#include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
-#include "llvm/ExecutionEngine/Orc/Mangling.h"
-#include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
-#include "llvm/IR/DataLayout.h"
+#include <llvm/ExecutionEngine/Orc/Core.h>
+#include <llvm/ExecutionEngine/Orc/IRCompileLayer.h>
+#include <llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h>
+#include <llvm/ExecutionEngine/Orc/Mangling.h>
+#include <llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h>
+#include <llvm/IR/DataLayout.h>
 
 #pragma warning(pop)
 

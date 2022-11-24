@@ -8,7 +8,7 @@
 #include "gtest/gtest.h"
 
 #include "JIT.h"
-#include "llvm/ExecutionEngine/Orc/ThreadSafeModule.h"
+#include <llvm/ExecutionEngine/Orc/ThreadSafeModule.h>
 
 std::vector<llfp::CompiledModule> compile(const char *string)
 {

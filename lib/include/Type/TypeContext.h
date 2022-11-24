@@ -18,8 +18,8 @@ is it ok to fix the type in these cases?
 
 #pragma warning(push, 0)
 
-#include "llvm/ADT/StringRef.h"
-#include "llvm/IR/LLVMContext.h"
+#include <llvm/ADT/StringRef.h>
+#include <llvm/IR/LLVMContext.h>
 
 #pragma warning(pop)
 

@@ -8,8 +8,8 @@
 
 #pragma warning(push, 0)
 
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Module.h"
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Module.h>
 
 #pragma warning(pop)
 

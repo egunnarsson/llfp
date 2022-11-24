@@ -12,11 +12,11 @@
 // C4996 use of function, class member, variable, or typedef that's marked deprecated
 #pragma warning(disable : 4996)
 
-#include "llvm/ADT/APFloat.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Verifier.h"
-#include "llvm/Support/FormatVariadic.h"
+#include <llvm/ADT/APFloat.h>
+#include <llvm/ADT/STLExtras.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/Support/FormatVariadic.h>
 
 #pragma warning(pop)
 
