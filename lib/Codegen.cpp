@@ -308,20 +308,20 @@ bool typeVarEqual(const std::string& typeVar, const ast::TypeIdentifier& type)
 
 std::stack<size_t> findTypeVariableIndex(const std::string& typeVar, const ast::TypeIdentifier& type)
 {
-    for (auto& [paramIndex, param] : llfp::enumerate(type.parameters))
+    for (auto& paramIt : llvm::enumerate(type.parameters))
     {
-        if (typeVarEqual(typeVar, *param))
+        if (typeVarEqual(typeVar, paramIt.value()))
         {
             std::stack<size_t> typeVarIndex;
-            typeVarIndex.push(paramIndex);
+            typeVarIndex.push(paramIt.index());
             return typeVarIndex;
         }
 
         {
-            auto typeVarIndex = findTypeVariableIndex(typeVar, *param);
+            auto typeVarIndex = findTypeVariableIndex(typeVar, paramIt.value());
             if (!typeVarIndex.empty())
             {
-                typeVarIndex.push(paramIndex);
+                typeVarIndex.push(paramIt.index());
                 return typeVarIndex;
             }
         }
@@ -352,13 +352,13 @@ type::Identifier findInstanceType(const ast::Class* classDecl, const ast::Functi
     auto             typeVariableIndex = findTypeVariableIndex(typeVar, funDecl->type);
     if (typeVariableIndex.empty() && !typeVarEqual(typeVar, funDecl->type))
     {
-        for (auto [paramIndex, param] : llfp::enumerate(funDecl->parameters))
+        for (auto paramIt : llvm::enumerate(funDecl->parameters))
         {
-            auto& paramTypeId = (*param)->type;
+            auto& paramTypeId = paramIt.value()->type;
             typeVariableIndex = findTypeVariableIndex(typeVar, paramTypeId);
             if (!typeVariableIndex.empty() || typeVarEqual(typeVar, paramTypeId))
             {
-                first = paramIndex + 1;
+                first = paramIt.index() + 1;
                 break;
             }
         }
@@ -620,16 +620,16 @@ public:
         auto originalBlock = context.irBuilder.GetInsertBlock();
         auto function      = originalBlock->getParent();
 
-        for (auto [index, branchBlock] : llfp::enumerate(blocks))
+        for (auto blockIt : llvm::enumerate(blocks))
         {
-            function->getBasicBlockList().push_back(*branchBlock);
-            context.irBuilder.SetInsertPoint(*branchBlock);
+            function->getBasicBlockList().push_back(blockIt.value());
+            context.irBuilder.SetInsertPoint(blockIt.value());
 
-            auto argValue = context.irBuilder.CreateExtractValue(value, { static_cast<unsigned int>(index) });
+            auto argValue = context.irBuilder.CreateExtractValue(value, { static_cast<unsigned int>(blockIt.index()) });
 
-            auto                 branchNextBlock = index == blocks.size() - 1 ? nextBlock : blocks[static_cast<size_t>(index) + 1];
+            auto                 branchNextBlock = blockIt.index() == blocks.size() - 1 ? nextBlock : blocks[blockIt.index() + 1];
             PatternCodeGenerator gen{ context, argValue, branchNextBlock };
-            pattern.arguments[index].pattern->accept(&gen);
+            pattern.arguments[blockIt.index()].pattern->accept(&gen);
         }
 
         // for now constructors only have one instance, i.e. always true condition
@@ -1217,15 +1217,15 @@ void ExpCodeGenerator::visit(ast::ConstructorExp& exp)
 
         bool         fail  = false;
         llvm::Value* value = llvm::UndefValue::get(expectedType->llvmType());
-        for (auto [fieldIndex, fieldType] : llfp::enumerate(expectedType->getFields()))
+        for (auto fieldIt : llvm::enumerate(expectedType->getFields()))
         {
-            auto& arg = exp.arguments[fieldIndex];
+            auto& arg = exp.arguments[fieldIt.index()];
 
             // at the moment name is only used to check correctness
             if (!arg.name.empty())
             {
                 auto index = expectedType->getFieldIndex(exp.identifier.name, arg.name);
-                if (index != fieldIndex)
+                if (index != static_cast<unsigned int>(fieldIt.index()))
                 {
                     Log(arg.location, index == type::TypeInstance::InvalidIndex
                                           ? "unknown field name"
@@ -1234,10 +1234,10 @@ void ExpCodeGenerator::visit(ast::ConstructorExp& exp)
                 }
             }
 
-            auto argValue = ExpCodeGenerator::generate(*arg.exp, *fieldType, this);
+            auto argValue = ExpCodeGenerator::generate(*arg.exp, fieldIt.value(), this);
             if (argValue != nullptr)
             {
-                value = llvmBuilder().CreateInsertValue(value, argValue, { static_cast<unsigned int>(fieldIndex) });
+                value = llvmBuilder().CreateInsertValue(value, argValue, { static_cast<unsigned int>(fieldIt.index()) });
             }
             else
             {
@@ -1362,9 +1362,9 @@ void generateVariantSwitch(llvm::IRBuilder<>& llvmBuilder, llvm::Value* value, t
     auto numBits     = variantTypeValue->getType()->getIntegerBitWidth();
     auto enumIntType = llvm::IntegerType::get(llvmBuilder.getContext(), numBits);
     auto switchInst  = llvmBuilder.CreateSwitch(variantTypeValue, failBB, static_cast<unsigned int>(variantBlocks.size()));
-    for (auto [index, variantBlock] : llfp::enumerate(variantBlocks))
+    for (auto it : llvm::enumerate(variantBlocks))
     {
-        switchInst->addCase(llvm::ConstantInt::get(enumIntType, index), *variantBlock);
+        switchInst->addCase(llvm::ConstantInt::get(enumIntType, it.index()), it.value());
     }
 }
 
@@ -1422,9 +1422,9 @@ bool CodeGenerator::generateCopyFunctionBodyStruct(type::TypeInstPtr type) // fo
     auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
     llvmBuilder.SetInsertPoint(entryBB);
 
-    for (auto [fieldIndex, fieldType] : llfp::enumerate(type->getFields()))
+    for (auto it : llvm::enumerate(type->getFields()))
     {
-        generateFieldCopy(type->llvmType(), fieldIndex, *fieldType, dstValue, srcValue);
+        generateFieldCopy(type->llvmType(), it.index(), it.value(), dstValue, srcValue);
     }
 
     llvmBuilder.CreateRetVoid();
@@ -1445,22 +1445,22 @@ bool CodeGenerator::generateCopyFunctionBodyVariant(type::TypeInstPtr type) // f
 
     std::vector<llvm::BasicBlock*> constructorBlocks;
     std::vector<llvm::Value*>      constructorValues;
-    for (auto [index, constructor] : llfp::enumerate(type->getConstructors()))
+    for (auto constructorIt : llvm::enumerate(type->getConstructors()))
     {
-        auto block = llvm::BasicBlock::Create(*llvmContext, llvm::Twine{ "constructor" } + llvm::Twine{ index }, llvmFunction);
+        auto block = llvm::BasicBlock::Create(*llvmContext, llvm::Twine{ "constructor" } + llvm::Twine{ constructorIt.index() }, llvmFunction);
         llvmBuilder.SetInsertPoint(block);
 
         // call malloc
         auto intPtrType     = llvmModule->getDataLayout().getIntPtrType(*llvmContext);
-        auto returnTypeSize = type->getSize(llvmModule, index);
+        auto returnTypeSize = type->getSize(llvmModule, constructorIt.index());
         auto sizeValue      = llvm::ConstantInt::get(intPtrType, returnTypeSize.getFixedSize());
-        auto dstValue       = llvm::CallInst::CreateMalloc(llvmBuilder.GetInsertBlock(), intPtrType, constructor->llvmType_, sizeValue, nullptr, nullptr, "new");
+        auto dstValue       = llvm::CallInst::CreateMalloc(llvmBuilder.GetInsertBlock(), intPtrType, constructorIt.value().llvmType_, sizeValue, nullptr, nullptr, "new");
 
-        auto variantType = constructor->llvmType_;
+        auto variantType = constructorIt.value().llvmType_;
 
-        for (auto [fieldIndex, fieldType] : llfp::enumerate(constructor->fields))
+        for (auto fieldIt : llvm::enumerate(constructorIt.value().fields))
         {
-            generateFieldCopy(variantType, fieldIndex, *fieldType, dstValue, srcValue);
+            generateFieldCopy(variantType, fieldIt.index(), fieldIt.value(), dstValue, srcValue);
         }
 
         llvmBuilder.CreateBr(retBB);

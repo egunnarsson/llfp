@@ -77,7 +77,7 @@ TEST(CodegenTest, Functions)
 TEST(CodegenTest, DataDeclaration)
 {
     // test valid data with field and types
-    auto result = compile(M"data d { i32 x; float y; }\nexport i32 f(d x) = 1;");
+    auto result = compile(M"data d = { i32 x; float y; };\nexport i32 f(d x) = 1;");
     ASSERT_NE(result[0].llvmModule, nullptr);
 
     auto llvm = result[0].llvmModule.get();
@@ -95,14 +95,14 @@ TEST(CodegenTest, DataDeclaration)
     EXPECT_TRUE(type->elements()[1]->isFloatTy());
 
     // negative
-    EXPECT_EQ(compileError(M"data foo { i32 x; i32 x; }\nexport i32 f(m:foo x) = 1;"), "string(2,19): duplicate field \"x\"\n");
-    EXPECT_EQ(compileError(M"data x{}\ndata x{}\nexport i32 f(m:x y) = 1;"),           "string(3,1): data already defined\n");
+    EXPECT_EQ(compileError(M"data foo = { i32 x; i32 x; };\nexport i32 f(m:foo x) = 1;"), "string(2,21): duplicate field \"x\"\n");
+    EXPECT_EQ(compileError(M"data x = {};\ndata x = {};\nexport i32 f(m:x y) = 1;"),      "string(3,1): data already defined\n");
 }
 
 TEST(CodegenTest, DataConstructor)
 {
     {
-        auto result = compile(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{z,z};");
+        auto result = compile(M"data d = {i32 x; i32 y;};\nexport d f(i32 z) = d{z,z};");
         ASSERT_NE(result[0].llvmModule, nullptr);
 
         auto llvm = result[0].llvmModule.get();
@@ -115,8 +115,8 @@ TEST(CodegenTest, DataConstructor)
     }
     {
         auto result = compile(
-           M"data d[a]   {a x; a y;}\n"
-            "data d2[a,b]{a x; b y;}\n"
+           M"data d[a]    = {a x; a y;};\n"
+            "data d2[a,b] = {a x; b y;};\n"
             "export i32 f1() = f2().x;\nf2() = d{1,1};\n"
             "export i32 f3() = d2{1,true}.x;");
         ASSERT_NE(result[0].llvmModule, nullptr);
@@ -133,10 +133,10 @@ TEST(CodegenTest, DataConstructor)
     // negative
     // unkown type, how do I trigger that code? type checks will fail before that always...
     //EXPECT_EQ(compileError(M"export d f(i32 x) = d{1,2};"), "string(3,1): \n");
-    EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{z,z,z};"),   "string(3,21): incorrect number of arguments\n");
-    EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{x=z,j=z};"), "string(3,27): unknown field name\n");
-    EXPECT_EQ(compileError(M"data d{i32 x; i32 y;}\nexport d f(i32 z) = d{y=z,y=z};"), "string(3,23): incorrect field position\n");
-    EXPECT_EQ(compileError(M"data d[a]{a x; a y;}\nexport i32 f1() = d{1,true}.x;"),   "string(3,23): failed to unify types, '@IntegerLiteral' with 'bool'\n");
+    EXPECT_EQ(compileError(M"data d = {i32 x; i32 y;};\nexport d f(i32 z) = d{z,z,z};"),   "string(3,21): incorrect number of arguments\n");
+    EXPECT_EQ(compileError(M"data d = {i32 x; i32 y;};\nexport d f(i32 z) = d{x=z,j=z};"), "string(3,27): unknown field name\n");
+    EXPECT_EQ(compileError(M"data d = {i32 x; i32 y;};\nexport d f(i32 z) = d{y=z,y=z};"), "string(3,23): incorrect field position\n");
+    EXPECT_EQ(compileError(M"data d[a] = {a x; a y;};\nexport i32 f1() = d{1,true}.x;"),   "string(3,23): failed to unify types, '@IntegerLiteral' with 'bool'\n");
 }
 
 struct D
@@ -158,7 +158,7 @@ TEST(CodegenTest, DataArguments)
     std::unique_ptr<llfp::JIT> jit = check(llfp::JIT::Create());
 
     auto m = compile(M
-        "data d{i64 x; i64 y; i64 z; i64 w; i64 k;}\n"
+        "data d = {i64 x; i64 y; i64 z; i64 w; i64 k;};\n"
         "i64 foo(d x) = x.x + 1;\n"
         "export i64 bar(d x) = foo(x);\n"
         "export d baz(d x) = d{x.x + x.y + x.z + x.w + x.k, 1, 2, 3, 4};\n");
@@ -292,8 +292,8 @@ TEST(CodegenTest, Logic)
     // case
     {
         auto m = compile(M
-            "data a{bool x; bool y;}\n"
-            "data b{a v1; bool v2; i32 v3; float v4; char v5;}\n"
+            "data a = {bool x; bool y;};\n"
+            "data b = {a v1; bool v2; i32 v3; float v4; char v5;};\n"
             "export i32 foo(i32 x, i32 y) = case x of\n"
             "    1 -> 0,\n"
             "    2 -> y,\n"
@@ -346,7 +346,7 @@ TEST(CodegenTest, Modules)
     // import type
 
     // import type 2nd level reference
-    // module a; data d {};
+    // module a; data d = {};
     // moudle b(foo); import a; i32 foo(a:d x) = 1; a:d bar = ...;
     // module c; import b; export i32 baz = foo(bar());
 
@@ -372,7 +372,7 @@ TEST(CodegenTest, TypeClass)
 
     // Nested type variable
     auto result2 = compile(
-        M"data D[a] {a x;}\n"
+        M"data D[a] = {a x;};\n"
         "class C a {i32 f(D[a]);}\n"
         "instance C bool {i32 f(D[bool] d) = 1;}\n"
         "export i32 foo() = f(D{true});");
@@ -444,12 +444,12 @@ data T[A] = { A[int32] x; }; // error type variable cant have parameters
 
 // recursion
 /*
-data foo
+data foo =
 {
     bar x;
-}
-data bar
+};
+data bar =
 {
     foo x;
-}
+};
 */

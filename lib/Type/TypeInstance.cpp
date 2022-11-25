@@ -251,7 +251,7 @@ unsigned int TypeInstanceStruct::getFieldIndex(const std::string& fieldIdentifie
 
 unsigned int TypeInstanceStruct::getFieldIndex(const std::string& constructorName, const std::string& fieldIdentifier) const
 {
-    if (ast->constructors.front().name != constructorName) { throw Error("unknown constructor"); }
+    if (ast->name != constructorName) { throw Error("unknown constructor"); }
     const auto& astFields = ast->constructors.front().fields;
     assert(astFields.size() == fields.size());
     const unsigned int size = static_cast<unsigned int>(astFields.size());
@@ -265,7 +265,7 @@ unsigned int TypeInstanceStruct::getFieldIndex(const std::string& constructorNam
 const FieldList& TypeInstanceStruct::getFields() const { return fields; }
 const FieldList& TypeInstanceStruct::getFields(const std::string& constructorName) const
 {
-    if (ast->constructors.front().name != constructorName) { throw Error("unknown constructor"); }
+    if (ast->name != constructorName) { throw Error("unknown constructor"); }
     return fields;
 }
 
