@@ -84,24 +84,24 @@ void addInstance(const std::unique_ptr<ast::Module>& astModule, const std::uniqu
 } // namespace
 
 MathModule::MathModule()
+    : source_{ "math.llf", code }
 {
-    auto input  = lex::StringInput(code);
-    auto lexer  = lex::Lexer(&input);
+    auto lexer  = lex::Lexer(&source_);
     auto parser = parse::Parser(&lexer);
-    astModule   = parser.parse();
+    astModule_  = parser.parse();
 
-    for (auto& classPtr : astModule->classes)
+    for (auto& classPtr : astModule_->classes)
     {
         if (classPtr->name == id::Signed)
         {
             // addInstance(astModule, classPtr, id::I8);
             // addInstance(astModule, classPtr, id::I16);
-            addInstance(astModule, classPtr, id::I32);
-            addInstance(astModule, classPtr, id::I64);
+            addInstance(astModule_, classPtr, id::I32);
+            addInstance(astModule_, classPtr, id::I64);
             // addInstance(astModule, classPtr, id::I128);
         }
-        addInstance(astModule, classPtr, id::Float);
-        addInstance(astModule, classPtr, id::Double);
+        addInstance(astModule_, classPtr, id::Float);
+        addInstance(astModule_, classPtr, id::Double);
     }
 }
 
@@ -109,7 +109,7 @@ void MathModule::addToGlobalContext(GlobalContext& context)
 {
     context.addModule(this);
 
-    for (auto& classInstance : astModule->classInstances)
+    for (auto& classInstance : astModule_->classInstances)
     {
         for (auto& fun : classInstance->functions)
         {
@@ -121,7 +121,7 @@ void MathModule::addToGlobalContext(GlobalContext& context)
 
 const std::string& MathModule::name() const
 {
-    return astModule->name;
+    return astModule_->name;
 }
 
 FunAst MathModule::getFunction(const std::string& name)
@@ -133,7 +133,7 @@ FunAst MathModule::getFunction(const std::string& name)
 FunDeclAst MathModule::getFunctionDecl(const std::string& name)
 {
     // TODO: make some lookup table
-    for (auto& classPtr : astModule->classes)
+    for (auto& classPtr : astModule_->classes)
     {
         for (auto& fun : classPtr->functions)
         {

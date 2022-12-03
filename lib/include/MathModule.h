@@ -1,6 +1,8 @@
 
 #include "IModule.h"
 
+#include "Source.h"
+
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -13,7 +15,8 @@ class GlobalContext;
 
 class MathModule : public ImportedModule
 {
-    std::unique_ptr<ast::Module> astModule;
+    Source                       source_;
+    std::unique_ptr<ast::Module> astModule_;
 
 public:
 

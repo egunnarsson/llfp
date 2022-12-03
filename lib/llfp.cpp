@@ -140,7 +140,7 @@ bool generateTypeFunctions(std::vector<CompiledModule>& result, type::TypeInstPt
 
 } // namespace
 
-std::vector<CompiledModule> compile(const std::vector<std::unique_ptr<lex::Input>>& sourceFiles)
+std::vector<CompiledModule> compile(const std::vector<Source>& sourceFiles)
 {
     auto             targetTriple = llvm::sys::getDefaultTargetTriple(); // 32 bit "i386-pc-windows-msvc"
     llvm::DataLayout dataLayout("");
@@ -158,7 +158,7 @@ std::vector<CompiledModule> compile(const std::vector<std::unique_ptr<lex::Input
     // Lex & Parse Input
     for (auto& input : sourceFiles)
     {
-        llfp::lex::Lexer    lexer(input.get());
+        llfp::lex::Lexer    lexer(&input);
         llfp::parse::Parser parser(&lexer);
         auto                astModule = parser.parse();
         if (astModule == nullptr)

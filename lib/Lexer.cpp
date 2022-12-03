@@ -10,51 +10,12 @@
 namespace llfp::lex
 {
 
-int Input::getChar()
-{
-    int _C = getCharInt();
-    if (_C != '\n')
-    {
-        ++location.Column;
-    }
-    else
-    {
-        location.Column = 0;
-        ++location.Line;
-    }
-    return _C;
-}
-
-int StdinInput::getCharInt()
-{
-    return getchar();
-}
-
-FileInput::FileInput(const char* fileName)
-    : Input(fileName)
-{
-    file = fopen(fileName, "r");
-    if (file == nullptr)
-    {
-        throw llfp::Error(std::string{ std::strerror(errno) } + " (" + fileName + ')');
-    }
-}
-
-FileInput::~FileInput()
-{
-    fclose(file);
-}
-
-int FileInput::getCharInt()
-{
-    return fgetc(file);
-}
-
-Lexer::Lexer(Input* input)
-    : input(input),
+Lexer::Lexer(const Source* source_)
+    : source{ source_ },
+      iterator{ source->begin() },
       currentToken(Token::Invalid)
 {
-    lastChar = input->getChar();
+    lastChar = getChar();
     nextToken();
 }
 
@@ -124,7 +85,11 @@ bool isidentifier(int _C)
 
 Token Lexer::nextToken()
 {
-    return currentToken = parseToken();
+    if (currentToken != Token::Eof)
+    {
+        currentToken = parseToken();
+    }
+    return currentToken;
 }
 
 Token Lexer::getToken() const
@@ -142,8 +107,21 @@ SourceLocation Lexer::getLocation() const
     return tokenLocation;
 }
 
+int Lexer::getChar()
+{
+    int result = EOF;
+    if (iterator != source->end())
+    {
+        result = static_cast<unsigned char>(*iterator);
+        ++iterator;
+    }
+    return result;
+}
+
 Token Lexer::parseToken()
 {
+    assert(currentToken != Token::Eof);
+
     if (currentToken == Token::Error)
     {
         return currentToken;
@@ -152,10 +130,10 @@ Token Lexer::parseToken()
     // Skip any whitespace.
     while (isspace(lastChar))
     {
-        lastChar = input->getChar();
+        lastChar = getChar();
     }
 
-    tokenLocation = input->getLocation();
+    tokenLocation = iterator.location();
 
     if (isalpha(lastChar)) // identifier: letter (letter | digit | '_' | '\'')*
     {
@@ -190,7 +168,7 @@ Token Lexer::parseToken()
     {
         tokenString = static_cast<char>(lastChar);
 
-        lastChar = input->getChar();
+        lastChar = getChar();
 
         return ptoken;
     }
@@ -205,6 +183,7 @@ Token Lexer::parseToken()
     if (lastChar == EOF)
     {
         tokenString.clear();
+        ++tokenLocation.Column;
         return Token::Eof;
     }
 
@@ -222,7 +201,7 @@ Token Lexer::parseIdentifier()
 {
     tokenString = static_cast<char>(lastChar);
 
-    while (isidentifier(lastChar = input->getChar()))
+    while (isidentifier(lastChar = getChar()))
         tokenString += static_cast<char>(lastChar);
 
     // TODO: change to switch or map
@@ -268,7 +247,7 @@ Token Lexer::parseNumber()
     while (isdigit(lastChar))
     {
         tokenString += static_cast<char>(lastChar);
-        lastChar = input->getChar();
+        lastChar = getChar();
     }
 
     if (lastChar != '.') // integer
@@ -278,11 +257,11 @@ Token Lexer::parseNumber()
     else // float
     {
         tokenString += '.';
-        lastChar = input->getChar();
+        lastChar = getChar();
         while (isdigit(lastChar))
         {
             tokenString += static_cast<char>(lastChar);
-            lastChar = input->getChar();
+            lastChar = getChar();
         }
         if (lastChar == 'e')
         {
@@ -307,10 +286,10 @@ Token Lexer::parseChar()
 {
     tokenString.clear();
 
-    lastChar = input->getChar();
+    lastChar = getChar();
     if (lastChar == '\\')
     {
-        lastChar = input->getChar();
+        lastChar = getChar();
         switch (lastChar)
         {
         case '\'': tokenString = '\''; break;
@@ -319,7 +298,7 @@ Token Lexer::parseChar()
         case 't': tokenString = '\t'; break;
         default: return error("invalid escape character");
         }
-        lastChar = input->getChar();
+        lastChar = getChar();
     }
     else if (lastChar == '\'')
     {
@@ -328,7 +307,7 @@ Token Lexer::parseChar()
     else
     {
         tokenString = static_cast<char>(lastChar);
-        lastChar    = input->getChar();
+        lastChar    = getChar();
     }
 
     if (lastChar != '\'')
@@ -336,7 +315,7 @@ Token Lexer::parseChar()
         return error("unclosed character");
     }
 
-    lastChar = input->getChar();
+    lastChar = getChar();
     return Token::Char;
 }
 
@@ -345,12 +324,12 @@ Token Lexer::parseString()
 {
     tokenString.clear();
 
-    lastChar = input->getChar();
+    lastChar = getChar();
     while (lastChar != '"')
     {
         if (lastChar == '\\')
         {
-            lastChar = input->getChar();
+            lastChar = getChar();
             switch (lastChar)
             {
             case '"': tokenString += '"'; break;
@@ -368,10 +347,10 @@ Token Lexer::parseString()
         {
             tokenString += static_cast<char>(lastChar);
         }
-        lastChar = input->getChar();
+        lastChar = getChar();
     }
 
-    lastChar = input->getChar();
+    lastChar = getChar();
     return Token::String;
 }
 
@@ -384,7 +363,7 @@ Token Lexer::parseOperator(bool continuation)
 
     tokenString += static_cast<char>(lastChar);
 
-    while (isoperator(lastChar = input->getChar()))
+    while (isoperator(lastChar = getChar()))
     {
         tokenString += static_cast<char>(lastChar);
     }
@@ -402,7 +381,7 @@ Token Lexer::parseComment()
 {
     tokenString.clear();
 
-    lastChar = input->getChar();
+    lastChar = getChar();
 
     // multiline could be any char you choose?
     // if this how do you single line?
@@ -410,7 +389,7 @@ Token Lexer::parseComment()
 
     if (lastChar == '{') // multiline comment
     {
-        lastChar      = input->getChar();
+        lastChar      = getChar();
         char exitChar = '}';
         while (true)
         {
@@ -433,14 +412,14 @@ Token Lexer::parseComment()
             {
                 exitChar = '}';
             }
-            lastChar = input->getChar();
+            lastChar = getChar();
         }
     }
     else // single line
     {
         while (lastChar != '\n' && lastChar != EOF)
         {
-            lastChar = input->getChar();
+            lastChar = getChar();
         }
     }
 

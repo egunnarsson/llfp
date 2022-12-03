@@ -1,20 +1,15 @@
 #pragma once
 
-#pragma warning(push, 0)
-
-#include <llvm/ADT/StringRef.h>
-
-#pragma warning(pop)
-
-
 namespace llfp
 {
 
+class Source;
+
 struct SourceLocation
 {
-    int             Line;
-    int             Column;
-    llvm::StringRef File;
+    int           Line;
+    int           Column;
+    const Source* File;
 };
 
 } // namespace llfp

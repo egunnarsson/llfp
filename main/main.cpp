@@ -19,22 +19,28 @@
 
 #pragma warning(pop)
 
+#include <fstream>
+#include <iostream>
+#include <sstream>
 #include <string>
 
 
 static llvm::cl::list<std::string> InputFilenames(llvm::cl::Positional, llvm::cl::desc("<Input files>"), llvm::cl::ZeroOrMore);
 static llvm::cl::opt<std::string>  OutputFilename("o", llvm::cl::desc("Output filename"), llvm::cl::value_desc("filename"));
 
-std::unique_ptr<llfp::lex::Input> makeInput(const std::string& inputFilename)
+llfp::Source makeInput(const std::string& inputFilename)
 {
+    std::ostringstream buffer;
     if (inputFilename == "-")
     {
-        return std::make_unique<llfp::lex::StdinInput>();
+        buffer << std::cin.rdbuf();
     }
     else
     {
-        return std::make_unique<llfp::lex::FileInput>(inputFilename.c_str());
+        std::ifstream fileStream{ inputFilename, std::ios::in | std::ios::binary };
+        buffer << fileStream.rdbuf();
     }
+    return { inputFilename, buffer.str() };
 }
 
 template<class T>
@@ -127,8 +133,8 @@ llfp::ReturnCode llfp_main(int argc, char* argv[])
         return llfp::ReturnCode::CommandLineArgumentError;
     }
 
-    llfp::ReturnCode                               returnCode = llfp::ReturnCode::NoError;
-    std::vector<std::unique_ptr<llfp::lex::Input>> inputFiles;
+    llfp::ReturnCode          returnCode = llfp::ReturnCode::NoError;
+    std::vector<llfp::Source> inputFiles;
     for (auto& inputFile : InputFilenames)
     {
         try

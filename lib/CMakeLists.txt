@@ -10,10 +10,12 @@ add_library(llfp_lib
 	JIT.cpp
 	Lexer.cpp
 	llfp.cpp
+	Log.cpp
 	MathModule.cpp
 	Module.cpp
 	Parser.cpp
 	ResolveIdentifiers.cpp
+	Source.cpp
 	Type/TypeContext.cpp
 	Type/TypeInference.cpp
 	Type/TypeInstance.cpp
@@ -30,11 +32,12 @@ add_library(llfp_lib
 	include/JIT.h
 	include/Lexer.h
 	include/llfp.h
-	include/MathModule.h
 	include/Log.h
+	include/MathModule.h
 	include/Module.h
 	include/Parser.h
 	include/ResolveIdentifiers.h
+	include/Source.h
 	include/String/StringConstants.h
 	include/Type/TypeContext.h
 	include/Type/TypeInference.h

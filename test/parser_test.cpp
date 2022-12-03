@@ -92,7 +92,7 @@ std::ostream& operator<<(std::ostream& os, const ModulePtr& ptr)
 
 auto Parse(const char* string)
 {
-    auto input = llfp::lex::StringInput(string);
+    auto input = llfp::Source("string", string);
     auto lexer = llfp::lex::Lexer(&input);
     auto parser = llfp::parse::Parser(&lexer);
     return ModulePtr(parser.parse());
@@ -102,7 +102,17 @@ std::string ParseError(const char* string)
 {
     testing::internal::CaptureStderr();
     Parse(string);
-    return testing::internal::GetCapturedStderr();
+    const auto msg = testing::internal::GetCapturedStderr();
+    if (msg.size() < 2)
+    {
+        return {};
+    }
+    const auto pos = msg.find_last_of('\n', msg.size() - 2);
+    if (pos == std::string::npos)
+    {
+        return {};
+    }
+    return msg.substr(pos + 1);
 }
 
 auto TypeId(std::string moduleName, std::string name, std::vector<llfp::ast::TypeIdentifier> parameters)
@@ -264,6 +274,11 @@ Make a module m with a function f with exp.
 ModulePtr m_f(std::unique_ptr<llfp::ast::Exp> exp)
 {
     return std::move(ModulePtr().functions({ Function({0,0}, Local, "f","", {}, std::move(exp)) }));
+}
+
+TEST(ParserTest, EmptyInput)
+{
+    EXPECT_EQ(ParseError(""), "string(1,1): expected 'module'\n");
 }
 
 TEST(ParserTest, Imports)

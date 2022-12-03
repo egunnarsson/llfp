@@ -12,11 +12,11 @@
 namespace llfp
 {
 
-#if __cplusplus > 201700L
-#else
-
 namespace detail
 {
+
+#if __cplusplus > 201700L
+#else
 
 inline void logRecursive() {}
 
@@ -27,16 +27,19 @@ void logRecursive(T value, Args&&... args)
     logRecursive(std::forward<Args>(args)...);
 }
 
+#endif
+
+void logSourceLocation(llvm::raw_ostream& out, const SourceLocation& location);
+
 } // namespace detail
 
-#endif
 
 // Log function
 
 template<class... Args>
 void Log(llvm::raw_ostream& out, const SourceLocation& location, Args&&... args)
 {
-    out << location.File << '(' << location.Line << ',' << location.Column << "): ";
+    detail::logSourceLocation(out, location);
 #if __cplusplus > 201700L
     (out << ... << args) << '\n';
 #else

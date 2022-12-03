@@ -3,6 +3,7 @@
 #include "Codegen.h"
 #include "Lexer.h"
 #include "Module.h"
+#include "Source.h"
 
 #pragma warning(push, 0)
 
@@ -40,7 +41,7 @@ struct CompiledModule
     std::unique_ptr<codegen::CodeGenerator> codeGenerator;
 };
 
-std::vector<CompiledModule> compile(const std::vector<std::unique_ptr<lex::Input>>& sourceFiles);
+std::vector<CompiledModule> compile(const std::vector<Source>& sources);
 
 // used for future Language Server
 // llfp::TaggedAst parse(std::string source);

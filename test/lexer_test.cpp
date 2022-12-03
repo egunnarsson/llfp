@@ -1,5 +1,6 @@
 
 #include "Lexer.h"
+#include "SourceFile.h"
 
 #include "gtest/gtest.h"
 
@@ -45,7 +46,7 @@ testing::AssertionResult Parse(const char*, const char*, const char *string, std
         return testing::AssertionFailure() << "empty tokens list";
     }
     
-    StringInput input(string);
+    llfp::Source input("string", string);
     Lexer lexer(&input);
     int ok = 0;
     for (auto token : tokens)
@@ -108,6 +109,14 @@ testing::AssertionResult Parse1(const char*, const char*, const char*, const cha
 TEST(LexerTest, StringInput)
 {
     //EXPECT_TRUE(false) << "this";
+}
+
+TEST(LexerTest, EmptyInput)
+{
+    llfp::Source input("string", "");
+    Lexer        lexer(&input);
+    EXPECT_EQ(lexer.getToken(), Token::Eof);
+    EXPECT_EQ(lexer.nextToken(), Token::Eof);
 }
 
 TEST(LexerTest, Tokens)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common/SourceLocation.h"
+#include "Source.h"
 
 #pragma warning(push, 0)
 
@@ -8,7 +9,6 @@
 
 #pragma warning(pop)
 
-#include <stdio.h>
 #include <string>
 
 namespace llfp::lex
@@ -59,95 +59,21 @@ enum class Token
     Comment,
 };
 
-class Input
-{
-    SourceLocation location;
-
-public:
-
-    Input(llvm::StringRef inputFile)
-        : location{ 1, 0, inputFile }
-    {}
-    virtual ~Input() {}
-
-    int            getChar();
-    // mark() ? to mark start of token
-    SourceLocation getLocation() const { return location; };
-
-protected:
-
-    // "internal"
-    virtual int getCharInt() = 0;
-};
-
-class StringInput : public Input
-{
-    const char* input;
-
-public:
-
-    StringInput(const char* _input)
-        : Input("string"),
-          input(_input)
-    {
-    }
-    virtual ~StringInput() {}
-
-protected:
-
-    int getCharInt() override
-    {
-        if (*input == 0)
-        {
-            return EOF;
-        }
-        else
-        {
-            return (unsigned char)*(input++);
-        }
-    }
-};
-
-class FileInput : public Input
-{
-    FILE* file;
-
-public:
-
-    FileInput(const char* fileName_);
-    virtual ~FileInput();
-
-protected:
-
-    int getCharInt() override;
-};
-
-class StdinInput : public Input
-{
-public:
-
-    StdinInput()
-        : Input("stdin")
-    {}
-    virtual ~StdinInput() {}
-
-protected:
-
-    int getCharInt() override;
-};
-
 class Lexer
 {
-    Input*         input;
+    const Source*  source;
+    SourceIterator iterator;
+    int            lastChar;
+
     Token          currentToken;
     SourceLocation tokenLocation;
     std::string    tokenString;
-    int            lastChar;
-    bool           skipComments = true;
+
+    bool skipComments = true;
 
 public:
 
-    Lexer(Input* input);
+    Lexer(const Source* source);
 
     // should be llvm::StringLiteral, except testing uses testing::Message << operator
     static constexpr const char* tokenName(Token token)
@@ -198,6 +124,9 @@ public:
     SourceLocation     getLocation() const;
 
 private:
+
+    // TODO use iterator instead
+    int getChar();
 
     Token parseToken();
     Token error(const char* msg);

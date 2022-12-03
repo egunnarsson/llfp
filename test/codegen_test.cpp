@@ -12,8 +12,7 @@
 
 std::vector<llfp::CompiledModule> compile(const char *string)
 {
-    std::vector<std::unique_ptr<llfp::lex::Input>> input;
-    input.push_back(std::make_unique<llfp::lex::StringInput>(string));
+    std::vector<llfp::Source> input = { llfp::Source{ "string", string } };
     return llfp::compile(input);
 }
 
@@ -21,16 +20,26 @@ std::string compileError(const char *string)
 {
     testing::internal::CaptureStderr();
     EXPECT_THROW(compile(string), llfp::ReturnCode);
-    return testing::internal::GetCapturedStderr();
+    const auto msg = testing::internal::GetCapturedStderr();
+    if (msg.size() < 2)
+    {
+        return {};
+    }
+    const auto pos = msg.find_last_of('\n', msg.size() - 2);
+    if (pos == std::string::npos)
+    {
+        return {};
+    }
+    return msg.substr(pos + 1);
 }
 
 template<size_t N>
 std::vector<llfp::CompiledModule> compile(std::array<const char*, N> source)
 {
-    std::vector<std::unique_ptr<llfp::lex::Input>> inputs;
+    std::vector<llfp::Source> inputs;
     for (size_t i = 0; i < N; i++)
     {
-        inputs.push_back(std::make_unique<llfp::lex::StringInput>(source[i]));
+        inputs.push_back({ "string", source[i] });
     }
 
     return llfp::compile(inputs);
