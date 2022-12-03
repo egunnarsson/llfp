@@ -28,17 +28,28 @@
 static llvm::cl::list<std::string> InputFilenames(llvm::cl::Positional, llvm::cl::desc("<Input files>"), llvm::cl::ZeroOrMore);
 static llvm::cl::opt<std::string>  OutputFilename("o", llvm::cl::desc("Output filename"), llvm::cl::value_desc("filename"));
 
-llfp::Source makeInput(const std::string& inputFilename)
+llfp::Source readInput(const std::string& inputFilename)
 {
     std::ostringstream buffer;
-    if (inputFilename == "-")
+    try
     {
-        buffer << std::cin.rdbuf();
+        if (inputFilename == "-")
+        {
+            std::cin.exceptions(std::ios::badbit | std::ios::failbit);
+            buffer << std::cin.rdbuf();
+        }
+        else
+        {
+            std::ifstream fileStream;
+            fileStream.exceptions(std::ios::badbit | std::ios::failbit);
+            fileStream.open(inputFilename, std::ios::in | std::ios::binary);
+            buffer << fileStream.rdbuf();
+        }
     }
-    else
+    catch (const std::ifstream::failure& e)
     {
-        std::ifstream fileStream{ inputFilename, std::ios::in | std::ios::binary };
-        buffer << fileStream.rdbuf();
+        // e.what() does not seem to return anything useful
+        throw llfp::Error(std::string{ std::strerror(errno) } + " (" + inputFilename + ')');
     }
     return { inputFilename, buffer.str() };
 }
@@ -139,7 +150,7 @@ llfp::ReturnCode llfp_main(int argc, char* argv[])
     {
         try
         {
-            inputFiles.push_back(makeInput(inputFile));
+            inputFiles.push_back(readInput(inputFile));
         }
         catch (const llfp::Error& e)
         {
