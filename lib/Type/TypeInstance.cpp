@@ -174,7 +174,7 @@ TypeInstanceBasic::TypeInstanceBasic(llvm::StringLiteral name, llvm::Type* llvmT
 }
 
 llvm::Type* TypeInstanceBasic::llvmType() const { return llvmType_; }
-bool        TypeInstanceBasic::isStructType() const { return false; }
+bool        TypeInstanceBasic::isBasicType() const { return true; }
 bool        TypeInstanceBasic::isRefType() const { return false; }
 bool        TypeInstanceBasic::containsRefTypes() const { return false; }
 
@@ -184,7 +184,7 @@ llvm::TypeSize TypeInstanceBasic::getSize(const llvm::Module* llvmModule, size_t
     return llvmModule->getDataLayout().getTypeAllocSize(llvmType_);
 }
 
-TypeInstanceStruct::TypeInstanceStruct(Identifier identifier, const ImportedModule* module_, const ast::Data* ast_, llvm::StructType* llvmType, std::vector<std::string> typeClasses)
+TypeInstanceAggregate::TypeInstanceAggregate(Identifier identifier, const ImportedModule* module_, const ast::Data* ast_, llvm::StructType* llvmType, std::vector<std::string> typeClasses)
     : TypeInstance(std::move(identifier), std::move(typeClasses)),
       llvmType_{ llvmType },
       module{ module_ },
@@ -192,7 +192,7 @@ TypeInstanceStruct::TypeInstanceStruct(Identifier identifier, const ImportedModu
 {
 }
 
-std::shared_ptr<hm::TypeConstant> TypeInstanceStruct::getType() const
+std::shared_ptr<hm::TypeConstant> TypeInstanceAggregate::getType() const
 {
     auto   type = TypeInstance::getType();
     size_t i    = 0;
@@ -204,16 +204,16 @@ std::shared_ptr<hm::TypeConstant> TypeInstanceStruct::getType() const
     return type;
 }
 
-const ImportedModule* TypeInstanceStruct::getModule() const
+const ImportedModule* TypeInstanceAggregate::getModule() const
 {
     return module;
 }
 
-llvm::Type* TypeInstanceStruct::llvmType() const { return llvmType_; }
-bool        TypeInstanceStruct::isStructType() const { return true; }
-bool        TypeInstanceStruct::isRefType() const { return false; }
+llvm::Type* TypeInstanceAggregate::llvmType() const { return llvmType_; }
+bool        TypeInstanceAggregate::isBasicType() const { return false; }
+bool        TypeInstanceAggregate::isRefType() const { return false; }
 
-bool TypeInstanceStruct::containsRefTypes() const
+bool TypeInstanceAggregate::containsRefTypes() const
 {
     for (auto& field : fields)
     {
@@ -225,18 +225,18 @@ bool TypeInstanceStruct::containsRefTypes() const
     return false;
 }
 
-TypeInstPtr TypeInstanceStruct::getTypeParameter(size_t index) const
+TypeInstPtr TypeInstanceAggregate::getTypeParameter(size_t index) const
 {
     return parameters.at(index);
 }
 
-llvm::TypeSize TypeInstanceStruct::getSize(const llvm::Module* llvmModule, size_t constructorIndex) const
+llvm::TypeSize TypeInstanceAggregate::getSize(const llvm::Module* llvmModule, size_t constructorIndex) const
 {
     assert(constructorIndex == 0);
     return llvmModule->getDataLayout().getTypeAllocSize(llvmType_);
 }
 
-unsigned int TypeInstanceStruct::getFieldIndex(const std::string& fieldIdentifier) const
+unsigned int TypeInstanceAggregate::getFieldIndex(const std::string& fieldIdentifier) const
 {
     assert(ast->constructors.size() == 1);
     auto& constructor = ast->constructors.front();
@@ -249,7 +249,7 @@ unsigned int TypeInstanceStruct::getFieldIndex(const std::string& fieldIdentifie
     return InvalidIndex;
 }
 
-unsigned int TypeInstanceStruct::getFieldIndex(const std::string& constructorName, const std::string& fieldIdentifier) const
+unsigned int TypeInstanceAggregate::getFieldIndex(const std::string& constructorName, const std::string& fieldIdentifier) const
 {
     if (ast->name != constructorName) { throw Error("unknown constructor"); }
     const auto& astFields = ast->constructors.front().fields;
@@ -262,8 +262,8 @@ unsigned int TypeInstanceStruct::getFieldIndex(const std::string& constructorNam
     return InvalidIndex;
 }
 
-const FieldList& TypeInstanceStruct::getFields() const { return fields; }
-const FieldList& TypeInstanceStruct::getFields(const std::string& constructorName) const
+const FieldList& TypeInstanceAggregate::getFields() const { return fields; }
+const FieldList& TypeInstanceAggregate::getFields(const std::string& constructorName) const
 {
     if (ast->name != constructorName) { throw Error("unknown constructor"); }
     return fields;
@@ -282,7 +282,7 @@ TypeInstPtr findTypeOfTypeVar(const std::string& typeVar, const ast::TypeIdentif
         }
 
         // assert(typeId.parameters.size() == type->getTypeParameterCount());
-        for (unsigned int i = 0; i < typeId.parameters.size(); ++i)
+        for (size_t i = 0; i < typeId.parameters.size(); ++i)
         {
             auto result = find_ref(typeId.parameters[i], type->getTypeParameter(i), find_ref);
             if (result != nullptr) { return result; }
@@ -295,7 +295,7 @@ TypeInstPtr findTypeOfTypeVar(const std::string& typeVar, const ast::TypeIdentif
 
 } // namespace
 
-void TypeInstanceStruct::setFields(FieldList fieldTypes)
+void TypeInstanceAggregate::setFields(FieldList fieldTypes)
 {
     assert(fields.size() == 0);
     assert(parameters.size() == 0);
@@ -361,7 +361,7 @@ const ImportedModule* TypeInstanceVariant::getModule() const
 }
 
 llvm::Type* TypeInstanceVariant::llvmType() const { return llvmType_; }
-bool        TypeInstanceVariant::isStructType() const { return true; }
+bool        TypeInstanceVariant::isBasicType() const { return false; }
 bool        TypeInstanceVariant::isRefType() const { return true; }
 
 bool TypeInstanceVariant::containsRefTypes() const

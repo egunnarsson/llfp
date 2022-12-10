@@ -157,7 +157,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
         llvm::Type*              returnType = nullptr;
         std::vector<llvm::Type*> parameterTypes;
 
-        const bool ptrReturn = types.front()->isStructType();
+        const bool ptrReturn = !types.front()->isBasicType();
 
         if (ptrReturn)
         {
@@ -171,13 +171,13 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
 
         for (auto typeIt = types.begin() + 1; typeIt != types.end(); ++typeIt)
         {
-            if ((*typeIt)->isStructType())
+            if ((*typeIt)->isBasicType())
             {
-                parameterTypes.push_back(llvm::PointerType::get((*typeIt)->llvmType(), 0));
+                parameterTypes.push_back((*typeIt)->llvmType());
             }
             else
             {
-                parameterTypes.push_back((*typeIt)->llvmType());
+                parameterTypes.push_back(llvm::PointerType::get((*typeIt)->llvmType(), 0));
             }
         }
 
@@ -216,7 +216,7 @@ bool CodeGenerator::generateFunctionBody(Function* function)
     llvmBuilder.SetInsertPoint(bb);
 
     // if return type is user type it is returned in first argument
-    size_t argOffset = types[0]->isStructType() ? 1 : 0;
+    size_t argOffset = types[0]->isBasicType() ? 0 : 1;
 
     std::map<std::string, Value> namedValues;
     for (size_t i = 0; i < ast->parameters.size(); ++i)
@@ -238,7 +238,7 @@ bool CodeGenerator::generateFunctionBody(Function* function)
         }
 
         llvm::Value* llvmArg = (llvmFunction->arg_begin() + argOffset + i);
-        if (types[i + 1]->isStructType())
+        if (!types[i + 1]->isBasicType())
         {
             llvmArg = llvmBuilder.CreateLoad(types[i + 1]->llvmType(), llvmArg);
         }
@@ -260,15 +260,15 @@ bool CodeGenerator::generateFunctionBody(Function* function)
 
     if (expGenerator.getResult() != nullptr)
     {
-        if (types[0]->isStructType())
+        if (types[0]->isBasicType())
+        {
+            llvmBuilder.CreateRet(expGenerator.getResult());
+        }
+        else
         {
             auto store = llvmBuilder.CreateStore(expGenerator.getResult(), llvmFunction->arg_begin());
             store->setAlignment(llvm::Align(8));
             llvmBuilder.CreateRetVoid();
-        }
-        else
-        {
-            llvmBuilder.CreateRet(expGenerator.getResult());
         }
 
         return true;
@@ -1074,7 +1074,7 @@ void ExpCodeGenerator::visit(ast::CallExp& exp)
 
             // Returning user type it is done on the stack, function will return void
             llvm::Value* retValue = nullptr;
-            if (expectedType->isStructType())
+            if (!expectedType->isBasicType())
             {
                 retValue = llvmBuilder().CreateAlloca(expectedType->llvmType());
                 arguments.push_back(retValue);
@@ -1101,14 +1101,14 @@ void ExpCodeGenerator::visit(ast::CallExp& exp)
             }
 
             // if return user type, result = load(first arg)
-            if (expectedType->isStructType())
+            if (expectedType->isBasicType())
             {
-                llvmBuilder().CreateCall(function->llvm, arguments);
-                result = llvmBuilder().CreateLoad(expectedType->llvmType(), retValue);
+                result = llvmBuilder().CreateCall(function->llvm, arguments, "call");
             }
             else
             {
-                result = llvmBuilder().CreateCall(function->llvm, arguments, "call");
+                llvmBuilder().CreateCall(function->llvm, arguments);
+                result = llvmBuilder().CreateLoad(expectedType->llvmType(), retValue);
             }
         }
     }
@@ -1405,7 +1405,7 @@ void copy(S* dst, S* src) {
 
 bool CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type) // for struct
 {
-    assert(type->isStructType());
+    assert(!type->isBasicType());
     if (type->isRefType())
     {
         return generateCopyFunctionBodyVariant(type);
@@ -1434,7 +1434,7 @@ bool CodeGenerator::generateCopyFunctionBodyStruct(type::TypeInstPtr type) // fo
 
 bool CodeGenerator::generateCopyFunctionBodyVariant(type::TypeInstPtr type) // for variant
 {
-    if (!type->isStructType()) { return false; }
+    if (type->isBasicType()) { return false; }
 
     auto llvmFunction = getCopyFunction(type);
     auto srcValue     = llvmFunction->arg_begin();

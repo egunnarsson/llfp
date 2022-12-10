@@ -120,7 +120,7 @@ public:
     virtual const ImportedModule*             getModule() const;
 
     virtual llvm::Type* llvmType() const         = 0;
-    virtual bool        isStructType() const     = 0; // rename basic?
+    virtual bool        isBasicType() const     = 0; // rename basic?
     virtual bool        isRefType() const        = 0;
     virtual bool        containsRefTypes() const = 0; // or bool canValueCopy() const;
     virtual TypeInstPtr getTypeParameter(size_t index) const;
@@ -154,14 +154,14 @@ public:
     virtual ~TypeInstanceBasic() = default;
 
     llvm::Type*    llvmType() const override;
-    bool           isStructType() const override;
+    bool           isBasicType() const override;
     bool           isRefType() const override;
     bool           containsRefTypes() const override;
     llvm::TypeSize getSize(const llvm::Module* llvmModule, size_t constructorIndex) const override;
 };
 
 
-class TypeInstanceStruct : public TypeInstance
+class TypeInstanceAggregate : public TypeInstance
 {
     llvm::StructType*        llvmType_;
     const ImportedModule*    module;
@@ -171,14 +171,14 @@ class TypeInstanceStruct : public TypeInstance
 
 public:
 
-    TypeInstanceStruct(Identifier identifier, const ImportedModule* module, const ast::Data* ast, llvm::StructType* llvmType, std::vector<std::string> typeClasses);
-    virtual ~TypeInstanceStruct() = default;
+    TypeInstanceAggregate(Identifier identifier, const ImportedModule* module, const ast::Data* ast, llvm::StructType* llvmType, std::vector<std::string> typeClasses);
+    virtual ~TypeInstanceAggregate() = default;
 
     std::shared_ptr<hm::TypeConstant> getType() const override;
     const ImportedModule*             getModule() const override;
 
     llvm::Type* llvmType() const override;
-    bool        isStructType() const override;
+    bool        isBasicType() const override;
     bool        isRefType() const override;
     bool        containsRefTypes() const override;
     TypeInstPtr getTypeParameter(size_t index) const override;
@@ -216,7 +216,7 @@ public:
     const ImportedModule*             getModule() const override;
 
     llvm::Type* llvmType() const override;
-    bool        isStructType() const override;
+    bool        isBasicType() const override;
     bool        isRefType() const override;
     bool        containsRefTypes() const override;
     TypeInstPtr getTypeParameter(size_t index) const override;

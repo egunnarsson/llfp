@@ -199,10 +199,10 @@ std::vector<TypeInstPtr> TypeContext::getFieldTypes(llfp::DataAst ast, const std
     return result;
 }
 
-TypeInstPtr TypeContext::makeTypeInstanceStruct(const Identifier& identifier, llfp::DataAst ast, std::vector<std::string> typeClasses, const std::map<std::string, Identifier>& typeVariables)
+TypeInstPtr TypeContext::makeTypeInstanceAggregate(const Identifier& identifier, llfp::DataAst ast, std::vector<std::string> typeClasses, const std::map<std::string, Identifier>& typeVariables)
 {
     auto llvmType = llvm::StructType::create(llvmContext, "");
-    auto tmpPtr   = std::make_unique<TypeInstanceStruct>(identifier, ast.importedModule, ast.data, llvmType, typeClasses);
+    auto tmpPtr   = std::make_unique<TypeInstanceAggregate>(identifier, ast.importedModule, ast.data, llvmType, typeClasses);
     auto typePtr  = tmpPtr.get();
     auto it2      = types.insert({ identifier, std::move(tmpPtr) });
     assert(it2.second);
@@ -276,7 +276,7 @@ TypeInstPtr TypeContext::getType(const Identifier& identifier)
 
         if (ast.data->constructors.size() == 1)
         {
-            return makeTypeInstanceStruct(identifier, ast, typeClasses, typeVariables);
+            return makeTypeInstanceAggregate(identifier, ast, typeClasses, typeVariables);
         }
         else
         {

@@ -10,7 +10,7 @@ namespace {
 
 auto Parse(const char* string)
 {
-    auto input = llfp::lex::StringInput(string);
+    auto input = llfp::Source("string", string);
     auto lexer = llfp::lex::Lexer(&input);
     auto parser = llfp::parse::Parser(&lexer);
     auto astPtr = parser.parse();

@@ -1,6 +1,6 @@
 
 #include "Lexer.h"
-#include "SourceFile.h"
+#include "Source.h"
 
 #include "gtest/gtest.h"
 
