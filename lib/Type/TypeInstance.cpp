@@ -327,6 +327,13 @@ void TypeInstanceAggregate::setFields(FieldList fieldTypes)
 }
 
 
+llvm::Type* TypeInstanceVariant::getEnumType(llvm::LLVMContext& context, const TypeInstance* type)
+{
+    // c++-20
+    //auto integerSize = std::bit_width(type->getConstructors().size())
+    return llvm::IntegerType::getInt32Ty(context);
+}
+
 TypeInstanceVariant::TypeInstanceVariant(
     Identifier               identifier,
     llvm::PointerType*       llvmType,

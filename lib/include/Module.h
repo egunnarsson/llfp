@@ -42,7 +42,7 @@ public:
     FunDeclAst getFunctionDecl(const std::string& name) override;
     DataAst    getType(const std::string& name) const override;
 
-    std::string getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const override;
+    std::string getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const override;
     std::string getMangledName(const ast::Data* data) const override;
     std::string getMangledName(const ast::Data* data, size_t constructorIndex) const override;
     std::string getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const override;
@@ -72,7 +72,7 @@ public:
     FunAst             getFunction(const std::string& name) override;
     FunDeclAst         getFunctionDecl(const std::string& name) override;
 
-    std::string getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const override;
+    std::string getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const override;
     std::string getMangledName(const ast::Data* data) const override;
     std::string getMangledName(const ast::Data* data, size_t constructorIndex) const override;
     std::string getExportedName(const ast::Function* function) const override;

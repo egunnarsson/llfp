@@ -152,7 +152,7 @@ DataAst MathModule::getType(const std::string& name) const
     return { nullptr, nullptr };
 }
 
-std::string MathModule::getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const
+std::string MathModule::getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const
 {
     assert(types.size() <= 2 && types.size() > 0);
     auto&      typeName = types[0]->identifier().name.name;

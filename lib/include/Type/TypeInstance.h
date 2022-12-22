@@ -119,8 +119,9 @@ public:
     const Identifier&                         identifier() const;
     virtual const ImportedModule*             getModule() const;
 
+    // Type used to store this type in another aggregate or on the stack
     virtual llvm::Type* llvmType() const         = 0;
-    virtual bool        isBasicType() const     = 0; // rename basic?
+    virtual bool        isBasicType() const      = 0;
     virtual bool        isRefType() const        = 0;
     virtual bool        containsRefTypes() const = 0; // or bool canValueCopy() const;
     virtual TypeInstPtr getTypeParameter(size_t index) const;
@@ -133,8 +134,6 @@ public:
     bool isFloating() const;
     bool isSigned() const;
 
-    // virtual unsigned int constructorCount() const;
-    // const std::string& getConstructor(unsigned int index) const;
     virtual const ConstructorList& getConstructors() const;
 
     virtual unsigned int     getFieldIndex(const std::string& fieldIdentifier) const;
@@ -203,6 +202,8 @@ class TypeInstanceVariant : public TypeInstance
     std::vector<TypeInstPtr> parameters;
 
 public:
+
+    static llvm::Type* getEnumType(llvm::LLVMContext& context, const TypeInstance* type);
 
     TypeInstanceVariant(
         Identifier               identifier,

@@ -133,9 +133,9 @@ bool generateTypeFunctions(std::vector<CompiledModule>& result, type::TypeInstPt
         return false;
     }
     auto moduleType = codeGenerator->getTypeContext()->getType(origType->identifier());
-    auto copyOk     = codeGenerator->generateCopyFunctionBody(moduleType);
+    bool releaseOk  = codeGenerator->generateReleaseFunctionBody(moduleType);
     auto deleteOk   = codeGenerator->generateDeleteFunctionBody(moduleType);
-    return copyOk && deleteOk;
+    return releaseOk && deleteOk;
 }
 
 } // namespace

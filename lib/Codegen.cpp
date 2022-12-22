@@ -1278,34 +1278,24 @@ llvm::Value* ExpCodeGenerator::getResult()
     return result;
 }
 
-llvm::Function* CodeGenerator::getCopyFunction(type::TypeInstPtr type)
+llvm::Function* CodeGenerator::getReleaseFunction(type::TypeInstPtr type)
 {
-    auto it = copyFunctions.find(type);
-    if (it != copyFunctions.end())
+    auto it = releaseFunctions.find(type);
+    if (it != releaseFunctions.end())
     {
         return it->second;
     }
 
     driver->push(type);
 
-    llvm::FunctionType* functionType = nullptr;
-    if (type->isRefType())
-    {
-        llvm::Type*                returnType     = type->llvmType();
-        std::array<llvm::Type*, 1> parameterTypes = { type->llvmType() };
-        functionType                              = llvm::FunctionType::get(returnType, parameterTypes, false);
-    }
-    else
-    {
-        llvm::Type*                returnType     = llvm::Type::getVoidTy(*llvmContext);
-        llvm::Type*                typePtrType    = type->llvmType()->getPointerTo();
-        std::array<llvm::Type*, 2> parameterTypes = { typePtrType, typePtrType };
-        functionType                              = llvm::FunctionType::get(returnType, parameterTypes, false);
-    }
+    auto name = sourceModule->getMangledName("release", type);
 
-    auto name         = sourceModule->getMangledName("copy", type);
+    llvm::Type*                returnType     = llvm::Type::getVoidTy(*llvmContext);
+    std::array<llvm::Type*, 1> parameterTypes = { llvm::PointerType::get(*llvmContext, 0) };
+
+    auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
     auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
-    copyFunctions.insert({ type, llvmFunction });
+    releaseFunctions.insert({ type, llvmFunction });
     return llvmFunction;
 }
 
@@ -1322,7 +1312,7 @@ llvm::Function* CodeGenerator::getDeleteFunction(type::TypeInstPtr type)
     auto name = sourceModule->getMangledName("delete", type);
 
     llvm::Type*                returnType     = llvm::Type::getVoidTy(*llvmContext);
-    std::array<llvm::Type*, 1> parameterTypes = { type->llvmType() };
+    std::array<llvm::Type*, 1> parameterTypes = { llvm::PointerType::get(*llvmContext, 0) };
 
     auto functionType = llvm::FunctionType::get(returnType, parameterTypes, false);
     auto llvmFunction = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, name, llvmModule);
@@ -1371,154 +1361,139 @@ void generateVariantSwitch(llvm::IRBuilder<>& llvmBuilder, llvm::Value* value, t
 } // namespace
 
 /*
-struct T {
-    int type;
-    union {
-        struct a {int x; int y ;};
-        struct b {foo* ptr;};
-        struct c {T* ptr2;};
-    };
+
+template<class T>
+struct RefT {
+    int count;
+    T value;
 };
 
-T* copy(T* src) {
-    T* dst = malloc(sizeof(T));
-    dst->type = src->type;
-    switch (src->type) {
-        case 0: dst->x = src->x; dst->y = src->y; break;
-        case 1: dst->ptr = copy(src->ptr); break;
-        case 2: dst->ptr2 = copy(src->ptr2); break;
-        default: abort();
+void release(RefT* ptr) {
+    --(ptr->count);
+    if (ptr->count == 0) {
+        release(&ptr->value);
+        free(ptr);
     }
-    return dst;
+}
+
+struct S2 {
+    RefT* v;
 }
 
 struct S {
-    int i;
-    T t;
-};
-
-void copy(S* dst, S* src) {
-    dst->i = src->i;
-    dst->t = copy(src->t);
+    float x;
+    RefT* v;
+    S2 s2;
 }
+
+void release(S* s) {
+    release(s->v);
+    release(&s->s2);
+}
+
 */
 
-bool CodeGenerator::generateCopyFunctionBody(type::TypeInstPtr type) // for struct
+bool CodeGenerator::generateReleaseFunctionBody(type::TypeInstPtr type)
 {
-    assert(!type->isBasicType());
-    if (type->isRefType())
-    {
-        return generateCopyFunctionBodyVariant(type);
-    }
-    return generateCopyFunctionBodyStruct(type);
-}
-
-bool CodeGenerator::generateCopyFunctionBodyStruct(type::TypeInstPtr type) // for struct
-{
-    auto llvmFunction = getCopyFunction(type);
-    auto dstValue     = llvmFunction->arg_begin();
-    auto srcValue     = llvmFunction->arg_begin() + 1;
+    auto llvmFunction = getReleaseFunction(type);
+    auto inValue      = llvmFunction->arg_begin();
 
     auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
     llvmBuilder.SetInsertPoint(entryBB);
 
-    for (auto it : llvm::enumerate(type->getFields()))
-    {
-        generateFieldCopy(type->llvmType(), it.index(), it.value(), dstValue, srcValue);
-    }
+    auto int32Ty = llvm::Type::getInt32Ty(*llvmContext);
 
+    auto oneValue     = llvm::ConstantInt::get(int32Ty, 1);
+    auto counterValue = llvmBuilder.CreateLoad(int32Ty, inValue);
+    auto compareValue = llvmBuilder.CreateICmpSLE(counterValue, oneValue);
+
+    auto deleteBranch = llvm::BasicBlock::Create(*llvmContext, "delete", llvmFunction);
+    auto decBranch    = llvm::BasicBlock::Create(*llvmContext, "dec", llvmFunction);
+
+    llvmBuilder.CreateCondBr(compareValue, deleteBranch, decBranch);
+
+    llvmBuilder.SetInsertPoint(deleteBranch);
+    auto deleteFunction = getDeleteFunction(type);
+    auto valueType      = type->isRefType() ? type::TypeInstanceVariant::getEnumType(*llvmContext, type) : type->llvmType();
+    auto valuePtr       = llvmBuilder.CreateGEP(llvm::StructType::create({ int32Ty, valueType }), inValue, { 0, 1 });
+    llvmBuilder.CreateCall(deleteFunction, { valuePtr });
+    llvmBuilder.CreateRetVoid();
+
+    llvmBuilder.SetInsertPoint(decBranch);
+    auto decValue = llvmBuilder.CreateSub(counterValue, oneValue);
+    llvmBuilder.CreateStore(decValue, inValue); // make sure inValue is ptr to int32?
     llvmBuilder.CreateRetVoid();
 
     return true;
 }
 
-bool CodeGenerator::generateCopyFunctionBodyVariant(type::TypeInstPtr type) // for variant
+bool CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type)
 {
-    if (type->isBasicType()) { return false; }
-
-    auto llvmFunction = getCopyFunction(type);
-    auto srcValue     = llvmFunction->arg_begin();
-
-    auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
-    auto retBB   = llvm::BasicBlock::Create(*llvmContext, "return", llvmFunction);
-    llvmBuilder.SetInsertPoint(entryBB);
-
-    std::vector<llvm::BasicBlock*> constructorBlocks;
-    std::vector<llvm::Value*>      constructorValues;
-    for (auto constructorIt : llvm::enumerate(type->getConstructors()))
+    if (type->getConstructors().size() == 1)
     {
-        auto block = llvm::BasicBlock::Create(*llvmContext, llvm::Twine{ "constructor" } + llvm::Twine{ constructorIt.index() }, llvmFunction);
-        llvmBuilder.SetInsertPoint(block);
+        return generateDeleteFunctionBodyAggregate(type);
+    }
+    else
+    {
+        return generateDeleteFunctionBodyVariant(type);
+    }
+}
 
-        // call malloc
-        auto intPtrType     = llvmModule->getDataLayout().getIntPtrType(*llvmContext);
-        auto returnTypeSize = type->getSize(llvmModule, constructorIt.index());
-        auto sizeValue      = llvm::ConstantInt::get(intPtrType, returnTypeSize.getFixedSize());
-        auto dstValue       = llvm::CallInst::CreateMalloc(llvmBuilder.GetInsertBlock(), intPtrType, constructorIt.value().llvmType_, sizeValue, nullptr, nullptr, "new");
+void CodeGenerator::generateDeleteConstructorBlock(llvm::Value* argValue, llvm::BasicBlock* block, const llfp::type::TypeConstructor& constructor)
+{
+    llvmBuilder.SetInsertPoint(block);
 
-        auto variantType = constructorIt.value().llvmType_;
+    auto variantType = constructor.llvmType_;
 
-        for (auto fieldIt : llvm::enumerate(constructorIt.value().fields))
+    const size_t fieldCount = constructor.fields.size();
+    for (size_t fieldIndex = 0; fieldIndex < fieldCount; ++fieldIndex)
+    {
+        auto fieldType = constructor.fields[fieldIndex];
+        if (fieldType->isRefType() || fieldType->containsRefTypes())
         {
-            generateFieldCopy(variantType, fieldIt.index(), fieldIt.value(), dstValue, srcValue);
+            std::array<llvm::Value*, 2> idxList = {
+                llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), 0),
+                llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), fieldIndex + 1)
+            };
+            auto fieldPtr = llvmBuilder.CreateGEP(variantType, argValue, idxList, "");
+            if (fieldType->isRefType())
+            {
+                // call release
+                auto fieldValue      = llvmBuilder.CreateLoad(fieldType->llvmType(), fieldPtr);
+                auto releaseFunction = getReleaseFunction(fieldType);
+                llvmBuilder.CreateCall(releaseFunction, fieldValue);
+            }
+            else if (fieldType->containsRefTypes())
+            {
+                // call delete
+                auto deleteFunction = getDeleteFunction(fieldType);
+                llvmBuilder.CreateCall(deleteFunction, fieldPtr);
+            }
         }
-
-        llvmBuilder.CreateBr(retBB);
-
-        constructorBlocks.push_back(block);
-        constructorValues.push_back(dstValue);
     }
+}
 
-    llvmBuilder.SetInsertPoint(entryBB);
-    generateVariantSwitch(llvmBuilder, srcValue, type, constructorBlocks);
+bool CodeGenerator::generateDeleteFunctionBodyAggregate(type::TypeInstPtr type)
+{
+    auto llvmFunction = getDeleteFunction(type);
+    auto argValue     = llvmFunction->arg_begin();
 
-    llvmBuilder.SetInsertPoint(retBB);
-    auto phiValue = llvmBuilder.CreatePHI(llvmFunction->getReturnType(), 2, "copyPhi");
-    for (const auto& [value, block] : llvm::zip(constructorValues, constructorBlocks))
+    auto block = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
+
+    generateDeleteConstructorBlock(argValue, block, type->getConstructors().front());
+
+    // call free and return
+    if (type->isRefType())
     {
-        phiValue->addIncoming(value, block);
+        llvm::CallInst::CreateFree(argValue, llvmBuilder.GetInsertBlock());
     }
-    llvmBuilder.CreateRet(phiValue);
+    llvmBuilder.CreateRetVoid();
 
     return true;
 }
 
-void CodeGenerator::generateFieldCopy(llvm::Type* parentType, size_t fieldIndex, type::TypeInstPtr fieldType, llvm::Value* dstValue, llvm::Value* srcValue)
+bool CodeGenerator::generateDeleteFunctionBodyVariant(type::TypeInstPtr type)
 {
-    std::array<llvm::Value*, 2> idxList = {
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), 0),
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), fieldIndex + 1)
-    };
-    auto fieldPtr = llvmBuilder.CreateGEP(parentType, srcValue, idxList, "");
-    auto dstPtr   = llvmBuilder.CreateGEP(parentType, dstValue, idxList, "");
-
-    auto fieldValue = llvmBuilder.CreateLoad(fieldType->llvmType(), fieldPtr);
-    if (fieldType->isRefType())
-    {
-        auto                        copyFunction = getCopyFunction(fieldType);
-        std::array<llvm::Value*, 1> arguments{ fieldValue };
-        auto                        fieldDstValue = llvmBuilder.CreateCall(copyFunction, arguments, "");
-        llvmBuilder.CreateStore(fieldDstValue, dstPtr);
-    }
-    else if (fieldType->containsRefTypes())
-    {
-        auto                        copyFunction = getCopyFunction(fieldType);
-        auto                        allocaValue  = llvmBuilder.CreateAlloca(fieldType->llvmType());
-        std::array<llvm::Value*, 2> arguments{ allocaValue, fieldPtr };
-        /*auto fieldDstValue =*/llvmBuilder.CreateCall(copyFunction, arguments, "");
-        auto fieldDstValue = llvmBuilder.CreateLoad(fieldType->llvmType(), allocaValue);
-        llvmBuilder.CreateStore(fieldDstValue, dstPtr);
-    }
-    else
-    {
-        llvmBuilder.CreateStore(fieldValue, dstPtr);
-    }
-}
-
-bool CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type) // for variant types
-{
-    assert(type->isRefType());
-
     auto llvmFunction = getDeleteFunction(type);
     auto argValue     = llvmFunction->arg_begin();
 
@@ -1529,35 +1504,7 @@ bool CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type) // for va
     for (auto& constructor : type->getConstructors())
     {
         auto block = llvm::BasicBlock::Create(*llvmContext, llvm::Twine{ "constructor" } + llvm::Twine{ constructorBlocks.size() }, llvmFunction);
-        llvmBuilder.SetInsertPoint(block);
-
-        auto variantType = constructor.llvmType_;
-
-        const size_t fieldCount = constructor.fields.size();
-        for (size_t fieldIndex = 0; fieldIndex < fieldCount; ++fieldIndex)
-        {
-            auto fieldType = constructor.fields[fieldIndex];
-            if (fieldType->isRefType() || type->containsRefTypes())
-            {
-                std::array<llvm::Value*, 2> idxList = {
-                    llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), 0),
-                    llvm::ConstantInt::get(llvm::Type::getInt32Ty(*llvmContext), fieldIndex + 1)
-                };
-                llvm::Value* callArgValue = nullptr;
-                auto         fieldPtr     = llvmBuilder.CreateGEP(variantType, callArgValue, idxList, "");
-                if (fieldType->isRefType())
-                {
-                    callArgValue = llvmBuilder.CreateLoad(fieldType->llvmType(), fieldPtr);
-                }
-                else
-                {
-                    callArgValue = fieldPtr;
-                }
-                auto deleteFunction = getDeleteFunction(fieldType);
-                llvmBuilder.CreateCall(deleteFunction, callArgValue);
-            }
-        }
-
+        generateDeleteConstructorBlock(argValue, block, constructor);
         llvmBuilder.CreateBr(retBB);
     }
 
@@ -1566,7 +1513,10 @@ bool CodeGenerator::generateDeleteFunctionBody(type::TypeInstPtr type) // for va
 
     // call free and return
     llvmBuilder.SetInsertPoint(retBB);
-    llvm::CallInst::CreateFree(argValue, llvmBuilder.GetInsertBlock());
+    if (type->isRefType())
+    {
+        llvm::CallInst::CreateFree(argValue, llvmBuilder.GetInsertBlock());
+    }
     llvmBuilder.CreateRetVoid();
 
     return true;

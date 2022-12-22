@@ -138,7 +138,7 @@ DataAst SourceModule::getType(const std::string& name) const
 }
 
 // [%@][-a-zA-Z$._][-a-zA-Z$._0-9]*
-std::string SourceModule::getMangledName(const ast::Function* function, const std::vector<const type::TypeInstance*>& types) const
+std::string SourceModule::getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const
 {
     assert(!types.empty());
     if (function->exported)
@@ -173,8 +173,7 @@ std::string SourceModule::getMangledName(const ast::Data* data, size_t construct
 
 std::string SourceModule::getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const
 {
-    // this might clash with user defined function 'copy' and 'delete'
-    return name() + ':' + internalFunctionName + '$' + type->identifier().str();
+    return name() + ':' + internalFunctionName + "$$" + type->identifier().str();
 }
 
 std::string SourceModule::getExportedName(const ast::Function* function) const
