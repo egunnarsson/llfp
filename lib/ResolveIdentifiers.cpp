@@ -29,7 +29,7 @@ struct Context
 template<class Check>
 void resolveType(Context& context, const SourceLocation& location, ast::TypeIdentifier& type, Check checkFun, bool allowEmpty)
 {
-    if (type.empty() && allowEmpty || type::isPrimitive(type) || checkFun(type))
+    if ((type.empty() && allowEmpty) || type::isPrimitive(type) || checkFun(type))
     {
         return;
     }

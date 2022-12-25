@@ -42,7 +42,7 @@ typename std::vector<T>::size_type findIndex(const std::vector<T>& list, const P
     auto it = std::find_if(list.begin(), list.end(), pred);
     if (it == list.end()) { return npos<typename std::vector<T>::size_type>; }
     auto distance = std::distance(list.begin(), it);
-    return static_cast<std::vector<T>::size_type>(distance);
+    return static_cast<typename std::vector<T>::size_type>(distance);
 }
 
 } // namespace llfp
