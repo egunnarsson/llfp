@@ -152,6 +152,12 @@ DataAst MathModule::getType(const std::string& name) const
     return { nullptr, nullptr };
 }
 
+DataAst MathModule::getConstructor(const std::string& name) const
+{
+    assert(false);
+    return { nullptr, nullptr };
+}
+
 std::string MathModule::getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const
 {
     assert(types.size() <= 2 && types.size() > 0);
@@ -218,6 +224,12 @@ FunDeclAst MathModule::lookupFunctionDecl(const GlobalIdentifier& identifier)
 }
 
 DataAst MathModule::lookupType(const GlobalIdentifier&) const
+{
+    assert(false);
+    return { nullptr, nullptr };
+}
+
+DataAst MathModule::lookupConstructor(const GlobalIdentifier&) const
 {
     assert(false);
     return { nullptr, nullptr };

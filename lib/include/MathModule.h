@@ -30,6 +30,7 @@ public:
     FunAst     getFunction(const std::string& name) override;
     FunDeclAst getFunctionDecl(const std::string& name) override;
     DataAst    getType(const std::string& name) const override;
+    DataAst    getConstructor(const std::string& name) const override;
 
     std::string getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const override;
     std::string getMangledName(const ast::Data* data) const override;
@@ -41,7 +42,8 @@ public:
     // Lookup global
     FunAst     lookupFunction(const GlobalIdentifier& identifier) override;
     FunDeclAst lookupFunctionDecl(const GlobalIdentifier& identifier) override;
-    DataAst    lookupType(const GlobalIdentifier&) const override;
+    DataAst    lookupType(const GlobalIdentifier& identifier) const override;
+    DataAst    lookupConstructor(const GlobalIdentifier& identifier) const override;
 };
 
 } // namespace llfp

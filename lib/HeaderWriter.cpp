@@ -143,14 +143,14 @@ void HeaderWriter::write(llvm::raw_ostream& os, llfp::SourceModule& module)
             if (d->constructors.size() > 1)
             {
                 os << "struct " << module.getMangledName(d.get()) << "\n{\n"
-                                                                     "\tint type;\n" //TODO: this type need to match TypeInstanceVariant::getEnumType
+                                                                     "\tint type;\n" // TODO: this type need to match TypeInstanceVariant::getEnumType
                                                                      "\tunion {\n";
                 for (int i = 0; i < d->constructors.size(); ++i)
                 {
                     os << "\t\tstruct " << module.getMangledName(d.get(), i) << ' ' << d->constructors[i].name << ";\n";
                 }
                 os << "\t};\n"
-                "};\n\n";
+                      "};\n\n";
             }
         }
         else

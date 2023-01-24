@@ -123,7 +123,7 @@ const std::string& SourceModule::name() const
 FunAst SourceModule::getFunction(const std::string& name)
 {
     auto ast = find(publicFunctions, name);
-    return ast != nullptr ? FunAst{ this, ast } : FunAst{};
+    return ast != nullptr ? FunAst{ this, ast } : FunAst{ nullptr, nullptr };
 }
 
 FunDeclAst SourceModule::getFunctionDecl(const std::string& name)
@@ -134,7 +134,26 @@ FunDeclAst SourceModule::getFunctionDecl(const std::string& name)
 DataAst SourceModule::getType(const std::string& name) const
 {
     auto ast = find(dataDeclarations, name);
-    return ast != nullptr ? DataAst{ this, ast } : DataAst{};
+    return ast != nullptr ? DataAst{ this, ast } : DataAst{ nullptr, nullptr };
+}
+
+DataAst SourceModule::getConstructor(const std::string& id) const
+{
+    for (const auto& [typeName, dataAst] : dataDeclarations)
+    {
+        if (typeName == id)
+        {
+            return { this, dataAst };
+        }
+        for (const auto& constructor : dataAst->constructors)
+        {
+            if (constructor.name == id)
+            {
+                return { this, dataAst };
+            }
+        }
+    }
+    return { nullptr, nullptr };
 }
 
 // [%@][-a-zA-Z$._][-a-zA-Z$._0-9]*
@@ -324,6 +343,14 @@ DataAst SourceModule::lookupType(const GlobalIdentifier& identifier) const
         [this](const std::string& id) { return getType(id); },
         [](ImportedModule* module, const std::string& id) { return module->getType(id); },
         "undefined data type ");
+}
+
+DataAst SourceModule::lookupConstructor(const GlobalIdentifier& identifier) const
+{
+    return lookup<DataAst>(
+        identifier, [this](const std::string& id) -> DataAst { return getConstructor(id); },
+        [](ImportedModule* module, const std::string& id) -> DataAst { return module->getConstructor(id); },
+        "undefined constructor ");
 }
 
 } // namespace llfp

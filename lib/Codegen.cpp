@@ -257,10 +257,12 @@ bool CodeGenerator::generateFunctionBody(Function* function)
 
     ExpCodeGenerator expGenerator(types[0], this, std::move(namedValues), &function->typeAnnotation);
     ast->functionBody->accept(&expGenerator);
+    expGenerator.generateCleanup();
 
     if (expGenerator.getResult() != nullptr)
     {
-        if (types[0]->isBasicType())
+
+        if (types[0]->isBasicType() || types[0]->isRefType())
         {
             llvmBuilder.CreateRet(expGenerator.getResult());
         }
@@ -440,7 +442,8 @@ ExpCodeGenerator::ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGenerator* pa
     assert(expectedType->llvmType() != nullptr);
 }
 
-llvm::Value* ExpCodeGenerator::generate(ast::Exp& exp, type::TypeInstPtr type, ExpCodeGenerator* parent, std::map<std::string, Value> scope)
+// Dont retain, move all temp to parent scope
+llvm::Value* ExpCodeGenerator::generateUnscoped(ast::Exp& exp, type::TypeInstPtr type, ExpCodeGenerator* parent, std::map<std::string, Value> scope)
 {
     if (type == nullptr) // or not?
     {
@@ -448,6 +451,47 @@ llvm::Value* ExpCodeGenerator::generate(ast::Exp& exp, type::TypeInstPtr type, E
     }
     ExpCodeGenerator generator(type, parent, std::move(scope));
     exp.accept(&generator);
+    parent->temporaries.insert(parent->temporaries.end(), generator.temporaries.begin(), generator.temporaries.end());
+    generator.temporaries.clear();
+    return generator.result;
+}
+
+// Retain result and add to parent scope, and release all temporaries
+llvm::Value* ExpCodeGenerator::generateScoped(ast::Exp& exp, type::TypeInstPtr type, ExpCodeGenerator* parent, std::map<std::string, Value> scope)
+{
+    if (type == nullptr) // or not?
+    {
+        return nullptr;
+    }
+    ExpCodeGenerator generator(type, parent, std::move(scope));
+    exp.accept(&generator);
+
+    auto  result  = generator.result;
+    auto& builder = generator.llvmBuilder();
+
+    if (result == nullptr)
+    {
+        generator.temporaries.clear();
+        return nullptr;
+    }
+
+    if (!std::any_of(generator.temporaries.begin(), generator.temporaries.end(), [result](const Value& v) { return v.value == result; }))
+    {
+        if (generator.expectedType->isRefType())
+        {
+            auto int32Ty         = llvm::Type::getInt32Ty(generator.llvmContext());
+            auto zeroV           = llvm::ConstantInt::get(int32Ty, 0);
+            auto oneV            = llvm::ConstantInt::get(int32Ty, 1);
+            auto counterValuePtr = builder.CreateGEP(generator.expectedType->llvmType(), result, { zeroV, zeroV });
+            auto counterValue    = builder.CreateLoad(int32Ty, counterValuePtr);
+            auto newValue        = builder.CreateAdd(counterValue, oneV);
+            builder.CreateStore(newValue, counterValuePtr);
+        }
+    }
+
+    generator.generateCleanup();
+
+    parent->temporaries.push_back({ generator.expectedType, generator.result });
     return generator.result;
 }
 
@@ -471,9 +515,11 @@ void ExpCodeGenerator::visit(ast::LetExp& exp)
             return;
         }
 
-        type::TypeInstPtr varType = var->type.identifier.name.empty() ? getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, exp) : getTypeContext()->getTypeFromAst(var->type);
+        type::TypeInstPtr varType = var->type.identifier.name.empty()
+                                        ? getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, exp)
+                                        : getTypeContext()->getTypeFromAst(var->type);
 
-        auto value = ExpCodeGenerator::generate(*var->functionBody, varType, this);
+        auto value = ExpCodeGenerator::generateScoped(*var->functionBody, varType, this);
 
         if (value == nullptr)
         {
@@ -490,12 +536,12 @@ void ExpCodeGenerator::visit(ast::LetExp& exp)
         }
     }
 
-    result = ExpCodeGenerator::generate(*exp.exp, expectedType, this);
+    result = ExpCodeGenerator::generateUnscoped(*exp.exp, expectedType, this);
 }
 
 void ExpCodeGenerator::visit(ast::IfExp& exp)
 {
-    auto condV = ExpCodeGenerator::generate(*exp.condition, getTypeContext()->getBool(), this);
+    auto condV = ExpCodeGenerator::generateScoped(*exp.condition, getTypeContext()->getBool(), this);
     if (condV == nullptr)
     {
         return;
@@ -512,7 +558,7 @@ void ExpCodeGenerator::visit(ast::IfExp& exp)
 
     builder.SetInsertPoint(thenBB);
 
-    auto thenV = ExpCodeGenerator::generate(*exp.thenExp, expectedType, this);
+    auto thenV = ExpCodeGenerator::generateScoped(*exp.thenExp, expectedType, this);
     if (thenV == nullptr)
     {
         return;
@@ -524,7 +570,7 @@ void ExpCodeGenerator::visit(ast::IfExp& exp)
     function->getBasicBlockList().push_back(elseBB);
     builder.SetInsertPoint(elseBB);
 
-    auto elseV = ExpCodeGenerator::generate(*exp.elseExp, expectedType, this);
+    auto elseV = ExpCodeGenerator::generateScoped(*exp.elseExp, expectedType, this);
     if (elseV == nullptr)
     {
         return;
@@ -539,6 +585,12 @@ void ExpCodeGenerator::visit(ast::IfExp& exp)
 
     PN->addIncoming(thenV, thenBB);
     PN->addIncoming(elseV, elseBB);
+
+    // need to replace thenV and elseV with PN in temporaries
+    llfp::erase_first_of(temporaries, [thenV](const Value& v) { return v.value == thenV; });
+    llfp::erase_first_of(temporaries, [elseV](const Value& v) { return v.value == elseV; });
+    temporaries.push_back({ expectedType, PN });
+
     result = PN;
 }
 
@@ -647,7 +699,7 @@ void ExpCodeGenerator::visit(ast::CaseExp& exp)
     auto  function = builder.GetInsertBlock()->getParent();
 
     auto caseT = getTypeContext()->constructTypeUsingAnnotationStuff(*typeAnnotation, *exp.caseExp);
-    auto caseV = ExpCodeGenerator::generate(*exp.caseExp, caseT, this);
+    auto caseV = ExpCodeGenerator::generateScoped(*exp.caseExp, caseT, this);
 
     std::vector<llvm::BasicBlock*> expBlocks;
     std::vector<llvm::BasicBlock*> patternBlocks;
@@ -681,10 +733,10 @@ void ExpCodeGenerator::visit(ast::CaseExp& exp)
     {
         function->getBasicBlockList().push_back(expBlocks[i]);
         builder.SetInsertPoint(expBlocks[i]);
-        auto thenV   = ExpCodeGenerator::generate(*exp.clauses[i].exp, expectedType, this, std::move(variables[i]));
+        auto clauseV = ExpCodeGenerator::generateScoped(*exp.clauses[i].exp, expectedType, this, std::move(variables[i]));
         // Codegen of 'Clause' can change the current block, update ClauseBB for the PHI.
         expBlocks[i] = builder.GetInsertBlock();
-        caseValues.push_back(thenV);
+        caseValues.push_back(clauseV);
         builder.CreateBr(mergeBB);
     }
 
@@ -695,6 +747,14 @@ void ExpCodeGenerator::visit(ast::CaseExp& exp)
     {
         PN->addIncoming(caseValues[i], expBlocks[i]);
     }
+
+    // Replace case values with phi value in temporaries
+    for (auto clauseV : caseValues)
+    {
+        llfp::erase_first_of(temporaries, [clauseV](const Value& v) { return v.value == clauseV; });
+    }
+    temporaries.push_back({ expectedType, PN });
+
     result = PN;
 }
 
@@ -916,7 +976,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp& exp)
         }
         else
         {
-            auto value = ExpCodeGenerator::generate(*exp.operand, expectedType, this);
+            auto value = ExpCodeGenerator::generateUnscoped(*exp.operand, expectedType, this);
             if (value != nullptr)
             {
                 if (expectedType->isFloating())
@@ -938,7 +998,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp& exp)
         }
         else
         {
-            auto value = ExpCodeGenerator::generate(*exp.operand, expectedType, this);
+            auto value = ExpCodeGenerator::generateUnscoped(*exp.operand, expectedType, this);
             if (value != nullptr)
             {
                 result = llvmBuilder().CreateNot(value, "lnot");
@@ -953,7 +1013,7 @@ void ExpCodeGenerator::visit(ast::UnaryExp& exp)
         }
         else
         {
-            auto value = ExpCodeGenerator::generate(*exp.operand, expectedType, this);
+            auto value = ExpCodeGenerator::generateUnscoped(*exp.operand, expectedType, this);
             if (value != nullptr)
             {
                 result = llvmBuilder().CreateNot(value, "bnot");
@@ -1073,16 +1133,18 @@ void ExpCodeGenerator::visit(ast::CallExp& exp)
             std::vector<llvm::Value*> arguments;
 
             // Returning user type it is done on the stack, function will return void
-            llvm::Value* retValue = nullptr;
-            if (!expectedType->isBasicType())
+            llvm::Value* retValue   = nullptr;
+            const auto   voidReturn = !(expectedType->isBasicType() || expectedType->isRefType());
+            if (voidReturn)
             {
+                // assert(!expectedType->isVariant());
                 retValue = llvmBuilder().CreateAlloca(expectedType->llvmType());
                 arguments.push_back(retValue);
             }
 
             for (size_t i = 0; i < exp.arguments.size(); ++i)
             {
-                auto argValue = generate(*exp.arguments[i], function->types[i + 1], this);
+                auto argValue = generateUnscoped(*exp.arguments[i], function->types[i + 1], this);
 
                 if (argValue == nullptr)
                 {
@@ -1101,15 +1163,16 @@ void ExpCodeGenerator::visit(ast::CallExp& exp)
             }
 
             // if return user type, result = load(first arg)
-            if (expectedType->isBasicType())
-            {
-                result = llvmBuilder().CreateCall(function->llvm, arguments, "call");
-            }
-            else
+            if (voidReturn)
             {
                 llvmBuilder().CreateCall(function->llvm, arguments);
                 result = llvmBuilder().CreateLoad(expectedType->llvmType(), retValue);
             }
+            else
+            {
+                result = llvmBuilder().CreateCall(function->llvm, arguments, "call");
+            }
+            temporaries.push_back({ expectedType, result });
         }
     }
     catch (const Error& e)
@@ -1188,7 +1251,7 @@ void ExpCodeGenerator::visit(ast::FieldExp& exp)
         // 22-01-31 except constructTypeUsingAnnotationStuff already checks?
         getTypeContext()->check(*typeAnnotation, expectedType, typeAnnotation->get(&exp));
 
-        auto structValue = ExpCodeGenerator::generate(*exp.lhs, lhsType, this);
+        auto structValue = ExpCodeGenerator::generateUnscoped(*exp.lhs, lhsType, this);
         if (structValue == nullptr)
         {
             return;
@@ -1217,7 +1280,7 @@ void ExpCodeGenerator::visit(ast::ConstructorExp& exp)
 
         bool         fail  = false;
         llvm::Value* value = llvm::UndefValue::get(expectedType->llvmType());
-        for (auto fieldIt : llvm::enumerate(expectedType->getFields()))
+        for (auto fieldIt : llvm::enumerate(expectedType->getFields(exp.identifier.name)))
         {
             auto& arg = exp.arguments[fieldIt.index()];
 
@@ -1234,10 +1297,13 @@ void ExpCodeGenerator::visit(ast::ConstructorExp& exp)
                 }
             }
 
-            auto argValue = ExpCodeGenerator::generate(*arg.exp, fieldIt.value(), this);
+            // scoped but remove value from temporary since it's owned by the result
+            auto argValue = ExpCodeGenerator::generateScoped(*arg.exp, fieldIt.value(), this);
             if (argValue != nullptr)
             {
                 value = llvmBuilder().CreateInsertValue(value, argValue, { static_cast<unsigned int>(fieldIt.index()) });
+                assert(temporaries.back().value == argValue);
+                temporaries.pop_back();
             }
             else
             {
@@ -1247,6 +1313,7 @@ void ExpCodeGenerator::visit(ast::ConstructorExp& exp)
 
         if (!fail)
         {
+            temporaries.push_back({ expectedType, value });
             result = value;
         }
     }
@@ -1276,6 +1343,29 @@ const Value& ExpCodeGenerator::getNamedValue(const std::string& name)
 llvm::Value* ExpCodeGenerator::getResult()
 {
     return result;
+}
+
+void ExpCodeGenerator::generateCleanup()
+{
+#if 0
+    for (auto temporary : temporaries)
+    {
+        if (temporary.value != result)
+        {
+            if (temporary.type->isRefType())
+            {
+                auto fun = generator->getReleaseFunction(temporary.type);
+                llvmBuilder().CreateCall(fun, { temporary.value });
+            }
+            else if (!temporary.type->isBasicType())
+            {
+                auto fun = generator->getDeleteFunction(temporary.type);
+                llvmBuilder().CreateCall(fun, { temporary.value });
+            }
+        }
+    }
+#endif
+    temporaries.clear();
 }
 
 llvm::Function* CodeGenerator::getReleaseFunction(type::TypeInstPtr type)

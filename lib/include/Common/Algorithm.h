@@ -27,22 +27,36 @@ bool contains(const std::vector<T>& list, const U& value)
     return std::any_of(list.begin(), list.end(), [&value](const T& item) { return item == value; });
 }
 
-template<class T>
-constexpr T npos = T(-1);
+constexpr auto npos = static_cast<size_t>(-1);
 
-template<class T>
-bool checkIndex(T i)
+inline bool checkIndex(size_t i)
 {
-    return npos<T> != i;
+    return npos != i;
 }
 
 template<class T, class P>
-typename std::vector<T>::size_type findIndex(const std::vector<T>& list, const P& pred)
+size_t findIndex(const std::vector<T>& list, const P& pred)
 {
     auto it = std::find_if(list.begin(), list.end(), pred);
-    if (it == list.end()) { return npos<typename std::vector<T>::size_type>; }
+    if (it == list.end()) { return npos; }
     auto distance = std::distance(list.begin(), it);
-    return static_cast<typename std::vector<T>::size_type>(distance);
+    return static_cast<size_t>(distance);
+}
+
+template<class T, class P>
+bool erase_first_of(std::vector<T>& list, const P& pred)
+{
+    auto it = std::find_if(list.begin(), list.end(), pred);
+    if (it != list.end())
+    {
+        if (it != list.end() - 1)
+        {
+            *it = std::move(list.back());
+        }
+        list.pop_back();
+        return true;
+    }
+    return false;
 }
 
 } // namespace llfp

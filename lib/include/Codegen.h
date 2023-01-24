@@ -105,15 +105,19 @@ class ExpCodeGenerator : public ast::ExpVisitor
     std::map<std::string, Value> values;
     // std::map<string, .> letExpFunctions; localFunction
     llvm::Value*                 result;
+    std::vector<Value>           temporaries;
     hm::TypeAnnotation*          typeAnnotation;
 
 public:
 
     ExpCodeGenerator(type::TypeInstPtr type_, CodeGenerator* generator_, std::map<std::string, Value> parameters_, hm::TypeAnnotation* typeAnnotation_);
     ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGenerator* parent_, std::map<std::string, Value> scope_);
-    virtual ~ExpCodeGenerator() {}
+    virtual ~ExpCodeGenerator() { assert(temporaries.empty()); }
 
-    static llvm::Value* generate(ast::Exp& exp, type::TypeInstPtr type, ExpCodeGenerator* parent, std::map<std::string, Value> scope = {});
+    static llvm::Value* generateUnscoped(ast::Exp& exp, type::TypeInstPtr type, ExpCodeGenerator* parent, std::map<std::string, Value> scope = {});
+    static llvm::Value* generateScoped(ast::Exp& exp, type::TypeInstPtr type, ExpCodeGenerator* parent, std::map<std::string, Value> scope = {});
+
+    void generateCleanup();
 
     // lookup, local functions, global functions,
     Function*          getFunction(const GlobalIdentifier& identifier, std::vector<type::TypeInstPtr> types);
@@ -141,8 +145,8 @@ private:
     auto generateBinary(type::TypeInstPtr type, ast::BinaryExp& exp)
     {
         return std::make_tuple(
-            ExpCodeGenerator::generate(*exp.lhs, type, this),
-            ExpCodeGenerator::generate(*exp.rhs, type, this));
+            ExpCodeGenerator::generateUnscoped(*exp.lhs, type, this),
+            ExpCodeGenerator::generateUnscoped(*exp.rhs, type, this));
     }
 
     typedef bool (*TypeCheckFunction)(ast::Exp& exp, type::TypeInstPtr);

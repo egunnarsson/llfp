@@ -31,7 +31,7 @@ std::vector<Substitution> Type::unify(TypeVar& a, SimpleType& b, const TypePtr& 
 
 std::vector<Substitution> Type::unify(TypeVar& a, FunctionType& b, const TypePtr& ptrB)
 {
-    if (a.fields.empty() && a.typeClasses.empty())
+    if (a.fields.empty() && a.typeClasses.empty() && a.constructors.empty())
     {
         return { { a.id, ptrB } };
     }
@@ -67,6 +67,7 @@ std::vector<Substitution> SimpleType::addConstraints(const SimpleType& other)
     }
 
     typeClasses.insert(std::begin(other.typeClasses), std::end(other.typeClasses));
+    constructors.insert(std::begin(other.constructors), std::end(other.constructors));
     return result;
 }
 
@@ -105,6 +106,7 @@ void SimpleType::copy(SimpleType* newObj) const
     {
         newObj->fields.insert({ name, type->copy() });
     }
+    newObj->constructors = constructors;
 }
 
 // ----------------------------------------------------------------------------
@@ -282,8 +284,8 @@ FunTypePtr FunctionType::copyFun() const
 // ----------------------------------------------------------------------------
 
 TypeUnifier::TypeUnifier(const TypePtr& a_, const TypePtr& b_)
-    : a(a_),
-      b(b_)
+    : a{ a_ },
+      b{ b_ }
 {}
 
 std::vector<Substitution> TypeUnifier::unify(const TypePtr& a, const TypePtr& b)
@@ -304,9 +306,7 @@ TypeAnnotation::TypeAnnotation(
     std::map<std::string, TypePtr>      vars_,
     std::map<std::string, FunTypePtr>   functions_,
     TypeVarId                           nextFreeVariable_)
-    :
-
-      ast{ std::move(ast_) },
+    : ast{ std::move(ast_) },
       variables{ std::move(vars_) },
       functions{ std::move(functions_) },
       nextFreeVariable{ nextFreeVariable_ }
@@ -782,7 +782,12 @@ void Annotator::visit(ast::ConstructorExp& exp)
     {
         arg.exp->accept(this);
     }
-    result[&exp] = makeConst(exp.identifier.str());
+    // if constructorCount == 1
+    //     result[&exp] = makeConst(exp.identifier.str()); // lookup type from constructor...
+    auto expTV = std::make_shared<TypeVar>(current++);
+    result[&exp] = expTV;
+
+    expTV->constructors.insert(exp.identifier.str());
 
     // is user type?
     // application, treat as functions?

@@ -52,7 +52,7 @@ void resolveType(Context& context, const SourceLocation& location, ast::TypeIden
 
 void resolveConstructor(Context& context, const SourceLocation& location, GlobalIdentifier& id)
 {
-    auto dataAst = context.srcModule.lookupType(id);
+    auto dataAst = context.srcModule.lookupConstructor(id);
     if (dataAst.empty())
     {
         Log(context.errs, location, "undefined data constructor \"", id.str(), '"');

@@ -98,20 +98,30 @@ TypeInstance::TypeInstance(Identifier identifier, std::vector<std::string> typeC
 {
 }
 
-// Creates a new hm type
-std::shared_ptr<hm::TypeConstant> TypeInstance::getType() const
+std::shared_ptr<hm::TypeConstant> TypeInstance::getType(std::map<const TypeInstance*, std::shared_ptr<hm::TypeConstant>>& types) const
 {
-    std::shared_ptr<hm::TypeConstant> type = std::make_shared<hm::TypeConstant>(identifier_.name.str());
+    auto it = types.find(this);
+    if (it != types.end())
+    {
+        return it->second;
+    }
+
+    auto type   = std::make_shared<hm::TypeConstant>(identifier_.name.str());
+    types[this] = type;
+
     for (auto& typeClass : typeClasses)
     {
         type->typeClasses.insert(typeClass);
     }
-    /*assert(ast->fields.size() == fields.size());
-    for (size_t i = 0; i < fields.size(); ++i)
-    {
-        type->fields.insert({ast->fields[i].name, fields[i]->getType()});
-    }*/
+
     return type;
+}
+
+// Creates a new hm type
+std::shared_ptr<hm::TypeConstant> TypeInstance::getType() const
+{
+    std::map<const TypeInstance*, std::shared_ptr<hm::TypeConstant>> types;
+    return getType(types);
 }
 
 const ImportedModule* TypeInstance::getModule() const
@@ -192,14 +202,19 @@ TypeInstanceAggregate::TypeInstanceAggregate(Identifier identifier, const Import
 {
 }
 
-std::shared_ptr<hm::TypeConstant> TypeInstanceAggregate::getType() const
+std::shared_ptr<hm::TypeConstant> TypeInstanceAggregate::getType(std::map<const TypeInstance*, std::shared_ptr<hm::TypeConstant>>& types) const
 {
-    auto   type = TypeInstance::getType();
-    size_t i    = 0;
-    for (const auto& field : fields)
+    auto it = types.find(this);
+    if (it != types.end())
     {
-        type->fields.insert({ ast->constructors.front().fields[i].name, field->getType() });
-        ++i;
+        return it->second;
+    }
+
+    auto& constructor = ast->constructors.front();
+    auto  type        = TypeInstance::getType(types);
+    for (const auto& field : llvm::enumerate(fields))
+    {
+        type->fields.insert({ constructor.fields[field.index()].name, field.value()->getType(types) });
     }
     return type;
 }
@@ -330,7 +345,7 @@ void TypeInstanceAggregate::setFields(FieldList fieldTypes)
 llvm::Type* TypeInstanceVariant::getEnumType(llvm::LLVMContext& context, const TypeInstance* type)
 {
     // c++-20
-    //auto integerSize = std::bit_width(type->getConstructors().size())
+    // auto integerSize = std::bit_width(type->getConstructors().size())
     return llvm::IntegerType::getInt32Ty(context);
 }
 
@@ -347,16 +362,18 @@ TypeInstanceVariant::TypeInstanceVariant(
 {
 }
 
-std::shared_ptr<hm::TypeConstant> TypeInstanceVariant::getType() const
+std::shared_ptr<hm::TypeConstant> TypeInstanceVariant::getType(std::map<const TypeInstance*, std::shared_ptr<hm::TypeConstant>>& types) const
 {
-    auto type = TypeInstance::getType();
+    auto it = types.find(this);
+    if (it != types.end())
+    {
+        return it->second;
+    }
+
+    auto type = TypeInstance::getType(types);
     for (auto [astConstructor, constructor] : llvm::zip(ast->constructors, constructors))
     {
-        type->constructors.push_back(astConstructor.name);
-        for (auto [astField, field] : llvm::zip(astConstructor.fields, constructor.fields))
-        {
-            type->fields.insert({ astField.name, field->getType() });
-        }
+        type->constructors.insert(astConstructor.name);
     }
     assert(!(!type->fields.empty() && type->constructors.size() > 1));
     return type;

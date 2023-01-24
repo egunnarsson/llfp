@@ -65,9 +65,10 @@ public:
     virtual const std::string& name() const = 0;
 
     // Get public
-    virtual FunAst     getFunction(const std::string& name)     = 0;
-    virtual FunDeclAst getFunctionDecl(const std::string& name) = 0;
-    virtual DataAst    getType(const std::string& name) const   = 0;
+    virtual FunAst     getFunction(const std::string& name)          = 0;
+    virtual FunDeclAst getFunctionDecl(const std::string& name)      = 0;
+    virtual DataAst    getType(const std::string& name) const        = 0;
+    virtual DataAst    getConstructor(const std::string& name) const = 0;
 
     virtual std::string getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const = 0;
     virtual std::string getMangledName(const ast::Data* data) const                                                                = 0;
@@ -77,9 +78,10 @@ public:
     virtual bool        fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const                     = 0;
 
     // Lookup global
-    virtual FunAst     lookupFunction(const GlobalIdentifier& identifier)     = 0;
-    virtual FunDeclAst lookupFunctionDecl(const GlobalIdentifier& identifier) = 0;
-    virtual DataAst    lookupType(const GlobalIdentifier&) const              = 0;
+    virtual FunAst     lookupFunction(const GlobalIdentifier& identifier)          = 0;
+    virtual FunDeclAst lookupFunctionDecl(const GlobalIdentifier& identifier)      = 0;
+    virtual DataAst    lookupType(const GlobalIdentifier&) const                   = 0;
+    virtual DataAst    lookupConstructor(const GlobalIdentifier& identifier) const = 0;
 };
 
 } // namespace llfp

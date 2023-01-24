@@ -115,7 +115,8 @@ public:
     virtual ~TypeInstance()           = default;
 
     // creates a new hm type
-    virtual std::shared_ptr<hm::TypeConstant> getType() const;
+    std::shared_ptr<hm::TypeConstant>         getType() const;
+    virtual std::shared_ptr<hm::TypeConstant> getType(std::map<const TypeInstance*, std::shared_ptr<hm::TypeConstant>>& types) const;
     const Identifier&                         identifier() const;
     virtual const ImportedModule*             getModule() const;
 
@@ -173,7 +174,7 @@ public:
     TypeInstanceAggregate(Identifier identifier, const ImportedModule* module, const ast::Data* ast, llvm::StructType* llvmType, std::vector<std::string> typeClasses);
     virtual ~TypeInstanceAggregate() = default;
 
-    std::shared_ptr<hm::TypeConstant> getType() const override;
+    std::shared_ptr<hm::TypeConstant> getType(std::map<const TypeInstance*, std::shared_ptr<hm::TypeConstant>>& types) const override;
     const ImportedModule*             getModule() const override;
 
     llvm::Type* llvmType() const override;
@@ -213,7 +214,7 @@ public:
         std::vector<std::string> typeClasses);
     virtual ~TypeInstanceVariant() = default;
 
-    std::shared_ptr<hm::TypeConstant> getType() const override;
+    std::shared_ptr<hm::TypeConstant> getType(std::map<const TypeInstance*, std::shared_ptr<hm::TypeConstant>>& types) const override;
     const ImportedModule*             getModule() const override;
 
     llvm::Type* llvmType() const override;
