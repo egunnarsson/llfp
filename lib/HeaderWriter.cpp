@@ -57,9 +57,14 @@ std::string convertType(llfp::SourceModule& module, const GlobalIdentifier& type
     auto ast = module.lookupType(type);
     if (ast.importedModule != nullptr && ast.data != nullptr)
     {
-        if (ast.data->typeVariables.empty())
+        if (ast.data->constructors.size() > 1)
         {
-            auto typeName = ast.importedModule->getMangledName(ast.data, {});
+            llvm::errs() << "type variant export not supported yet '" << ast.importedModule->name() << ':' << ast.data->name << '\'';
+            return std::string();
+        }
+        else if (ast.data->typeVariables.empty())
+        {
+            auto typeName = ast.importedModule->getMangledName(ast.data);
             typeName += '*'; // all user types passed by ptr
             return typeName;
         }

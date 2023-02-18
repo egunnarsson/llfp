@@ -166,7 +166,7 @@ bool TypeInstance::isSigned() const
     return llfp::contains(typeClasses, id::Signed.str());
 }
 
-const ConstructorList& TypeInstance::getConstructors() const
+ConstructorList TypeInstance::getConstructors() const
 {
     return assertFalse<ConstructorList>();
 }
@@ -196,9 +196,9 @@ llvm::TypeSize TypeInstanceBasic::getSize(const llvm::Module* llvmModule, size_t
 
 TypeInstanceAggregate::TypeInstanceAggregate(Identifier identifier, const ImportedModule* module_, const ast::Data* ast_, llvm::StructType* llvmType, std::vector<std::string> typeClasses)
     : TypeInstance(std::move(identifier), std::move(typeClasses)),
-      llvmType_{ llvmType },
-      module{ module_ },
-      ast{ ast_ }
+      constructor{ &ast_->constructors.at(0), {}, llvmType },
+      ast{ ast_ },
+      module{ module_ }
 {
 }
 
@@ -210,11 +210,10 @@ std::shared_ptr<hm::TypeConstant> TypeInstanceAggregate::getType(std::map<const 
         return it->second;
     }
 
-    auto& constructor = ast->constructors.front();
-    auto  type        = TypeInstance::getType(types);
-    for (const auto& field : llvm::enumerate(fields))
+    auto type = TypeInstance::getType(types);
+    for (const auto& field : llvm::enumerate(constructor.fields))
     {
-        type->fields.insert({ constructor.fields[field.index()].name, field.value()->getType(types) });
+        type->fields.insert({ constructor.ast->fields[field.index()].name, field.value()->getType(types) });
     }
     return type;
 }
@@ -224,13 +223,13 @@ const ImportedModule* TypeInstanceAggregate::getModule() const
     return module;
 }
 
-llvm::Type* TypeInstanceAggregate::llvmType() const { return llvmType_; }
+llvm::Type* TypeInstanceAggregate::llvmType() const { return constructor.llvmType_; }
 bool        TypeInstanceAggregate::isBasicType() const { return false; }
 bool        TypeInstanceAggregate::isRefType() const { return false; }
 
 bool TypeInstanceAggregate::containsRefTypes() const
 {
-    for (auto& field : fields)
+    for (auto& field : constructor.fields)
     {
         if (field->isRefType() || field->containsRefTypes())
         {
@@ -248,18 +247,23 @@ TypeInstPtr TypeInstanceAggregate::getTypeParameter(size_t index) const
 llvm::TypeSize TypeInstanceAggregate::getSize(const llvm::Module* llvmModule, size_t constructorIndex) const
 {
     assert(constructorIndex == 0);
-    return llvmModule->getDataLayout().getTypeAllocSize(llvmType_);
+    return llvmModule->getDataLayout().getTypeAllocSize(constructor.llvmType_);
+}
+
+ConstructorList TypeInstanceAggregate::getConstructors() const
+{
+    return constructor;
 }
 
 unsigned int TypeInstanceAggregate::getFieldIndex(const std::string& fieldIdentifier) const
 {
     assert(ast->constructors.size() == 1);
-    auto& constructor = ast->constructors.front();
-    assert(constructor.fields.size() == fields.size());
-    const unsigned int size = static_cast<unsigned int>(constructor.fields.size());
+    auto& astConstructor = *constructor.ast;
+    assert(astConstructor.fields.size() == constructor.fields.size());
+    const unsigned int size = static_cast<unsigned int>(astConstructor.fields.size());
     for (unsigned int i = 0; i < size; ++i)
     {
-        if (constructor.fields[i].name == fieldIdentifier) { return i; }
+        if (astConstructor.fields[i].name == fieldIdentifier) { return i; }
     }
     return InvalidIndex;
 }
@@ -267,8 +271,8 @@ unsigned int TypeInstanceAggregate::getFieldIndex(const std::string& fieldIdenti
 unsigned int TypeInstanceAggregate::getFieldIndex(const std::string& constructorName, const std::string& fieldIdentifier) const
 {
     if (ast->name != constructorName) { throw Error("unknown constructor"); }
-    const auto& astFields = ast->constructors.front().fields;
-    assert(astFields.size() == fields.size());
+    const auto& astFields = constructor.ast->fields;
+    assert(astFields.size() == constructor.fields.size());
     const unsigned int size = static_cast<unsigned int>(astFields.size());
     for (unsigned int i = 0; i < size; ++i)
     {
@@ -277,11 +281,11 @@ unsigned int TypeInstanceAggregate::getFieldIndex(const std::string& constructor
     return InvalidIndex;
 }
 
-const FieldList& TypeInstanceAggregate::getFields() const { return fields; }
+const FieldList& TypeInstanceAggregate::getFields() const { return constructor.fields; }
 const FieldList& TypeInstanceAggregate::getFields(const std::string& constructorName) const
 {
     if (ast->name != constructorName) { throw Error("unknown constructor"); }
-    return fields;
+    return constructor.fields;
 }
 
 namespace
@@ -312,7 +316,7 @@ TypeInstPtr findTypeOfTypeVar(const std::string& typeVar, const ast::TypeIdentif
 
 void TypeInstanceAggregate::setFields(FieldList fieldTypes)
 {
-    assert(fields.size() == 0);
+    assert(constructor.fields.size() == 0);
     assert(parameters.size() == 0);
     assert(ast->constructors.size() == 1);
     const auto& astFields = ast->constructors.front().fields;
@@ -330,23 +334,25 @@ void TypeInstanceAggregate::setFields(FieldList fieldTypes)
         parameters.push_back(result);
     }
 
-    if (llvmType_ != nullptr) // when is this not null?
+    if (constructor.llvmType_ != nullptr) // when is this not null?
     {
         std::vector<llvm::Type*> llvmTypes;
         std::transform(fieldTypes.begin(), fieldTypes.end(), std::back_inserter(llvmTypes),
                        [](const TypeInstPtr& type) { return type->llvmType(); });
 
-        llvmType_->setBody(llvmTypes);
+        constructor.llvmType_->setBody(llvmTypes);
     }
-    fields = std::move(fieldTypes);
+    constructor.fields = std::move(fieldTypes);
+
+    assert(this->ast->constructors.front().fields.size() == this->constructor.fields.size());
 }
 
 
-llvm::Type* TypeInstanceVariant::getEnumType(llvm::LLVMContext& context, const TypeInstance* type)
+llvm::IntegerType* TypeInstanceVariant::getEnumType(llvm::LLVMContext& context, const TypeInstance* type)
 {
     // c++-20
     // auto integerSize = std::bit_width(type->getConstructors().size())
-    return llvm::IntegerType::getInt32Ty(context);
+    return llvm::IntegerType::getInt16Ty(context);
 }
 
 TypeInstanceVariant::TypeInstanceVariant(
@@ -414,9 +420,9 @@ llvm::TypeSize TypeInstanceVariant::getSize(const llvm::Module* llvmModule, size
     return llvmModule->getDataLayout().getTypeAllocSize(constructor.llvmType_);
 }
 
-const ConstructorList& TypeInstanceVariant::getConstructors() const
+ConstructorList TypeInstanceVariant::getConstructors() const
 {
-    return constructors;
+    return ConstructorList{ &constructors.at(0), constructors.size() };
 }
 
 unsigned int TypeInstanceVariant::getFieldIndex(const std::string&) const
@@ -446,7 +452,7 @@ const FieldList& TypeInstanceVariant::getFields(const std::string& constructor) 
     return constructors[i].fields;
 }
 
-void TypeInstanceVariant::setConstructors(ConstructorList constructors_)
+void TypeInstanceVariant::setConstructors(std::vector<TypeConstructor> constructors_)
 {
     for (auto& typeVar : ast->typeVariables)
     {

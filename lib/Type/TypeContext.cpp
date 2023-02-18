@@ -38,19 +38,31 @@ public:
 
     void visit(hm::TypeVar& t) override
     {
-        // assert(t.fields.empty());
-
-        if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == id::Floating; }))
+        if (t.constructors.empty() && t.fields.empty())
         {
-            result = context->getDouble();
-        }
-        else if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == id::Signed; }))
-        {
-            result = context->getI64();
+            if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == id::Floating; }))
+            {
+                result = context->getDouble();
+            }
+            else if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == id::Signed; }))
+            {
+                result = context->getI64();
+            }
+            else
+            {
+                result = context->getU64();
+            }
         }
         else
         {
-            result = context->getU64();
+            if (t.constructors.empty())
+            {
+                // lookup type based on fields?
+            }
+            else
+            {
+                result = context->getTypeFromConstructor(*t.constructors.begin());
+            }
         }
     }
 
@@ -233,12 +245,11 @@ TypeInstPtr TypeContext::makeTypeInstanceVariant(const Identifier& identifier, l
         llvmType->setName(ast.importedModule->getMangledName(ast.data, it.index()));
 
         std::vector<llvm::Type*> llvmTypes;
-        llvmTypes.push_back(llvm::Type::getInt32Ty(llvmContext)); // variant type
         std::transform(fieldTypes.begin(), fieldTypes.end(), std::back_inserter(llvmTypes),
                        [](const TypeInstPtr& type) { return type->llvmType(); });
         llvmType->setBody(llvmTypes);
 
-        constructors.push_back(TypeConstructor{ std::move(fieldTypes), llvmType });
+        constructors.push_back(TypeConstructor{ &it.value(), std::move(fieldTypes), llvmType });
     }
     typePtr->setConstructors(std::move(constructors));
 
@@ -285,6 +296,27 @@ TypeInstPtr TypeContext::getType(const Identifier& identifier)
     }
 
     throw Error(std::string{ "unknown data " } + identifier.name.str());
+}
+
+
+TypeInstPtr TypeContext::getTypeFromConstructor(const std::string& name)
+{
+    auto       id  = GlobalIdentifier::split(name);
+    auto       ast = sourceModule->lookupConstructor(id);
+    Identifier tid{ id, {} };
+    if (ast.data->typeVariables.size() != tid.parameters.size())
+    {
+        //throw Error(std::string{ "type arity mismatch between " } + tid.str() + " and " + ast.importedModule->name() + ':' + ast.data->name + '/' + std::to_string(ast.data->typeVariables.size()));
+        throw Error(std::string{ "not implemented, cannot deduce type parameters for " } + id.str());
+    }
+    if (ast.data->constructors.size() == 1)
+    {
+        return makeTypeInstanceAggregate(tid, ast, {}, {});
+    }
+    else
+    {
+        return makeTypeInstanceVariant(tid, ast, {}, {});
+    }
 }
 
 bool TypeContext::equals(TypeInstPtr type, const ast::TypeIdentifier& identifier)

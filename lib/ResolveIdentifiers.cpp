@@ -4,6 +4,7 @@
 #include "Ast.h"
 #include "Common/Algorithm.h"
 #include "Common/SourceLocation.h"
+#include "Error.h"
 #include "Log.h"
 #include "Module.h"
 #include "Type/TypeContext.h"
@@ -34,14 +35,17 @@ void resolveType(Context& context, const SourceLocation& location, ast::TypeIden
         return;
     }
 
-    auto dataAst = context.srcModule.lookupType(type.identifier);
-    if (dataAst.empty())
+    try
     {
-        Log(context.errs, location, "undefined data type \"", type.identifier.str(), '"');
+        auto dataAst = context.srcModule.lookupType(type.identifier);
+        if (type.identifier.moduleName.empty())
+        {
+            type.identifier.moduleName = dataAst.importedModule->name();
+        }
     }
-    else if (type.identifier.moduleName.empty())
+    catch (const Error& e)
     {
-        type.identifier.moduleName = dataAst.importedModule->name();
+        Log(context.errs, location, e.what());
     }
 
     for (auto& param : type.parameters)
@@ -52,14 +56,17 @@ void resolveType(Context& context, const SourceLocation& location, ast::TypeIden
 
 void resolveConstructor(Context& context, const SourceLocation& location, GlobalIdentifier& id)
 {
-    auto dataAst = context.srcModule.lookupConstructor(id);
-    if (dataAst.empty())
+    try
     {
-        Log(context.errs, location, "undefined data constructor \"", id.str(), '"');
+        auto dataAst = context.srcModule.lookupConstructor(id);
+        if (id.moduleName.empty())
+        {
+            id.moduleName = dataAst.importedModule->name();
+        }
     }
-    else if (id.moduleName.empty())
+    catch (const Error& e)
     {
-        id.moduleName = dataAst.importedModule->name();
+        Log(context.errs, location, e.what());
     }
 }
 

@@ -40,6 +40,7 @@ class TypeConstant;
 class FunctionType;
 
 typedef std::shared_ptr<Type>         TypePtr;
+typedef std::shared_ptr<TypeVar>      TypeVarPtr;
 typedef std::shared_ptr<FunctionType> FunTypePtr;
 
 
@@ -305,7 +306,7 @@ public:
 
 private:
 
-    TypePtr    makeVar();
+    TypeVarPtr makeVar();
     TypePtr    makeConst(llvm::StringRef s);
     TypePtr    makeClass(llvm::StringRef s);
     FunTypePtr makeFunction(std::vector<TypePtr> types);

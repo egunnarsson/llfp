@@ -133,7 +133,7 @@ bool generateTypeFunctions(std::vector<CompiledModule>& result, type::TypeInstPt
         return false;
     }
     auto moduleType = codeGenerator->getTypeContext()->getType(origType->identifier());
-    bool releaseOk  = codeGenerator->generateReleaseFunctionBody(moduleType);
+    bool releaseOk  = moduleType->isRefType() ? codeGenerator->generateReleaseFunctionBody(moduleType) : true;
     auto deleteOk   = codeGenerator->generateDeleteFunctionBody(moduleType);
     return releaseOk && deleteOk;
 }

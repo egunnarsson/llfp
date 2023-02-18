@@ -532,6 +532,8 @@ void Annotator::visit(ast::LetExp& exp)
 
         if (let->parameters.empty())
         {
+            result[let.get()] = tv(let->functionBody);
+
             auto it = variables.find(let->name);
             if (it == variables.end())
             {
@@ -596,7 +598,9 @@ void PatternTypeVisitor::visit(ast::IdentifierPattern& pattern)
 
 void PatternTypeVisitor::visit(ast::ConstructorPattern& pattern)
 {
-    add(pattern, annotator.makeConst(pattern.identifier.str()));
+    auto type = annotator.makeVar();
+    type->constructors.insert(pattern.identifier.str());
+    add(pattern, type);
     for (auto& arg : pattern.arguments)
     {
         // TODO: add constraints for fields... by index!
@@ -771,7 +775,7 @@ void Annotator::visit(ast::FieldExp& exp)
     auto expTV   = makeVar();
     result[&exp] = expTV;
 
-    auto t = std::make_shared<TypeVar>(current++);
+    auto t = makeVar();
     t->fields.insert(std::make_pair(exp.fieldIdentifier, expTV));
     add({ exp.location, tv(exp.lhs), t });
 }
@@ -784,7 +788,7 @@ void Annotator::visit(ast::ConstructorExp& exp)
     }
     // if constructorCount == 1
     //     result[&exp] = makeConst(exp.identifier.str()); // lookup type from constructor...
-    auto expTV = std::make_shared<TypeVar>(current++);
+    auto expTV   = makeVar();
     result[&exp] = expTV;
 
     expTV->constructors.insert(exp.identifier.str());
@@ -795,7 +799,7 @@ void Annotator::visit(ast::ConstructorExp& exp)
     auto it = variables.find(exp.identifier.name); // ?
 }
 
-TypePtr Annotator::makeVar()
+TypeVarPtr Annotator::makeVar()
 {
     return std::make_shared<TypeVar>(current++);
 }
@@ -818,7 +822,7 @@ TypePtr Annotator::makeConst(llvm::StringRef stringRef)
 
 TypePtr Annotator::makeClass(llvm::StringRef stringRef)
 {
-    auto ptr = std::make_shared<TypeVar>(current++);
+    auto ptr = makeVar();
     ptr->typeClasses.insert(stringRef.str());
     return ptr;
 }

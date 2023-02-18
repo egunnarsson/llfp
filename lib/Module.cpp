@@ -3,6 +3,7 @@
 
 #include "Codegen.h"
 #include "Common/Algorithm.h"
+#include "Error.h"
 #include "GlobalContext.h"
 #include "Log.h"
 
@@ -270,13 +271,14 @@ AstNode SourceModule::lookup(
         }
         else if (!results.empty())
         {
-            // for functionDecl not finding a result is ok, but this is not, how do we return this to the caller? start with exception?
-            Log({}, "reference to ", identifier.str(), " is ambiguous");
-            return AstNode{};
+            throw Error{ std::string{ "reference to " } + identifier.str() + " is ambiguous" };
         }
         else
         {
-            if (!errorMsg.empty()) { Log({}, errorMsg, identifier.str()); }
+            if (!errorMsg.empty())
+            {
+                throw Error{ errorMsg.str() + identifier.str() };
+            }
             return AstNode{};
         }
     }
@@ -305,13 +307,15 @@ AstNode SourceModule::lookup(
             }
             else
             {
-                Log({}, "undefined module ", identifier.moduleName);
-                return AstNode{};
+                throw Error{ std::string{ "undefined module " } + identifier.moduleName };
             }
         }
     }
 
-    if (!errorMsg.empty()) { Log({}, errorMsg, identifier.str()); }
+    if (!errorMsg.empty())
+    {
+        throw Error{ errorMsg.str() + identifier.str() };
+    }
     return AstNode{};
 }
 

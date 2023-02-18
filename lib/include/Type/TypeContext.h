@@ -87,6 +87,8 @@ public:
     TypeInstPtr getType(const Identifier& identifier);
     // const TypeInstance& getType(const hm::TypePtr& type);
 
+    TypeInstPtr getTypeFromConstructor(const std::string&);
+
 private:
 
     TypeInstance* addType(llvm::StringLiteral name, llvm::Type* llvmType, std::initializer_list<llvm::StringRef> typeClasses);

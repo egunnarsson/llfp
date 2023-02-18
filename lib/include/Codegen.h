@@ -39,7 +39,7 @@ struct Function
 struct Value
 {
     type::TypeInstPtr type;
-    llvm::Value*      value;
+    llvm::Value*      llvmValue;
 };
 
 class CodeGenerator
@@ -88,9 +88,11 @@ private:
     llvm::Function* getReleaseFunction(type::TypeInstPtr type);
     llvm::Function* getDeleteFunction(type::TypeInstPtr type);
 
-    bool generateDeleteFunctionBodyAggregate(type::TypeInstPtr type);
-    bool generateDeleteFunctionBodyVariant(type::TypeInstPtr type);
-    void generateDeleteConstructorBlock(llvm::Value* argValue, llvm::BasicBlock* block, const llfp::type::TypeConstructor& constructor);
+    bool generateDeleteFunctionBodyAggregate(llvm::Function* function, type::TypeInstPtr type);
+    bool generateDeleteFunctionBodyVariant(llvm::Function* function, type::TypeInstPtr type);
+    void generateDeleteConstructorBlock(llvm::Value* argValue, const llfp::type::TypeConstructor& constructor);
+
+    llvm::Value* i32V(uint64_t i);
 
     friend ExpCodeGenerator;
 };
@@ -141,6 +143,9 @@ private:
 
     auto& llvmContext() { return *generator->llvmContext; }
     auto& llvmBuilder() { return generator->llvmBuilder; }
+    auto& llvmModule() { return *generator->llvmModule; }
+
+    llvm::Value* i32V(uint64_t i) { return generator->i32V(i); }
 
     auto generateBinary(type::TypeInstPtr type, ast::BinaryExp& exp)
     {
