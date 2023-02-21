@@ -187,6 +187,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
         auto argRange = llvmFunction->args();
         if (ptrReturn)
         {
+            assert(!llvmFunction->arg_empty());
             argRange.begin()->addAttr(llvm::Attribute::NoAlias);
             argRange.begin()->addAttr(llvm::Attribute::get(*llvmContext, llvm::Attribute::Alignment, 8));
             argRange = { argRange.begin() + 1, argRange.end() };
@@ -216,7 +217,7 @@ bool CodeGenerator::generateFunctionBody(Function* function)
     llvmBuilder.SetInsertPoint(bb);
 
     // if return type is user type it is returned in first argument
-    size_t argOffset = types[0]->isBasicType() ? 0 : 1;
+    size_t argOffset = (types[0]->isBasicType() || types[0]->isRefType()) ? 0 : 1;
 
     std::map<std::string, Value> namedValues;
     for (size_t i = 0; i < ast->parameters.size(); ++i)
@@ -237,7 +238,7 @@ bool CodeGenerator::generateFunctionBody(Function* function)
             }
         }
 
-        llvm::Value* llvmArg           = (llvmFunction->arg_begin() + argOffset + i);
+        llvm::Value* llvmArg           = llvmFunction->getArg(argOffset + i);
         namedValues[param->identifier] = { types[i + 1], llvmArg };
     }
 
@@ -264,7 +265,7 @@ bool CodeGenerator::generateFunctionBody(Function* function)
         else
         {
             auto load  = llvmBuilder.CreateLoad(types[0]->llvmType(), expGenerator.getResult());
-            auto store = llvmBuilder.CreateStore(load, llvmFunction->arg_begin());
+            auto store = llvmBuilder.CreateStore(load, llvmFunction->getArg(0));
             store->setAlignment(llvm::Align(8));
             llvmBuilder.CreateRetVoid();
         }
@@ -1613,7 +1614,7 @@ bool CodeGenerator::generateReleaseFunctionBody(type::TypeInstPtr type)
     {
         return true;
     }
-    auto inValue = llvmFunction->arg_begin();
+    auto inValue = llvmFunction->getArg(0);
 
     auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
     llvmBuilder.SetInsertPoint(entryBB);
@@ -1689,7 +1690,7 @@ void CodeGenerator::generateDeleteConstructorBlock(llvm::Value* argValue, const 
 
 bool CodeGenerator::generateDeleteFunctionBodyAggregate(llvm::Function* llvmFunction, type::TypeInstPtr type)
 {
-    auto argValue = llvmFunction->arg_begin();
+    auto argValue = llvmFunction->getArg(0);
 
     auto block = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
 
@@ -1711,7 +1712,7 @@ bool CodeGenerator::generateDeleteFunctionBodyAggregate(llvm::Function* llvmFunc
 
 bool CodeGenerator::generateDeleteFunctionBodyVariant(llvm::Function* llvmFunction, type::TypeInstPtr type)
 {
-    auto argValue = llvmFunction->arg_begin();
+    auto argValue = llvmFunction->getArg(0);
 
     auto entryBB = llvm::BasicBlock::Create(*llvmContext, "entry", llvmFunction);
     auto retBB   = llvm::BasicBlock::Create(*llvmContext, "return", llvmFunction);
