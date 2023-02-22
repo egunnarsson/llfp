@@ -193,7 +193,7 @@ std::string SourceModule::getMangledName(const ast::Data* data, size_t construct
 
 std::string SourceModule::getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const
 {
-    return name() + ':' + internalFunctionName + "$$" + type->identifier().str();
+    return '$' + name() + ':' + internalFunctionName + "$" + type->identifier().str();
 }
 
 std::string SourceModule::getExportedName(const ast::Function* function) const

@@ -298,7 +298,6 @@ TypeInstPtr TypeContext::getType(const Identifier& identifier)
     throw Error(std::string{ "unknown data " } + identifier.name.str());
 }
 
-
 TypeInstPtr TypeContext::getTypeFromConstructor(const std::string& name)
 {
     auto       id  = GlobalIdentifier::split(name);

@@ -291,7 +291,7 @@ const FieldList& TypeInstanceAggregate::getFields(const std::string& constructor
 namespace
 {
 
-TypeInstPtr findTypeOfTypeVar(const std::string& typeVar, const ast::TypeIdentifier& typeId, TypeInstPtr type)
+TypeInstPtr findTypeOfTypeVar(const std::string& typeVar, const ast::TypeIdentifier& typeIdIn, TypeInstPtr type)
 {
     auto findType_impl = [&typeVar](const ast::TypeIdentifier& typeId, TypeInstPtr type, auto& find_ref) -> TypeInstPtr {
         if (typeId.identifier.moduleName.empty() && typeId.identifier.name == typeVar)
@@ -309,7 +309,7 @@ TypeInstPtr findTypeOfTypeVar(const std::string& typeVar, const ast::TypeIdentif
 
         return nullptr;
     };
-    return findType_impl(typeId, type, findType_impl);
+    return findType_impl(typeIdIn, type, findType_impl);
 }
 
 } // namespace

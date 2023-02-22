@@ -97,22 +97,28 @@ private:
     friend ExpCodeGenerator;
 };
 
+struct ExpCodeGeneratorContext
+{
+    CodeGenerator&      generator_;
+    hm::TypeAnnotation& typeAnnotation_;
+};
+
 class ExpCodeGenerator : public ast::ExpVisitor
 {
     static const Value EmptyValue;
 
     ExpCodeGenerator* const      parent;
-    CodeGenerator* const         generator;
-    const type::TypeInstance*    expectedType;
+    ExpCodeGeneratorContext&     context_;
+    type::TypeInstPtr            expectedType;
     std::map<std::string, Value> values;
     // std::map<string, .> letExpFunctions; localFunction
-    llvm::Value*                 result;
     std::vector<Value>           temporaries;
-    hm::TypeAnnotation*          typeAnnotation;
+    llvm::Value*                 result;
+    llvm::StringLiteral          path;
 
 public:
 
-    ExpCodeGenerator(type::TypeInstPtr type_, CodeGenerator* generator_, std::map<std::string, Value> parameters_, hm::TypeAnnotation* typeAnnotation_);
+    ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGeneratorContext& context, std::map<std::string, Value> parameters_);
     ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGenerator* parent_, std::map<std::string, Value> scope_);
     virtual ~ExpCodeGenerator() { assert(temporaries.empty()); }
 
@@ -139,13 +145,15 @@ public:
 
 private:
 
+    std::string buildPath() const;
+
     const Value& getNamedValue(const std::string& name);
 
-    auto& llvmContext() { return *generator->llvmContext; }
-    auto& llvmBuilder() { return generator->llvmBuilder; }
-    auto& llvmModule() { return *generator->llvmModule; }
+    auto& llvmContext() { return *context_.generator_.llvmContext; }
+    auto& llvmBuilder() { return context_.generator_.llvmBuilder; }
+    auto& llvmModule() { return *context_.generator_.llvmModule; }
 
-    llvm::Value* i32V(uint64_t i) { return generator->i32V(i); }
+    llvm::Value* i32V(uint64_t i) { return context_.generator_.i32V(i); }
 
     auto generateBinary(type::TypeInstPtr type, ast::BinaryExp& exp)
     {
