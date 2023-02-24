@@ -1233,10 +1233,14 @@ void ExpCodeGenerator::visit(ast::CallExp& exp)
                 arguments.push_back(argValue);
             }
 
-            result = llvmBuilder().CreateCall(function->llvm, arguments, p);
             if (retValue != nullptr)
             {
+                llvmBuilder().CreateCall(function->llvm, arguments);
                 result = retValue;
+            }
+            else
+            {
+                result = llvmBuilder().CreateCall(function->llvm, arguments, p);
             }
             temporaries.push_back({ expectedType, result });
         }
