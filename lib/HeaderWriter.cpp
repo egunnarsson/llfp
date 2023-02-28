@@ -1,6 +1,7 @@
 
 #include "HeaderWriter.h"
 
+#include "Error.h"
 #include "Type/TypeContext.h"
 
 #pragma warning(push, 0)
@@ -59,8 +60,7 @@ std::string convertType(llfp::SourceModule& module, const GlobalIdentifier& type
     {
         if (ast.data->constructors.size() > 1)
         {
-            llvm::errs() << "type variant export not supported yet '" << ast.importedModule->name() << ':' << ast.data->name << '\'';
-            return std::string();
+            throw Error{ std::string{ "type variant export not supported yet '" } + ast.importedModule->name() + ':' + ast.data->name + '\'' };
         }
         else if (ast.data->typeVariables.empty())
         {
@@ -70,14 +70,11 @@ std::string convertType(llfp::SourceModule& module, const GlobalIdentifier& type
         }
         else
         {
-            llvm::errs() << "cannot export data type with type variables: " << ast.importedModule->name() << ':' << ast.data->name;
-            return std::string();
+            throw Error{ std::string{ "cannot export data type with type variables: " } + ast.importedModule->name() + ':' + ast.data->name };
         }
     }
 
-    // TODO: If we end up here we should delete the output file
-    llvm::errs() << "unsupported C type (" << type.str() << ") in exported function\n";
-    return std::string();
+    throw Error{ std::string{ "unsupported C type (" } + type.str() + ") in exported function" };
 }
 
 void writeParameter(llvm::raw_ostream& os, llfp::SourceModule& module, std::unique_ptr<ast::Parameter>& param)
@@ -94,117 +91,124 @@ void writeParameter(llvm::raw_ostream& os, llfp::SourceModule& module, std::uniq
 
 void HeaderWriter::write(llvm::raw_ostream& os, llfp::SourceModule& module)
 {
-    auto headerGuard = module.name();
-    for (auto& c : headerGuard) c = llvm::toUpper(c);
-    headerGuard += "_H";
-
-    os << "#ifndef " << headerGuard << "\n"
-                                       "#define "
-       << headerGuard << "\n\n"
-
-                         "#include <stdint.h>\n"
-                         "#include <stdbool.h>\n\n"
-
-                         "#ifdef __cplusplus\n"
-                         "extern \"C\" {\n"
-                         "#endif\n\n";
-
-    // for data used from other modules we need to #include ""
-
-    // TODO: C requires these to be in order if they refer to each other
-    for (auto& d : module.getAST()->datas)
+    try
     {
-        // TODO: instead we should mark them as needed?
-        // otherwise we need to check recursively if all children are also exported
-        // for all types in exported functions
-        // if not it's an error
-        if (!d->exported)
-        {
-            continue;
-        }
-        if (!d->typeVariables.empty())
-        {
-            llvm::errs() << "cannot export data type with type variables: " << module.name() << ':' << d->name;
-            continue;
-        }
+        auto headerGuard = module.name();
+        for (auto& c : headerGuard) c = llvm::toUpper(c);
+        headerGuard += "_H";
 
-        auto writeStruct = [&module, &os](const std::string& name, const std::vector<ast::Field>& fields) {
-            os << "struct " << name << "\n{\n";
-            for (auto& f : fields)
+        os << "#ifndef " << headerGuard << "\n"
+                                           "#define "
+           << headerGuard << "\n\n"
+
+                             "#include <stdint.h>\n"
+                             "#include <stdbool.h>\n\n"
+
+                             "#ifdef __cplusplus\n"
+                             "extern \"C\" {\n"
+                             "#endif\n\n";
+
+        // for data used from other modules we need to #include ""
+
+        // TODO: C requires these to be in order if they refer to each other
+        for (auto& d : module.getAST()->datas)
+        {
+            // TODO: instead we should mark them as needed?
+            // otherwise we need to check recursively if all children are also exported
+            // for all types in exported functions
+            // if not it's an error
+            if (!d->exported)
             {
-                os << '\t' << convertType(module, f.type.identifier) << ' ' << f.name << ";\n";
+                continue;
             }
-            os << "};\n\n";
-        };
-
-        if (d->constructors.size() > 1)
-        {
-            for (int i = 0; i < d->constructors.size(); ++i)
+            if (!d->typeVariables.empty())
             {
-                writeStruct(module.getMangledName(d.get(), i), d->constructors[i].fields);
+                llvm::errs() << "cannot export data type with type variables: " << module.name() << ':' << d->name;
+                continue;
             }
 
-            // make union struct
+            auto writeStruct = [&module, &os](const std::string& name, const std::vector<ast::Field>& fields) {
+                os << "struct " << name << "\n{\n";
+                for (auto& f : fields)
+                {
+                    os << '\t' << convertType(module, f.type.identifier) << ' ' << f.name << ";\n";
+                }
+                os << "};\n\n";
+            };
+
             if (d->constructors.size() > 1)
             {
-                os << "struct " << module.getMangledName(d.get()) << "\n{\n"
-                                                                     "\tint type;\n" // TODO: this type need to match TypeInstanceVariant::getEnumType
-                                                                     "\tunion {\n";
                 for (int i = 0; i < d->constructors.size(); ++i)
                 {
-                    os << "\t\tstruct " << module.getMangledName(d.get(), i) << ' ' << d->constructors[i].name << ";\n";
+                    writeStruct(module.getMangledName(d.get(), i), d->constructors[i].fields);
                 }
-                os << "\t};\n"
-                      "};\n\n";
+
+                // make union struct
+                if (d->constructors.size() > 1)
+                {
+                    os << "struct " << module.getMangledName(d.get()) << "\n{\n"
+                                                                         "\tint type;\n" // TODO: this type need to match TypeInstanceVariant::getEnumType
+                                                                         "\tunion {\n";
+                    for (int i = 0; i < d->constructors.size(); ++i)
+                    {
+                        os << "\t\tstruct " << module.getMangledName(d.get(), i) << ' ' << d->constructors[i].name << ";\n";
+                    }
+                    os << "\t};\n"
+                          "};\n\n";
+                }
+            }
+            else
+            {
+                writeStruct(module.getMangledName(d.get()), d->constructors.at(0).fields);
             }
         }
-        else
+
+        for (auto& f : module.getAST()->functions)
         {
-            writeStruct(module.getMangledName(d.get()), d->constructors.at(0).fields);
-        }
-    }
+            if (!f->exported) { continue; }
 
-    for (auto& f : module.getAST()->functions)
-    {
-        if (!f->exported) { continue; }
+            auto            retType     = convertType(module, f->type.identifier);
+            const bool      retUserType = retType.back() == '*';
+            llvm::StringRef funRetType  = retUserType ? llvm::StringLiteral("void") : llvm::StringRef(retType);
 
-        auto            retType     = convertType(module, f->type.identifier);
-        const bool      retUserType = retType.back() == '*';
-        llvm::StringRef funRetType  = retUserType ? llvm::StringLiteral("void") : llvm::StringRef(retType);
+            os << funRetType << ' ' << module.getExportedName(f.get()) << '(';
 
-        os << funRetType << ' ' << module.getExportedName(f.get()) << '(';
-
-        if (retUserType)
-        {
-            os << retType << " result";
-        }
-
-        if (f->parameters.size() >= 1)
-        {
             if (retUserType)
             {
-                os << ", ";
+                os << retType << " result";
             }
 
-            writeParameter(os, module, f->parameters.front());
-            if (f->parameters.size() >= 2)
+            if (f->parameters.size() >= 1)
             {
-                for (auto it = f->parameters.begin() + 1; it != f->parameters.end(); ++it)
+                if (retUserType)
                 {
                     os << ", ";
-                    writeParameter(os, module, *it);
+                }
+
+                writeParameter(os, module, f->parameters.front());
+                if (f->parameters.size() >= 2)
+                {
+                    for (auto it = f->parameters.begin() + 1; it != f->parameters.end(); ++it)
+                    {
+                        os << ", ";
+                        writeParameter(os, module, *it);
+                    }
                 }
             }
+
+            os << ");\n";
         }
 
-        os << ");\n";
+        os << "\n#ifdef __cplusplus\n"
+              "}\n"
+              "#endif\n\n"
+
+              "#endif\n";
     }
-
-    os << "\n#ifdef __cplusplus\n"
-          "}\n"
-          "#endif\n\n"
-
-          "#endif\n";
+    catch (const Error& e)
+    {
+        llvm::errs() << e.what() << '\n';
+    }
 }
 
 } // namespace llfp
