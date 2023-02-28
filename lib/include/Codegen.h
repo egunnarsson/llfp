@@ -114,7 +114,6 @@ class ExpCodeGenerator : public ast::ExpVisitor
     // std::map<string, .> letExpFunctions; localFunction
     std::vector<Value>           temporaries;
     llvm::Value*                 result;
-    llvm::StringLiteral          path;
 
 public:
 
@@ -125,7 +124,7 @@ public:
     static llvm::Value* generateUnscoped(ast::Exp& exp, type::TypeInstPtr type, ExpCodeGenerator* parent, std::map<std::string, Value> scope = {});
     static llvm::Value* generateScoped(ast::Exp& exp, type::TypeInstPtr type, ExpCodeGenerator* parent, std::map<std::string, Value> scope = {});
 
-    void generateCleanup();
+    void generateCleanup(const ast::Exp& epx);
 
     // lookup, local functions, global functions,
     Function*          getFunction(const GlobalIdentifier& identifier, std::vector<type::TypeInstPtr> types);
@@ -144,8 +143,6 @@ public:
     void visit(ast::ConstructorExp& exp) override;
 
 private:
-
-    std::string buildPath() const;
 
     const Value& getNamedValue(const std::string& name);
 
