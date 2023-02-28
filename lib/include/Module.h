@@ -44,8 +44,8 @@ public:
     DataAst    getConstructor(const std::string& name) const override;
 
     std::string getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const override;
-    std::string getMangledName(const ast::Data* data) const override;
-    std::string getMangledName(const ast::Data* data, size_t constructorIndex) const override;
+    std::string getMangledName(const ast::Data* data, const std::map<std::string, type::Identifier>& typeVariables = {}) const override;
+    std::string getMangledName(const ast::Data* data, size_t constructorIndex, const std::map<std::string, type::Identifier>& typeVariables = {}) const override;
     std::string getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const override;
     std::string getExportedName(const ast::Function* function) const override;
     bool        fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const override;
@@ -62,22 +62,6 @@ private:
 
     template<class AstNode, class LocalFun, class GlobalFun>
     AstNode lookup(const GlobalIdentifier& identifier, LocalFun localLookup, GlobalFun globalLookup, llvm::StringLiteral errorMsg) const;
-};
-
-class StandardModule : public ImportedModule
-{
-    std::string name_;
-
-public:
-
-    const std::string& name() const override;
-    FunAst             getFunction(const std::string& name) override;
-    FunDeclAst         getFunctionDecl(const std::string& name) override;
-
-    std::string getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const override;
-    std::string getMangledName(const ast::Data* data) const override;
-    std::string getMangledName(const ast::Data* data, size_t constructorIndex) const override;
-    std::string getExportedName(const ast::Function* function) const override;
 };
 
 } // namespace llfp

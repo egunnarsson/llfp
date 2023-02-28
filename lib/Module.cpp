@@ -178,17 +178,39 @@ std::string SourceModule::getMangledName(const ast::Function* function, const ll
     return result;
 }
 
-std::string SourceModule::getMangledName(const ast::Data* data) const
+namespace
 {
-    assert(data->typeVariables.empty());
-    return name() + '_' + data->name;
+
+void mangleTypeVars(std::string& name, const ast::Data* data, const std::map<std::string, type::Identifier>& typeVariables)
+{
+    for (auto& typeVar : data->typeVariables)
+    {
+        auto it = typeVariables.find(typeVar);
+        assert(it != typeVariables.end());
+        name += '_';
+        name += it->second.str();
+    }
 }
 
-std::string SourceModule::getMangledName(const ast::Data* data, size_t constructorIndex) const
+} // namespace
+
+std::string SourceModule::getMangledName(const ast::Data* data, const std::map<std::string, type::Identifier>& typeVariables) const
 {
-    assert(data->typeVariables.empty());
+    assert(data->constructors.size() == 1);
+    assert(data->typeVariables.size() == typeVariables.size());
+    auto result = name() + '_' + data->name;
+    mangleTypeVars(result, data, typeVariables);
+    return result;
+}
+
+std::string SourceModule::getMangledName(const ast::Data* data, size_t constructorIndex, const std::map<std::string, type::Identifier>& typeVariables) const
+{
     assert(data->constructors.size() > 1);
-    return name() + '_' + data->name + '_' + data->constructors.at(constructorIndex).name;
+    assert(data->typeVariables.size() == typeVariables.size());
+    auto result = name() + '_' + data->name;
+    mangleTypeVars(result, data, typeVariables);
+    result += '_' + data->constructors.at(constructorIndex).name;
+    return result;
 }
 
 std::string SourceModule::getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const

@@ -130,11 +130,17 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
             auto funAst = sourceModule->lookupFunction(GlobalIdentifier::split(funName)); // module? not sourceModule?
             if (funAst.empty())
             {
-                continue; // could be typeclass and we dont know the type instance yet
+                auto funDecl = sourceModule->lookupFunctionDecl(GlobalIdentifier::split(funName));
+                assert(!funDecl.empty());
+                auto& funType = typeContext.getAnnotation(funDecl.class_, funDecl.function);
+                typeAnnotation.add(funName, funType);
             }
-            const auto& funAnnotation = typeContext.getAnnotation(funAst.importedModule, funAst.function);
-            const auto  funType       = funAnnotation.getFun(funName);
-            typeAnnotation.add(funName, funType);
+            else
+            {
+                const auto& funAnnotation = typeContext.getAnnotation(funAst.importedModule, funAst.function);
+                const auto  funType       = funAnnotation.getFun(funName);
+                typeAnnotation.add(funName, funType);
+            }
         }
 
         // standard module may not have implementation

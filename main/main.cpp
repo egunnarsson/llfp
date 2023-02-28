@@ -46,7 +46,7 @@ llfp::Source readInput(const std::string& inputFilename)
             buffer << fileStream.rdbuf();
         }
     }
-    catch (const std::ifstream::failure& e)
+    catch ([[maybe_unused]] const std::ifstream::failure& e)
     {
         // e.what() does not seem to return anything useful
         throw llfp::Error(std::string{ std::strerror(errno) } + " (" + inputFilename + ')');

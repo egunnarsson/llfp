@@ -123,6 +123,45 @@ const hm::TypeAnnotation& TypeContext::getAnnotation(const ImportedModule* modul
     return *it->second;
 }
 
+
+const hm::FunTypePtr& TypeContext::getAnnotation(const ast::Class* class_, const ast::FunctionDeclaration* ast)
+{
+    auto it = annotationsDecls.find(ast);
+    if (it != annotationsDecls.end())
+    {
+        return it->second;
+    }
+
+    hm::TypePtr                        varPtr = std::make_shared<hm::TypeVar>(0);
+    std::map<std::string, hm::TypePtr> typeMap;
+    typeMap[class_->typeVariable] = varPtr;
+
+    auto insert = [&typeMap](std::string argType) {
+        auto it = typeMap.find(argType);
+        if (it == typeMap.end())
+        {
+            auto copy                   = argType;
+            typeMap[std::move(argType)] = std::make_shared<hm::TypeConstant>(std::move(copy));
+        }
+    };
+
+    insert(ast->type.identifier.str());
+    for (auto& arg : ast->parameters)
+    {
+        insert(arg->type.str());
+    }
+
+    std::vector<hm::TypePtr> types;
+    types.push_back(typeMap[ast->type.identifier.str()]);
+    for (auto& arg : ast->parameters)
+    {
+        types.push_back(typeMap[arg->type.str()]);
+    }
+
+    auto result = annotationsDecls.insert({ ast, std::make_shared<hm::FunctionType>(std::move(types)) });
+    return result.first->second;
+}
+
 // will throw on error, return not needed?
 bool TypeContext::check(hm::TypeAnnotation& context, TypeInstPtr typeInstance, const hm::TypePtr& t)
 {
@@ -182,6 +221,41 @@ TypeInstPtr TypeContext::getTypeFromAst(const ast::TypeIdentifier& identifier, c
     throw Error(std::string{ "failed to fully qualify name: " } + identifier.str());
 }
 
+namespace
+{
+
+void replaceTypeVars(ast::TypeIdentifier& id, const std::map<std::string, Identifier>& typeVariables)
+{
+    if (id.identifier.moduleName.empty())
+    {
+        auto it = typeVariables.find(id.identifier.name);
+        if (it != typeVariables.end())
+        {
+            id.identifier = it->second.name;
+        }
+    }
+    for (auto& param : id.parameters)
+    {
+        replaceTypeVars(param, typeVariables);
+    }
+}
+
+} // namespace
+
+TypeInstPtr TypeContext::getTypeFromAst(const ast::TypeIdentifier& identifier, const ImportedModule* lookupModule, const std::map<std::string, Identifier>& typeVariables)
+{
+    if (typeVariables.empty())
+    {
+        return getTypeFromAst(identifier, lookupModule);
+    }
+    else
+    {
+        ast::TypeIdentifier idCopy = identifier;
+        replaceTypeVars(idCopy, typeVariables);
+        return getTypeFromAst(idCopy, lookupModule);
+    }
+}
+
 std::vector<TypeInstPtr> TypeContext::getFieldTypes(llfp::DataAst ast, const std::vector<llfp::ast::Field>& fields, const std::map<std::string, Identifier>& typeVariables)
 {
     std::vector<TypeInstPtr> result;
@@ -198,7 +272,7 @@ std::vector<TypeInstPtr> TypeContext::getFieldTypes(llfp::DataAst ast, const std
         }
         if (fieldType == nullptr)
         {
-            fieldType = getTypeFromAst(field.type, ast.importedModule);
+            fieldType = getTypeFromAst(field.type, ast.importedModule, typeVariables);
         }
 
         if (fieldType == nullptr)
@@ -242,7 +316,7 @@ TypeInstPtr TypeContext::makeTypeInstanceVariant(const Identifier& identifier, l
         auto llvmType   = llvm::StructType::create(llvmContext, "");
         auto fieldTypes = getFieldTypes(ast, it.value().fields, typeVariables);
 
-        llvmType->setName(ast.importedModule->getMangledName(ast.data, it.index()));
+        llvmType->setName(ast.importedModule->getMangledName(ast.data, it.index(), typeVariables));
 
         std::vector<llvm::Type*> llvmTypes;
         std::transform(fieldTypes.begin(), fieldTypes.end(), std::back_inserter(llvmTypes),
@@ -305,7 +379,7 @@ TypeInstPtr TypeContext::getTypeFromConstructor(const std::string& name)
     Identifier tid{ id, {} };
     if (ast.data->typeVariables.size() != tid.parameters.size())
     {
-        //throw Error(std::string{ "type arity mismatch between " } + tid.str() + " and " + ast.importedModule->name() + ':' + ast.data->name + '/' + std::to_string(ast.data->typeVariables.size()));
+        // throw Error(std::string{ "type arity mismatch between " } + tid.str() + " and " + ast.importedModule->name() + ':' + ast.data->name + '/' + std::to_string(ast.data->typeVariables.size()));
         throw Error(std::string{ "not implemented, cannot deduce type parameters for " } + id.str());
     }
     if (ast.data->constructors.size() == 1)

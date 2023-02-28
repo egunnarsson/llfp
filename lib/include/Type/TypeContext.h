@@ -55,6 +55,7 @@ class TypeContext
 
     std::unordered_map<Identifier, std::unique_ptr<TypeInstance>>                 types;
     std::unordered_map<const ast::Function*, std::unique_ptr<hm::TypeAnnotation>> annotations;
+    std::unordered_map<const ast::FunctionDeclaration*, hm::FunTypePtr>           annotationsDecls;
 
     TypeInstance* boolType;
     TypeInstance* i64Type;
@@ -67,9 +68,11 @@ public:
     TypeContext(llvm::LLVMContext& llvmContext_, SourceModule* sourceModule_, GlobalContext* globalContext_);
 
     const hm::TypeAnnotation& getAnnotation(const ImportedModule* module, const ast::Function* ast);
+    const hm::FunTypePtr&     getAnnotation(const ast::Class* class_, const ast::FunctionDeclaration* ast);
 
     TypeInstPtr getTypeFromAst(const ast::TypeIdentifier& identifier);
     TypeInstPtr getTypeFromAst(const ast::TypeIdentifier& identifier, const ImportedModule* lookupModule);
+    TypeInstPtr getTypeFromAst(const ast::TypeIdentifier& identifier, const ImportedModule* lookupModule, const std::map<std::string, Identifier>& typeVariables);
     bool        equals(TypeInstPtr type, const ast::TypeIdentifier& identifier);
     bool        equals(TypeInstPtr type, llvm::StringRef identifier);
 

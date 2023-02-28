@@ -497,13 +497,14 @@ void Annotator::operator()(const std::string& moduleName, const ast::Function& f
     result.clear();
     constraints.clear();
 
-    auto bodyType = fun.type.empty() ? makeVar() : makeConst(fun.type.str());
+    auto bodyType = fun.type.empty() ? makeVar() : makeConst(fun.type.identifier.str());
 
     std::vector<TypePtr> args;
     args.push_back(bodyType);
     for (auto& arg : fun.parameters)
     {
-        auto argTV          = arg->type.empty() ? makeVar() : makeConst(arg->type.str()); // Maybe[int], Maybe[bool]... Maybe[a]?
+        auto argTV          = arg->type.empty() ? makeVar() : makeConst(arg->type.identifier.str()); // Maybe[int], Maybe[bool]... Maybe[a]?
+        // TODO: nested type parameters
         auto [it, inserted] = variables.insert({ arg->identifier, argTV });
         if (!inserted)
         {

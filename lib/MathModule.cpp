@@ -148,13 +148,11 @@ FunDeclAst MathModule::getFunctionDecl(const std::string& name)
 
 DataAst MathModule::getType(const std::string& name) const
 {
-    assert(false);
     return { nullptr, nullptr };
 }
 
 DataAst MathModule::getConstructor(const std::string& name) const
 {
-    assert(false);
     return { nullptr, nullptr };
 }
 
@@ -181,13 +179,13 @@ std::string MathModule::getMangledName(const ast::Function* function, const llvm
     }
 }
 
-std::string MathModule::getMangledName(const ast::Data* data) const
+std::string MathModule::getMangledName(const ast::Data* data, const std::map<std::string, type::Identifier>& typeVariables) const
 {
     assert(false);
     return "";
 }
 
-std::string MathModule::getMangledName(const ast::Data* data, size_t constructorIndex) const
+std::string MathModule::getMangledName(const ast::Data* data, size_t constructorIndex, const std::map<std::string, type::Identifier>& typeVariables) const
 {
     assert(false);
     return "";
