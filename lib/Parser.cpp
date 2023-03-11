@@ -908,6 +908,7 @@ std::unique_ptr<ast::Exp> Parser::parsePrimaryExp()
     case lex::Token::Let: return parseLetExp();
     case lex::Token::Case: return parseCaseExp();
     case lex::Token::Open_parenthesis: return parseParenthesizedExp();
+    case lex::Token::Intrinsic: return parseIntrinsicExp();
     default: return error<ast::Exp>("expected an expression");
     }
 }
@@ -978,6 +979,42 @@ std::unique_ptr<ast::Exp> Parser::parseBinaryExp(int exprPrec, std::unique_ptr<a
             LHS = std::make_unique<ast::BinaryExp>(location, op, std::move(LHS), std::move(RHS));
         }
     }
+}
+
+// <intrinsic> "(" [ <exp> { "," <exp> } ] ")"
+std::unique_ptr<ast::Exp> Parser::parseIntrinsicExp()
+{
+    assert(lexer->getToken() == lex::Token::Intrinsic);
+
+    const auto location = lexer->getLocation();
+    auto       name     = lexer->getString();
+
+    std::vector<std::unique_ptr<ast::Exp>> args;
+    if (lexer->nextToken() == lex::Token::Open_parenthesis)
+    {
+        auto parseElement = [this, &args]() {
+            if (auto arg = parseExp())
+            {
+                args.push_back(std::move(arg));
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        };
+
+        if (!parseList(parseElement))
+        {
+            return nullptr;
+        }
+    }
+    else
+    {
+        return error<ast::Exp>("expected 'parenthesis'");
+    }
+
+    return std::make_unique<ast::IntrinsicExp>(location, std::move(name), std::move(args));
 }
 
 std::unique_ptr<ast::Exp> Parser::parseExp()

@@ -197,6 +197,14 @@ public:
         }
     }
 
+    void visit(ast::IntrinsicExp& exp) override
+    {
+        for (auto& arg : exp.arguments_)
+        {
+            arg->accept(this);
+        }
+    }
+
     bool isLocal(const std::string& id) const override
     {
         return parentScope != nullptr ? parentScope->isLocal(id) : false;

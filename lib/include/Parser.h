@@ -66,6 +66,7 @@ private:
     std::unique_ptr<ast::Exp> parsePrimaryExp(); // What is this? more like Term
     std::unique_ptr<ast::Exp> parseUnaryExp();
     std::unique_ptr<ast::Exp> parseBinaryExp(int exprPrec, std::unique_ptr<ast::Exp> LHS);
+    std::unique_ptr<ast::Exp> parseIntrinsicExp();
     std::unique_ptr<ast::Exp> parseExp();
 
     std::optional<ast::NamedArgument> parseNamedArgument();

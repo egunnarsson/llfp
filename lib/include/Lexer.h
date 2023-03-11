@@ -56,6 +56,8 @@ enum class Token
     Comma,
     Equal,
 
+    Intrinsic,
+
     Comment,
 };
 
@@ -136,6 +138,7 @@ private:
     Token parseChar();
     Token parseString();
     Token parseOperator(bool continuation = false);
+    Token parseIntrinsic();
     Token parseComment();
 };
 

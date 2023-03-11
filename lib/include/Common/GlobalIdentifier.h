@@ -49,17 +49,11 @@ struct GlobalIdentifier
 
 } // namespace llfp
 
-
-namespace std
-{
-
 template<>
-struct hash<llfp::GlobalIdentifier>
+struct std::hash<llfp::GlobalIdentifier>
 {
     std::size_t operator()(llfp::GlobalIdentifier const& id) const noexcept
     {
         return llvm::hash_combine(llvm::hash_value(id.name), llvm::hash_value(id.moduleName));
     }
 };
-
-} // namespace std

@@ -173,6 +173,11 @@ Token Lexer::parseToken()
         return ptoken;
     }
 
+    if (lastChar == '@')
+    {
+        return parseIntrinsic();
+    }
+
     if (lastChar == '#') // Comments: '#'[.-'\n']*'\n' | #{.*}#
     {
         return parseComment();
@@ -199,6 +204,7 @@ Token Lexer::error(const char* msg)
 // identifier: letter (letter | digit | '_' | '\'')*
 Token Lexer::parseIdentifier()
 {
+    assert(isalpha(lastChar));
     tokenString = static_cast<char>(lastChar);
 
     while (isidentifier(lastChar = getChar()))
@@ -374,6 +380,24 @@ Token Lexer::parseOperator(bool continuation)
     }
 
     return Token::Operator;
+}
+
+Token Lexer::parseIntrinsic()
+{
+    assert(lastChar == '@');
+    tokenString.clear();
+
+    lastChar = getChar();
+    if (lastChar != EOF)
+    {
+        parseIdentifier();
+    }
+
+    if (tokenString.empty())
+    {
+        return error("empty intrinsic");
+    }
+    return Token::Intrinsic;
 }
 
 // Comments: '#'[.-'\n']*'\n' | #{.*}#

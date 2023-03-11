@@ -293,6 +293,12 @@ TEST(LexerTest, StringsAndChars)
     PARSE_TOKEN("\"\\a\"", Token::Error, "invalid escape character");
 }
 
+TEST(LexerTest, Intrinsic)
+{
+    PARSE_TOKEN("@a'b", Token::Intrinsic, "a'b");
+    PARSE_TOKEN("@", Token::Error, "empty intrinsic");
+}
+
 TEST(LexerTest, Comments)
 {
     

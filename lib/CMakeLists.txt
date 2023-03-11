@@ -4,6 +4,7 @@ include_directories(${LLVM_INCLUDE_DIRS} ${LLFP_INCLUDE_DIR})
 add_library(llfp_lib
 	Ast.cpp
 	Codegen.cpp
+	Common/Algorithm.cpp
 	Driver.cpp
 	GlobalContext.cpp
 	HeaderWriter.cpp

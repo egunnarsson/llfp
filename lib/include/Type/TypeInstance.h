@@ -49,25 +49,20 @@ struct Identifier
 
 } // namespace llfp::type
 
-namespace std
-{
-
 template<>
-struct hash<llfp::type::Identifier>
+struct std::hash<llfp::type::Identifier>
 {
     std::size_t operator()(llfp::type::Identifier const& id) const noexcept
     {
         std::vector<llvm::hash_code> tmp(id.parameters.size(), 0);
         std::transform(id.parameters.begin(), id.parameters.end(), tmp.begin(),
-                       [](llfp::type::Identifier const& id) { return hash<llfp::type::Identifier>{}(id); });
+                       [](llfp::type::Identifier const& id) { return std::hash<llfp::type::Identifier>{}(id); });
 
         return llvm::hash_combine(
             std::hash<llfp::GlobalIdentifier>{}(id.name),
             llvm::hash_combine_range(tmp.begin(), tmp.end()));
     }
 };
-
-} // namespace std
 
 namespace llfp
 {

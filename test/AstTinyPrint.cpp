@@ -43,6 +43,7 @@ public:
     void visit(llfp::ast::VariableExp &exp) override { os << exp.identifier; }
     void visit(llfp::ast::FieldExp &exp) override { os << exp.lhs << '.' << exp.fieldIdentifier; }
     void visit(llfp::ast::ConstructorExp &exp) override { os << exp.identifier << exp.arguments; }
+    void visit(llfp::ast::IntrinsicExp& exp) override { os << '@' << exp.identifier_ << exp.arguments_; }
 };
 
 class PatternPrint : public llfp::ast::PatternVisitor

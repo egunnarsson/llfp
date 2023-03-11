@@ -151,14 +151,14 @@ const hm::FunTypePtr& TypeContext::getAnnotation(const ast::Class* class_, const
         insert(arg->type.str());
     }
 
-    std::vector<hm::TypePtr> types;
-    types.push_back(typeMap[ast->type.identifier.str()]);
+    std::vector<hm::TypePtr> functionTypes;
+    functionTypes.push_back(typeMap[ast->type.identifier.str()]);
     for (auto& arg : ast->parameters)
     {
-        types.push_back(typeMap[arg->type.str()]);
+        functionTypes.push_back(typeMap[arg->type.str()]);
     }
 
-    auto result = annotationsDecls.insert({ ast, std::make_shared<hm::FunctionType>(std::move(types)) });
+    auto result = annotationsDecls.insert({ ast, std::make_shared<hm::FunctionType>(std::move(functionTypes)) });
     return result.first->second;
 }
 

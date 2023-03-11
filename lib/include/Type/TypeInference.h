@@ -303,6 +303,7 @@ public:
     void visit(ast::VariableExp& exp) override;
     void visit(ast::FieldExp& exp) override;
     void visit(ast::ConstructorExp& exp) override;
+    void visit(ast::IntrinsicExp& exp) override;
 
 private:
 

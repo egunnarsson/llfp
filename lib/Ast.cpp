@@ -382,4 +382,13 @@ ConstructorExp::~ConstructorExp() {}
 void ConstructorExp::accept(ExpVisitor* visitor) { visitor->visit(*this); }
 
 
+IntrinsicExp::IntrinsicExp(SourceLocation location, std::string identifier, std::vector<std::unique_ptr<Exp>> args)
+    : Exp(location),
+      identifier_{ std::move(identifier) },
+      arguments_{ std::move(args) }
+{}
+
+IntrinsicExp ::~IntrinsicExp() {}
+void IntrinsicExp::accept(ExpVisitor* visitor) { visitor->visit(*this); }
+
 } // namespace llfp::ast

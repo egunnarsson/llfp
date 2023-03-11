@@ -1,8 +1,15 @@
 
 #include "Type/TypeInference.h"
 
+#include "Common/Algorithm.h"
 #include "Error.h"
 #include "String/StringConstants.h"
+
+#pragma warning(push, 0)
+
+#include <llvm/ADT/STLExtras.h>
+
+#pragma warning(pop)
 
 #include <iostream> //TODO: remove only for debug
 
@@ -798,6 +805,19 @@ void Annotator::visit(ast::ConstructorExp& exp)
     // application, treat as functions?
     // no, constructor tells me something about the type constant for this exp
     auto it = variables.find(exp.identifier.name); // ?
+}
+
+void Annotator::visit(ast::IntrinsicExp& exp)
+{
+    std::vector<std::string_view> types = str_split(exp.identifier_, '\'');
+
+    for (auto& argIt : llvm::enumerate(exp.arguments_))
+    {
+        argIt.value()->accept(this);
+        add({ argIt.value()->location, tv(argIt.value()), makeConst(types.at(argIt.index() + 1)) });
+    }
+
+    result[&exp] = makeConst(types.at(0));
 }
 
 TypeVarPtr Annotator::makeVar()

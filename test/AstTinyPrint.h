@@ -12,7 +12,7 @@ std::ostream& operator<<(std::ostream& os, const llfp::ast::TypeIdentifier& t);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Field& f);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::DataConstructor& d);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Data& d);
-//TODO: need a const visitor for this to be const
+// TODO: need a const visitor for this to be const
 std::ostream& operator<<(std::ostream& os, llfp::ast::Exp& e);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Parameter& p);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Function& f);
@@ -21,7 +21,7 @@ std::ostream& operator<<(std::ostream& os, const llfp::ast::Class& f);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::ClassInstance& f);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Public& p);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::Import& i);
-std::ostream& operator<<(std::ostream& os, const llfp::ast::Module &m);
+std::ostream& operator<<(std::ostream& os, const llfp::ast::Module& m);
 std::ostream& operator<<(std::ostream& os, const llfp::ast::NamedArgument& i);
 
 std::ostream& operator<<(std::ostream& os, llfp::ast::Pattern& p);
@@ -30,17 +30,17 @@ std::ostream& operator<<(std::ostream& os, const llfp::ast::NamedArgumentPattern
 
 // maybe rename this to avoid operators for std types in global namespace?
 template<class T>
-std::ostream& operator<<(std::ostream &os, const std::unique_ptr<T> &ptr)
+std::ostream& operator<<(std::ostream& os, const std::unique_ptr<T>& ptr)
 {
     if (ptr == nullptr) return os << "nullptr";
     return os << *ptr;
 }
 
 template<class T>
-std::ostream& operator<<(std::ostream &os, const std::vector<T> &v)
+std::ostream& operator<<(std::ostream& os, const std::vector<T>& v)
 {
     os << "[";
-    for (auto &e : v)
+    for (auto& e : v)
     {
         os << e << ", ";
     }

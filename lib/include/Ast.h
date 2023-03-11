@@ -33,6 +33,7 @@ struct CallExp;
 struct VariableExp;
 struct FieldExp;
 struct ConstructorExp;
+struct IntrinsicExp;
 
 // template?
 class ExpVisitor
@@ -49,6 +50,7 @@ public:
     virtual void visit(VariableExp& exp)    = 0;
     virtual void visit(FieldExp& exp)       = 0;
     virtual void visit(ConstructorExp& exp) = 0;
+    virtual void visit(IntrinsicExp& exp)   = 0;
 
 protected:
 
@@ -456,6 +458,17 @@ struct ConstructorExp final : public Exp
 
     ConstructorExp(SourceLocation location_, GlobalIdentifier identifier_, std::vector<NamedArgument> arguments_);
     virtual ~ConstructorExp();
+
+    void accept(ExpVisitor* visitor) override;
+};
+
+struct IntrinsicExp final : public Exp
+{
+    std::string                       identifier_;
+    std::vector<std::unique_ptr<Exp>> arguments_;
+
+    IntrinsicExp(SourceLocation location, std::string identifier, std::vector<std::unique_ptr<Exp>> args);
+    virtual ~IntrinsicExp();
 
     void accept(ExpVisitor* visitor) override;
 };

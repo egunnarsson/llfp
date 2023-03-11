@@ -1,6 +1,6 @@
 
-#include "Parser.h"
 #include "Lexer.h"
+#include "Parser.h"
 
 #include "AstEquality.h"
 #include "AstTinyPrint.h"
@@ -16,11 +16,13 @@ template<class T>
 struct movable_il
 {
     mutable T t;
-    operator T() const&& { return std::move(t); }
-    movable_il(T&& in) : t(std::move(in)) {}
+              operator T() const&& { return std::move(t); }
+    movable_il(T&& in)
+        : t(std::move(in))
+    {}
 };
 
-template <class T, class A = std::allocator<T>>
+template<class T, class A = std::allocator<T>>
 std::vector<T, A> vector_from_il(std::initializer_list<movable_il<T>> il)
 {
     std::vector<T, A> r(std::make_move_iterator(il.begin()), std::make_move_iterator(il.end()));
@@ -35,8 +37,10 @@ struct ModulePtr
 {
     std::unique_ptr<llfp::ast::Module> ptr;
 
-    ModulePtr(std::unique_ptr<llfp::ast::Module>&& ptr_) : ptr{ std::move(ptr_) } {}
-    ModulePtr(llfp::SourceLocation location = { 0,0 }, std::string name = "m")
+    ModulePtr(std::unique_ptr<llfp::ast::Module>&& ptr_)
+        : ptr{ std::move(ptr_) }
+    {}
+    ModulePtr(llfp::SourceLocation location = { 0, 0 }, std::string name = "m")
     {
         ptr = std::make_unique<llfp::ast::Module>(location, std::move(name));
     }
@@ -92,8 +96,8 @@ std::ostream& operator<<(std::ostream& os, const ModulePtr& ptr)
 
 auto Parse(const char* string)
 {
-    auto input = llfp::Source("string", string);
-    auto lexer = llfp::lex::Lexer(&input);
+    auto input  = llfp::Source("string", string);
+    auto lexer  = llfp::lex::Lexer(&input);
     auto parser = llfp::parse::Parser(&lexer);
     return ModulePtr(parser.parse());
 }
@@ -117,7 +121,7 @@ std::string ParseError(const char* string)
 
 auto TypeId(std::string moduleName, std::string name, std::vector<llfp::ast::TypeIdentifier> parameters)
 {
-    return llfp::ast::TypeIdentifier{ llfp::GlobalIdentifier {std::move(moduleName), std::move(name) }, std::move(parameters) };
+    return llfp::ast::TypeIdentifier{ llfp::GlobalIdentifier{ std::move(moduleName), std::move(name) }, std::move(parameters) };
 }
 
 auto DataDecl(llfp::SourceLocation location, bool exported, std::string name, std::vector<llfp::ast::Field> fields)
@@ -127,22 +131,22 @@ auto DataDecl(llfp::SourceLocation location, bool exported, std::string name, st
 }
 
 auto Function(
-    llfp::SourceLocation location,
-    bool exported,
-    std::string name,
-    std::string typeName,
-    uptr_il<llfp::ast::Parameter> parameters,
+    llfp::SourceLocation            location,
+    bool                            exported,
+    std::string                     name,
+    std::string                     typeName,
+    uptr_il<llfp::ast::Parameter>   parameters,
     std::unique_ptr<llfp::ast::Exp> functionBody)
 {
-    return std::make_unique<llfp::ast::Function>(location, std::move(name), llfp::ast::TypeIdentifier{ llfp::GlobalIdentifier{ "",  std::move(typeName) }, {} }, vector_from_il(parameters), std::move(functionBody), exported);
+    return std::make_unique<llfp::ast::Function>(location, std::move(name), llfp::ast::TypeIdentifier{ llfp::GlobalIdentifier{ "", std::move(typeName) }, {} }, vector_from_il(parameters), std::move(functionBody), exported);
 }
 
 auto Function(
-    llfp::SourceLocation location,
-    bool exported,
-    std::string name,
-    llfp::ast::TypeIdentifier typeName,
-    uptr_il<llfp::ast::Parameter> parameters,
+    llfp::SourceLocation            location,
+    bool                            exported,
+    std::string                     name,
+    llfp::ast::TypeIdentifier       typeName,
+    uptr_il<llfp::ast::Parameter>   parameters,
     std::unique_ptr<llfp::ast::Exp> functionBody)
 {
     return std::make_unique<llfp::ast::Function>(location, std::move(name), std::move(typeName), vector_from_il(parameters), std::move(functionBody), exported);
@@ -213,6 +217,11 @@ std::unique_ptr<llfp::ast::Exp> Constructor(llfp::SourceLocation location, llfp:
     return std::make_unique<llfp::ast::ConstructorExp>(location, std::move(name), vector_from_il(args));
 }
 
+std::unique_ptr<llfp::ast::Exp> Intrinsic(llfp::SourceLocation location, std::string name, uptr_il<llfp::ast::Exp> args)
+{
+    return std::make_unique<llfp::ast::IntrinsicExp>(location, std::move(name), vector_from_il(args));
+}
+
 auto Class(llfp::SourceLocation location, std::string name, std::string typeVar, uptr_il<llfp::ast::FunctionDeclaration> funs)
 {
     return std::make_unique<llfp::ast::Class>(location, std::move(name), std::move(typeVar), vector_from_il(funs));
@@ -263,18 +272,21 @@ auto ConstructorPattern(llfp::SourceLocation location, llfp::GlobalIdentifier gi
     return std::make_unique<llfp::ast::ConstructorPattern>(location, std::move(gid), vector_from_il(args));
 }
 
-namespace {
-constexpr bool Local = false;
+namespace
+{
+constexpr bool Local    = false;
 constexpr bool Exported = true;
-}
+} // namespace
 
 /**
 Make a module m with a function f with exp.
 */
 ModulePtr m_f(std::unique_ptr<llfp::ast::Exp> exp)
 {
-    return std::move(ModulePtr().functions({ Function({0,0}, Local, "f","", {}, std::move(exp)) }));
+    return std::move(ModulePtr().functions({ Function({ 0, 0 }, Local, "f", "", {}, std::move(exp)) }));
 }
+
+// clang-format off
 
 TEST(ParserTest, EmptyInput)
 {
@@ -692,6 +704,13 @@ TEST(ParserTest, FieldExp)
     EXPECT_EQ(ParseError(M"f = x.);"), "string(2,7): expected a field identifier\n");
 }
 
+TEST(ParserTest, IntrinsicExp)
+{
+    EXPECT_EQ(Parse(M"f = @a'b'c(x);"), m_f(Intrinsic({0,0}, "a'b'c", { Variable({0,0}, "", "x") })));
+
+    EXPECT_EQ(ParseError(M"f = @a'b'c;"), "string(2,11): expected 'parenthesis'\n");
+}
+
 TEST(ParserTest, ClassDeclaration)
 {
     EXPECT_EQ(Parse(M"class a b {t f();}"),
@@ -733,3 +752,5 @@ TEST(ParserTest, InstanceDeclaration)
 TEST(ParserTest, Comments)
 {
 }
+
+// clang-format on

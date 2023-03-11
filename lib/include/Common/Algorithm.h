@@ -59,4 +59,7 @@ bool erase_first_of(std::vector<T>& list, const P& pred)
     return false;
 }
 
+std::vector<std::string_view> str_split(const std::string& str, char c);
+bool                          str_replace(std::string& str, std::string_view from, std::string_view to);
+
 } // namespace llfp
