@@ -814,10 +814,10 @@ void Annotator::visit(ast::IntrinsicExp& exp)
     for (auto& argIt : llvm::enumerate(exp.arguments_))
     {
         argIt.value()->accept(this);
-        add({ argIt.value()->location, tv(argIt.value()), makeConst(types.at(argIt.index() + 1)) });
+        add({ argIt.value()->location, tv(argIt.value()), makeConst(types.at(argIt.index() + 2)) });
     }
 
-    result[&exp] = makeConst(types.at(0));
+    result[&exp] = makeConst(types.at(1));
 }
 
 TypeVarPtr Annotator::makeVar()

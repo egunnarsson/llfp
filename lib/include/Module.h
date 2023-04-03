@@ -37,6 +37,7 @@ public:
     bool                                 addImportedModules(GlobalContext& globalContext);
 
     const std::string& name() const override;
+    ast::Module*       getAST() override;
 
     FunAst     getFunction(const std::string& name) override; // lookup public function
     FunDeclAst getFunctionDecl(const std::string& name) override;
@@ -49,8 +50,6 @@ public:
     std::string getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const override;
     std::string getExportedName(const ast::Function* function) const override;
     bool        fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const override;
-
-    ast::Module* getAST();
 
     // lookup local function or global from imported modules
     FunAst     lookupFunction(const GlobalIdentifier& identifier) override;

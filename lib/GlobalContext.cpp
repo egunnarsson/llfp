@@ -35,7 +35,7 @@ bool GlobalContext::buildFunctionInstances(SourceModule* sourceModule)
                 else
                 {
                     auto& map = functionInstances[function->name];
-                    auto  it  = map.insert({ std::move(id), FunAst{ sourceModule, function.get() } });
+                    auto  it  = map.insert({ id, FunAst{ sourceModule, function.get() } });
                     if (!it.second)
                     {
                         auto& typeKey = it.first->first;

@@ -472,6 +472,7 @@ TEST(CodegenTest, MathModule)
     auto m = compile(
         M "import math;\n"
           "export float foo(float x, float y) = sin(x) + cos(y);\n");
+    auto linked = llfp::link("test", m);
 
     LLVMInitializeNativeAsmPrinter();
     LLVMInitializeNativeAsmParser();
@@ -479,9 +480,9 @@ TEST(CodegenTest, MathModule)
     llvm::ExitOnError          check;
     std::unique_ptr<llfp::JIT> jit = check(llfp::JIT::Create());
 
-    m.at(0).llvmModule->setDataLayout(jit->getDataLayout());
+    linked.llvmModule->setDataLayout(jit->getDataLayout());
     auto RT  = jit->getMainJITDylib().createResourceTracker();
-    auto TSM = llvm::orc::ThreadSafeModule(std::move(m.at(0).llvmModule), std::move(m.at(0).llvmContext));
+    auto TSM = llvm::orc::ThreadSafeModule(std::move(linked.llvmModule), std::move(linked.llvmContext));
     check(jit->addModule(std::move(TSM), RT));
 
     double result = call<float, float, float>(jit, "m_foo", 1, 1); // 0.8414709848 + 0.54030230586 = 1.38177329066

@@ -4,10 +4,9 @@
 #include "Driver.h"
 #include "GlobalContext.h"
 #include "MathModule.h"
+#include "Module.h"
 #include "Parser.h"
 #include "ResolveIdentifiers.h"
-
-#pragma warning(push, 0)
 
 #include <llvm/MC/TargetRegistry.h>
 
@@ -17,7 +16,13 @@
 #include <llvm/Target/TargetMachine.h>
 #include <llvm/Target/TargetOptions.h>
 
-#pragma warning(pop)
+#include <llvm/Bitcode/BitcodeReader.h>
+#pragma warning(disable : 4244)
+#include <llvm/Bitcode/BitcodeWriter.h>
+#pragma warning(default : 4244)
+#include <llvm/Support/MemoryBuffer.h>
+
+#include <llvm/Linker/Linker.h>
 
 
 namespace llfp
@@ -79,17 +84,17 @@ bool generateExportedFunctions(codegen::CodeGenerator* codeGenerator, SourceModu
     return true;
 }
 
-codegen::CodeGenerator* getCodeGenerator(std::vector<CompiledModule>& result, const ImportedModule* m)
+codegen::CodeGenerator* getCodeGenerator(const std::vector<CompiledModule>& result, const ImportedModule* m)
 {
-    auto predicate = [m](const CompiledModule& u) { return static_cast<ImportedModule*>(u.sourceModule.get()) == m; };
-    auto it        = std::find_if(result.begin(), result.end(), predicate);
-    if (it == result.end())
+    for (auto& cm : result)
     {
-        // standard module
-        // return functionId.ast.function->functionBody == nullptr;
-        return nullptr;
+        if (cm.sourceModule.get() == m)
+        {
+            return cm.codeGenerator.get();
+        }
     }
-    return it->codeGenerator.get();
+    assert(false);
+    return nullptr;
 }
 
 bool generateNextFunction(std::vector<CompiledModule>& result, FunctionIdentifier functionId)
@@ -97,12 +102,6 @@ bool generateNextFunction(std::vector<CompiledModule>& result, FunctionIdentifie
     auto ast           = functionId.ast.function;
     auto m             = functionId.ast.importedModule;
     auto codeGenerator = getCodeGenerator(result, m);
-
-    if (codeGenerator == nullptr)
-    {
-        // standard module
-        return functionId.ast.function->functionBody == nullptr;
-    }
 
     std::vector<type::TypeInstPtr> types;
     for (auto t : *functionId.types)
@@ -126,15 +125,9 @@ bool generateTypeFunctions(std::vector<CompiledModule>& result, type::TypeInstPt
 {
     auto m             = origType->getModule();
     auto codeGenerator = getCodeGenerator(result, m);
-    if (codeGenerator == nullptr)
-    {
-        // or standard module? Should be ok to generator memory functions for those types...
-        Log({}, "generating memory functions for basic type? ", origType->identifier().str());
-        return false;
-    }
-    auto moduleType = codeGenerator->getTypeContext()->getType(origType->identifier());
-    bool releaseOk  = moduleType->isRefType() ? codeGenerator->generateReleaseFunctionBody(moduleType) : true;
-    auto deleteOk   = codeGenerator->generateDeleteFunctionBody(moduleType);
+    auto moduleType    = codeGenerator->getTypeContext()->getType(origType->identifier());
+    bool releaseOk     = moduleType->isRefType() ? codeGenerator->generateReleaseFunctionBody(moduleType) : true;
+    auto deleteOk      = codeGenerator->generateDeleteFunctionBody(moduleType);
     return releaseOk && deleteOk;
 }
 
@@ -152,12 +145,7 @@ std::vector<CompiledModule> compile(const std::vector<Source>& sourceFiles)
     GlobalContext               globalContext;
     std::vector<CompiledModule> result;
 
-    MathModule mathModule;
-    mathModule.addToGlobalContext(globalContext);
-
-    // Lex & Parse Input
-    for (auto& input : sourceFiles)
-    {
+    auto lexAndParseModule = [&globalContext, &result, &targetTriple, &dataLayout](const Source& input) {
         llfp::lex::Lexer    lexer(&input);
         llfp::parse::Parser parser(&lexer);
         auto                astModule = parser.parse();
@@ -179,10 +167,19 @@ std::vector<CompiledModule> compile(const std::vector<Source>& sourceFiles)
         unit.llvmContext  = std::make_unique<llvm::LLVMContext>();
         unit.llvmModule   = std::make_unique<llvm::Module>(sourceModule->name(), *unit.llvmContext);
         unit.sourceModule = std::move(sourceModule);
+        unit.source       = &input;
 
         unit.llvmModule->setTargetTriple(targetTriple);
         unit.llvmModule->setDataLayout(dataLayout);
+    };
+
+    // Lex & Parse Input
+    for (auto& input : sourceFiles)
+    {
+        lexAndParseModule(input);
     }
+
+    lexAndParseModule(MathModule::getSource());
 
     // Resolve imports
     for (auto& unit : result)
@@ -245,6 +242,39 @@ std::vector<CompiledModule> compile(const std::vector<Source>& sourceFiles)
     for (auto& unit : result)
     {
         unit.codeGenerator = nullptr;
+    }
+
+    return result;
+}
+
+LinkedModule link(llvm::StringRef name, const std::vector<CompiledModule>& modules)
+{
+    LinkedModule result;
+    result.llvmContext = std::make_unique<llvm::LLVMContext>();
+    result.llvmModule  = std::make_unique<llvm::Module>(name, *result.llvmContext);
+
+    llvm::Linker            linker{ *result.llvmModule };
+    llvm::SmallVector<char> buffer;
+    for (auto& cm : modules)
+    {
+        buffer.clear();
+
+        llvm::BitcodeWriter writer{ buffer };
+        writer.writeModule(*cm.llvmModule);
+        writer.writeSymtab();
+        writer.writeStrtab();
+
+        auto memBuff    = llvm::MemoryBuffer::getMemBuffer(llvm::StringRef{ buffer.begin(), buffer.size() }, "", false);
+        auto linkModule = llvm::parseBitcodeFile(*memBuff, *result.llvmContext);
+        if (auto error = linkModule.takeError())
+        {
+            llvm::errs() << llvm::toString(std::move(error));
+            throw ReturnCode::LinkError;
+        }
+        if (linker.linkInModule(std::move(linkModule.get())))
+        {
+            throw ReturnCode::LinkError;
+        }
     }
 
     return result;

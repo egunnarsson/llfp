@@ -24,6 +24,7 @@ enum class ReturnCode
     CommandLineArgumentError,
     ParseOrLexerError,
     TypeOrCodeGenerationError,
+    LinkError,
     LLVMError,
     IOError,
 };
@@ -35,13 +36,21 @@ constexpr bool error(ReturnCode c)
 
 struct CompiledModule
 {
+    const Source*                           source;
     std::unique_ptr<llvm::LLVMContext>      llvmContext;
     std::unique_ptr<llvm::Module>           llvmModule;
     std::unique_ptr<SourceModule>           sourceModule;
     std::unique_ptr<codegen::CodeGenerator> codeGenerator;
 };
 
+struct LinkedModule
+{
+    std::unique_ptr<llvm::LLVMContext> llvmContext;
+    std::unique_ptr<llvm::Module>      llvmModule;
+};
+
 std::vector<CompiledModule> compile(const std::vector<Source>& sources);
+LinkedModule                link(llvm::StringRef name, const std::vector<CompiledModule>& modules);
 
 // used for future Language Server
 // llfp::TaggedAst parse(std::string source);

@@ -121,6 +121,11 @@ const std::string& SourceModule::name() const
     return astModule->name;
 }
 
+ast::Module* SourceModule::getAST()
+{
+    return astModule.get();
+}
+
 FunAst SourceModule::getFunction(const std::string& name)
 {
     auto ast = find(publicFunctions, name);
@@ -253,11 +258,6 @@ bool SourceModule::fullyQualifiedName(type::Identifier& identifier, const ast::T
         }
     }
     return true;
-}
-
-ast::Module* SourceModule::getAST()
-{
-    return astModule.get();
 }
 
 template<class AstNode, class LocalFun, class GlobalFun>

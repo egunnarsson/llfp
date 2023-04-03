@@ -65,6 +65,8 @@ public:
 
     virtual const std::string& name() const = 0;
 
+    virtual ast::Module* getAST() = 0;
+
     // Get public
     virtual FunAst     getFunction(const std::string& name)          = 0;
     virtual FunDeclAst getFunctionDecl(const std::string& name)      = 0;

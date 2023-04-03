@@ -450,6 +450,41 @@ Function* CodeGenerator::getFunction(const GlobalIdentifier& identifier, std::ve
     return proto;
 }
 
+IntrinsicFunction* CodeGenerator::getIntrinsicFunction(const std::vector<std::string_view>& splitName)
+{
+    std::string strName = std::string{ splitName.at(0) };
+    auto        funIt   = intrinsicFunctions.find(strName);
+    if (funIt == intrinsicFunctions.end())
+    {
+        if (llvmModule->getNamedValue(strName) == nullptr)
+        {
+            auto retType = getTypeContext()->getType({ { std::string{}, std::string{ splitName.at(1) } }, {} })->llvmType();
+
+            std::vector<type::TypeInstPtr> types;
+            std::vector<llvm::Type*>       llvmTypes;
+            if (splitName.size() >= 3)
+            {
+                for (auto it = splitName.begin() + 2; it != splitName.end(); ++it)
+                {
+                    auto argType = getTypeContext()->getType({ { std::string{}, std::string{ *it } }, {} });
+                    types.push_back(argType);
+                    llvmTypes.push_back(argType->llvmType());
+                }
+            }
+            auto funType = llvm::FunctionType::get(retType, llvmTypes, false);
+            auto fun     = llvm::Function::Create(funType, llvm::Function::ExternalLinkage, strName, *llvmModule);
+            funIt        = intrinsicFunctions.insert({ std::move(strName), { fun, std::move(types) } }).first;
+        }
+        else
+        {
+            // intrinsic clash with exported function
+            throw Error{ "function already defined" };
+        }
+    }
+    return &funIt->second;
+}
+
+
 ExpCodeGenerator::ExpCodeGenerator(type::TypeInstPtr type_, ExpCodeGeneratorContext& context, std::map<std::string, Value> parameters_)
     : parent{ nullptr },
       context_{ context },
@@ -1482,6 +1517,211 @@ void ExpCodeGenerator::visit(ast::ConstructorExp& exp)
     catch (const Error& error)
     {
         Log(exp.location, error.what());
+    }
+}
+
+namespace
+{
+
+uint64_t getSafeIntegerSize(llvm::Type* type)
+{
+    assert(type->isFloatingPointTy());
+    switch (type->getTypeID())
+    {
+    case llvm::Type::HalfTyID: return 11;
+    case llvm::Type::FloatTyID: return 24;
+    case llvm::Type::DoubleTyID: return 53;
+    }
+    return 0;
+}
+
+llvm::Value* createPromote(llvm::IRBuilder<>& b, type::TypeInstPtr from, type::TypeInstPtr to, llvm::Value* arg)
+{
+    auto       type     = to->llvmType();
+    const auto fromSize = from->llvmType()->getPrimitiveSizeInBits().getFixedSize();
+    const auto toSize   = to->llvmType()->getPrimitiveSizeInBits().getFixedSize();
+    if (from->isInteger())
+    {
+        if (to->isFloating())
+        {
+            if (fromSize < getSafeIntegerSize(to->llvmType()))
+            {
+                return to->isSigned()
+                           ? b.CreateFPToSI(arg, type)
+                           : b.CreateFPToUI(arg, type);
+            }
+        }
+        else if (fromSize < toSize)
+        {
+            if (from->isSigned())
+            {
+                if (to->isSigned())
+                {
+                    return b.CreateSExt(arg, type);
+                }
+            }
+            else
+            {
+                return b.CreateZExt(arg, type);
+            }
+        }
+    }
+    else if (to->isFloating() && fromSize < toSize)
+    {
+        return b.CreateFPExt(arg, type);
+    }
+    throw Error{ "no instance of \"promote " + from->identifier().str() + " " + to->identifier().str() + '"' };
+}
+
+llvm::Value* createConvert(llvm::IRBuilder<>& b, type::TypeInstPtr from, type::TypeInstPtr to, llvm::Value* arg)
+{
+    auto       type     = to->llvmType();
+    const auto fromSize = from->llvmType()->getPrimitiveSizeInBits().getFixedSize();
+    const auto toSize   = to->llvmType()->getPrimitiveSizeInBits().getFixedSize();
+    if (from->isFloating())
+    {
+        if (to->isFloating())
+        {
+            if (toSize < fromSize)
+            {
+                return b.CreateFPTrunc(arg, type);
+            }
+        }
+        else if (to->isSigned())
+        {
+            return b.CreateFPToSI(arg, type);
+        }
+        else
+        {
+            return b.CreateFPToUI(arg, type);
+        }
+    }
+    else
+    {
+        if (to->isFloating())
+        {
+            // special, if 'to' can hold all values of 'from'
+            // dont allow 'convert', it should be a 'promote'
+            const auto minSize = getSafeIntegerSize(to->llvmType());
+            if (fromSize > minSize)
+            {
+                return from->isSigned()
+                           ? b.CreateSIToFP(arg, type)
+                           : b.CreateUIToFP(arg, type);
+            }
+        }
+        else
+        {
+            if (fromSize > toSize)
+            {
+                return b.CreateTrunc(arg, type);
+            }
+            else if (fromSize == toSize && from->isSigned() && !to->isSigned())
+            {
+                return b.CreateBitCast(arg, type);
+            }
+        }
+    }
+    throw Error{ "no instance of \"convert " + from->identifier().str() + " " + to->identifier().str() + '"' };
+}
+
+llvm::Value* createBitcast(llvm::IRBuilder<>& b, type::TypeInstPtr, type::TypeInstPtr to, llvm::Value* arg)
+{
+    return b.CreateBitCast(arg, to->llvmType());
+}
+
+using IntrinsicCreateFunction =
+    llvm::Value* (*)(llvm::IRBuilder<>& b, type::TypeInstPtr from, type::TypeInstPtr to, llvm::Value* arg);
+
+IntrinsicCreateFunction lookupIntrinsicFunction(std::string_view name)
+{
+    if (name == "promote")
+    {
+        return createPromote;
+    }
+    else if (name == "convert")
+    {
+        return createConvert;
+    }
+    else if (name == "bitcast")
+    {
+        return createBitcast;
+    }
+    return nullptr;
+}
+
+void intrinsicError(SourceLocation location, llvm::ArrayRef<std::string_view> split)
+{
+    assert(!split.empty());
+    std::string msg = "no instance of \"";
+    msg += split.front();
+    if (split.size() >= 2)
+    {
+        for (const auto& part : split.drop_front())
+        {
+            msg += ' ';
+            msg += part;
+        }
+    }
+    msg += '"';
+    throw ErrorLocation{ location, msg };
+}
+
+} // namespace
+
+void ExpCodeGenerator::visit(ast::IntrinsicExp& exp)
+{
+    auto location        = exp.location;
+    auto split           = llfp::str_split(exp.identifier_, '\'');
+    auto name            = split.at(0);
+    auto createIntrinsic = lookupIntrinsicFunction(name);
+    try
+    {
+        if (createIntrinsic != nullptr)
+        {
+            if (split.size() != 3)
+            {
+                intrinsicError(location, split);
+            }
+            if (exp.arguments_.size() != 1)
+            {
+                throw ErrorLocation{ location, "incorrect number of arguments" };
+            }
+            auto fromType = getTypeContext()->getType({ { std::string{}, std::string{ split.at(2) } }, {} });
+            auto toType   = getTypeContext()->getType({ { std::string{}, std::string{ split.at(1) } }, {} });
+            if (!fromType->isNum() || !toType->isNum())
+            {
+                intrinsicError(location, split);
+            }
+            if (name == "bitcast" && fromType->llvmType()->getPrimitiveSizeInBits() != toType->llvmType()->getPrimitiveSizeInBits())
+            {
+                intrinsicError(location, split);
+            }
+            auto arg = ExpCodeGenerator::generateUnscoped(*exp.arguments_.at(0), fromType, this);
+            result   = createIntrinsic(llvmBuilder(), fromType, toType, arg);
+        }
+        else
+        {
+            // create c function
+            auto fun = context_.generator_.getIntrinsicFunction(split);
+
+            std::vector<llvm::Value*> arguments;
+            for (const auto& argIt : llvm::enumerate(exp.arguments_))
+            {
+                auto argValue = generateUnscoped(*argIt.value(), fun->types[argIt.index()], this);
+                if (argValue == nullptr)
+                {
+                    return;
+                }
+                arguments.push_back(argValue);
+            }
+
+            result = llvmBuilder().CreateCall(fun->llvm, arguments);
+        }
+    }
+    catch (const Error& e)
+    {
+        throw ErrorLocation{ location, e.what() };
     }
 }
 

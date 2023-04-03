@@ -14,7 +14,6 @@
 #include <llvm/Bitcode/BitcodeWriter.h>
 
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Support/FormatVariadic.h>
 #include <llvm/Support/Path.h>
 
 #pragma warning(pop)
@@ -186,7 +185,8 @@ llfp::ReturnCode llfp_main(int argc, char* argv[])
         {
             for (size_t index = 0; index < count; ++index)
             {
-                output    = InputFilenames[index];
+                output    = result[index].source->name();
+                // output    = path + result[index].sourceModule->name();
                 auto code = write(result[index], output);
                 if (llfp::error(code)) { return code; }
             }

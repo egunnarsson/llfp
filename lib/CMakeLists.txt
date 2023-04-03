@@ -46,7 +46,7 @@ add_library(llfp_lib
 )
 
 if (MSVC)
-	target_compile_options(llfp_lib PUBLIC /W4 /permissive-
+	target_compile_options(llfp_lib PUBLIC /W4 /permissive- /external:I ${LLVM_INCLUDE_DIRS} /external:W0
 		/D_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING) # llvm iterator_facade_base uses std::iterator as base
 endif (MSVC)
 if ((MSVC) AND (MSVC_VERSION GREATER_EQUAL 1914))

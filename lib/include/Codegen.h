@@ -36,6 +36,12 @@ struct Function
     std::vector<type::TypeInstPtr> types;
 };
 
+struct IntrinsicFunction
+{
+    llvm::Function*                llvm;
+    std::vector<type::TypeInstPtr> types;
+};
+
 struct Value
 {
     type::TypeInstPtr type;
@@ -53,7 +59,8 @@ class CodeGenerator
     llvm::Module*      llvmModule;
 
     // mangled name as id
-    std::unordered_map<std::string, Function>              functions;   // unique_ptr<Function>? value probably not moved because hm::TypeAnnotation
+    std::unordered_map<std::string, Function>              functions; // unique_ptr<Function>? value probably not moved because hm::TypeAnnotation
+    std::unordered_map<std::string, IntrinsicFunction>     intrinsicFunctions;
     type::TypeContext                                      typeContext; // move to source module (if it should create types it needs the llvmContext)
     std::unordered_map<type::TypeInstPtr, llvm::Function*> releaseFunctions;
     std::unordered_map<type::TypeInstPtr, llvm::Function*> deleteFunctions;
@@ -83,7 +90,9 @@ private:
     void AddDllMain(); // should be done on dll not on one module
 
     // lookup, global functions, generate llvmFunction if first external reference
-    Function* getFunction(const GlobalIdentifier& identifier, std::vector<const type::TypeInstance*> types);
+    Function*          getFunction(const GlobalIdentifier& identifier, std::vector<const type::TypeInstance*> types);
+    // lookup or insert intrinsic function
+    IntrinsicFunction* getIntrinsicFunction(const std::vector<std::string_view>& splitName);
 
     llvm::Function* getReleaseFunction(type::TypeInstPtr type);
     llvm::Function* getDeleteFunction(type::TypeInstPtr type);
@@ -141,7 +150,7 @@ public:
     void visit(ast::VariableExp& exp) override;
     void visit(ast::FieldExp& exp) override;
     void visit(ast::ConstructorExp& exp) override;
-    void visit(ast::IntrinsicExp& exp) override { assert(false); }
+    void visit(ast::IntrinsicExp& exp) override;
 
 private:
 

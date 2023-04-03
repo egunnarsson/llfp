@@ -1,28 +1,9 @@
 
 #include "MathModule.h"
 
-#include "GlobalContext.h"
-#include "Parser.h"
-#include "String/StringConstants.h"
-#include "Type/TypeInstance.h"
-
-#include <unordered_map>
-
 
 namespace llfp
 {
-/*
-
-class Bounded a
-{
-    a maximum();
-    a minimum();
-}
-
-pi :: Frac
-e :: Frac
-
-*/
 
 namespace
 {
@@ -31,13 +12,84 @@ constexpr auto code = R"x(
 
 module math();
 
+#{
+# Lossy conversion (double -> float, i32 -> i8, u32 -> i32, i32 -> u32)
+class Convertible a b
+{
+    b convert(a x);
+}
+
+# (float -> double, i8 -> i16)
+class Promotable a b
+{
+    b promote(a x);
+}
+
+b bitcast(a x) = @;
+
+}#
+
+class Bounded a
+{
+    a minimum();
+    a maximum();
+}
+
+instance Bounded i8
+{
+    i8 minimum() = -128;
+    i8 maximum() = 127;
+}
+
+instance Bounded u8
+{
+    u8 minimum() = 0;
+    u8 maximum() = 255;
+}
+
+instance Bounded i16
+{
+    i16 minimum() = -32768;
+    i16 maximum() = 32767;
+}
+
+instance Bounded u16
+{
+    u16 minimum() = 0;
+    u16 maximum() = 65535;
+}
+
+instance Bounded i32
+{
+    i32 minimum() = -2147483648;
+    i32 maximum() = 2147483647;
+}
+
+instance Bounded u32
+{
+    u32 minimum() = -4294967296;
+    u32 maximum() = 4294967295;
+}
+
+instance Bounded i64
+{
+    i64 minimum() = -9223372036854775808;
+    i64 maximum() = 9223372036854775807;
+}
+
+instance Bounded u64
+{
+    u64 minimum() = 0;
+    u64 maximum() = 18446744073709551615;
+}
+
 class Signed a
 {
     a abs(a x);
-#    a sign(a x);
+    a sign(a x);
 }
 
-class Fractional a
+class Floating a
 {
     a sqrt(a x);
     a pow(a x);
@@ -55,182 +107,65 @@ class Fractional a
     a floor(a x);
     a ceil(a x);
     a round(a x);
+
+    a pi();
+    a e();
+}
+
+instance Floating float
+{
+    float sqrt(float x) = @sqrtf'float'float(x);
+    float pow(float x) = @powf'float'float(x);
+
+    float sin(float x) = @sinf'float'float(x);
+    float cos(float x) = @cosf'float'float(x);
+    float tan(float x) = @tanf'float'float(x);
+
+    float exp(float x) = @expf'float'float(x);
+    float exp2(float x) = @exp2f'float'float(x);
+    float log(float x) = @logf'float'float(x);
+    float log10(float x) = @log10f'float'float(x);
+    float log2(float x) = @log2f'float'float(x);
+
+    float floor(float x) = @floorf'float'float(x);
+    float ceil(float x) = @ceilf'float'float(x);
+    float round(float x) = @roundf'float'float(x);
+
+    float pi() = 3.1415926535897932384;
+    float e()  = 2.7182818284590452353;
+}
+
+instance Floating double
+{
+    double sqrt(double x) = @sqrt'double'double(x);
+    double pow(double x) = @pow'double'double(x);
+
+    double sin(double x) = @sin'double'double(x);
+    double cos(double x) = @cos'double'double(x);
+    double tan(double x) = @tan'double'double(x);
+
+    double exp(double x) = @exp'double'double(x);
+    double exp2(double x) = @exp2'double'double(x);
+    double log(double x) = @log'double'double(x);
+    double log10(double x) = @log10'double'double(x);
+    double log2(double x) = @log2'double'double(x);
+
+    double floor(double x) = @floor'double'double(x);
+    double ceil(double x) = @ceil'double'double(x);
+    double round(double x) = @round'double'double(x);
+
+    double pi() = 3.1415926535897932384;
+    double e()  = 2.7182818284590452353;
 }
 
 )x";
 
-void addInstance(const std::unique_ptr<ast::Module>& astModule, const std::unique_ptr<ast::Class>& classPtr, llvm::StringRef type)
-{
-    auto location        = classPtr->location;
-    auto classIdentifier = GlobalIdentifier{ "math", classPtr->name };
-    auto typeArgument    = ast::TypeIdentifier{ { "", type.str() }, {} };
-
-    std::vector<std::unique_ptr<ast::Function>> functions;
-    for (auto& function : classPtr->functions)
-    {
-        std::vector<std::unique_ptr<ast::Parameter>> parameters;
-        for (auto& param : function->parameters)
-        {
-            parameters.push_back(std::make_unique<ast::Parameter>(param->location, typeArgument, param->identifier));
-        }
-
-        functions.push_back(std::make_unique<ast::Function>(location, function->name, typeArgument, std::move(parameters), nullptr, false));
-    }
-
-    auto instancePtr = std::make_unique<ast::ClassInstance>(location, std::move(classIdentifier), std::move(typeArgument), std::move(functions));
-    astModule->classInstances.push_back(std::move(instancePtr));
-}
-
 } // namespace
 
-MathModule::MathModule()
-    : source_{ "math.llf", code }
+const Source& MathModule::getSource()
 {
-    auto lexer  = lex::Lexer(&source_);
-    auto parser = parse::Parser(&lexer);
-    astModule_  = parser.parse();
-
-    for (auto& classPtr : astModule_->classes)
-    {
-        if (classPtr->name == id::Signed)
-        {
-            // addInstance(astModule, classPtr, id::I8);
-            // addInstance(astModule, classPtr, id::I16);
-            addInstance(astModule_, classPtr, id::I32);
-            addInstance(astModule_, classPtr, id::I64);
-            // addInstance(astModule, classPtr, id::I128);
-        }
-        addInstance(astModule_, classPtr, id::Float);
-        addInstance(astModule_, classPtr, id::Double);
-    }
-}
-
-void MathModule::addToGlobalContext(GlobalContext& context)
-{
-    context.addModule(this);
-
-    for (auto& classInstance : astModule_->classInstances)
-    {
-        for (auto& fun : classInstance->functions)
-        {
-            type::Identifier typeId{ classInstance->typeArgument.identifier, {} };
-            context.addFunctionInstance(fun->name, std::move(typeId), { this, fun.get() });
-        }
-    }
-}
-
-const std::string& MathModule::name() const
-{
-    return astModule_->name;
-}
-
-FunAst MathModule::getFunction(const std::string& name)
-{
-    // we only have instances
-    return { nullptr, nullptr };
-}
-
-FunDeclAst MathModule::getFunctionDecl(const std::string& name)
-{
-    // TODO: make some lookup table
-    for (auto& classPtr : astModule_->classes)
-    {
-        for (auto& fun : classPtr->functions)
-        {
-            if (fun->name == name)
-            {
-                return { this, classPtr.get(), fun.get() };
-            }
-        }
-    }
-    return { nullptr, nullptr, nullptr };
-}
-
-DataAst MathModule::getType(const std::string& name) const
-{
-    return { nullptr, nullptr };
-}
-
-DataAst MathModule::getConstructor(const std::string& name) const
-{
-    return { nullptr, nullptr };
-}
-
-std::string MathModule::getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const
-{
-    assert(types.size() <= 2 && types.size() > 0);
-    auto&      typeName = types[0]->identifier().name.name;
-    const bool isFloat  = typeName == id::Float;
-    const bool isInt32  = typeName == id::I32;
-    if (function->name == "abs")
-    {
-        if (types[0]->isFloating())
-        {
-            return isFloat ? "fabsf" : "fabs";
-        }
-        else
-        {
-            return isInt32 ? "abs" : "labs";
-        }
-    }
-    else
-    {
-        return isFloat ? function->name + 'f' : function->name;
-    }
-}
-
-std::string MathModule::getMangledName(const ast::Data* data, const std::map<std::string, type::Identifier>& typeVariables) const
-{
-    assert(false);
-    return "";
-}
-
-std::string MathModule::getMangledName(const ast::Data* data, size_t constructorIndex, const std::map<std::string, type::Identifier>& typeVariables) const
-{
-    assert(false);
-    return "";
-}
-
-std::string MathModule::getMangledName(const char* internalFunctionName, const type::TypeInstance* type) const
-{
-    assert(false);
-    return "";
-}
-
-std::string MathModule::getExportedName(const ast::Function* function) const
-{
-    assert(false);
-    return "";
-}
-
-bool MathModule::fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const
-{
-    return false;
-}
-
-// Lookup global
-FunAst MathModule::lookupFunction(const GlobalIdentifier& identifier)
-{
-    assert(false);
-    return { nullptr, nullptr };
-}
-
-FunDeclAst MathModule::lookupFunctionDecl(const GlobalIdentifier& identifier)
-{
-    assert(false);
-    return { nullptr, nullptr, nullptr };
-}
-
-DataAst MathModule::lookupType(const GlobalIdentifier&) const
-{
-    assert(false);
-    return { nullptr, nullptr };
-}
-
-DataAst MathModule::lookupConstructor(const GlobalIdentifier&) const
-{
-    assert(false);
-    return { nullptr, nullptr };
+    static Source source{ "math.llf", code };
+    return source;
 }
 
 } // namespace llfp

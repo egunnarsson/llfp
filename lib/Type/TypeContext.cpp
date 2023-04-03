@@ -348,7 +348,8 @@ TypeInstPtr TypeContext::getType(const Identifier& identifier)
     {
         if (ast.data->typeVariables.size() != identifier.parameters.size())
         {
-            throw Error(std::string{ "type arity mismatch between " } + identifier.str() + " and " + ast.importedModule->name() + ':' + ast.data->name + '/' + std::to_string(ast.data->typeVariables.size()));
+            throw Error(std::string{ "type arity mismatch between " } + identifier.str() + " and " +
+                        ast.importedModule->name() + ':' + ast.data->name + '/' + std::to_string(ast.data->typeVariables.size()));
         }
 
         std::vector<std::string> typeClasses; // TODO!!!
@@ -369,7 +370,7 @@ TypeInstPtr TypeContext::getType(const Identifier& identifier)
         }
     }
 
-    throw Error(std::string{ "unknown data " } + identifier.name.str());
+    throw Error(std::string{ "unknown type " } + identifier.name.str());
 }
 
 TypeInstPtr TypeContext::getTypeFromConstructor(const std::string& name)
