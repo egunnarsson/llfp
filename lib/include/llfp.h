@@ -18,7 +18,7 @@
 namespace llfp
 {
 
-enum class ReturnCode
+enum class ReturnCode : int
 {
     NoError = 0,
     CommandLineArgumentError,

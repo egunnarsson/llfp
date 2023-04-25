@@ -5,27 +5,39 @@
 #include "llfp.h"
 #include "Module.h"
 
-#pragma warning(push, 0)
-// C4244 conversion, possible loss of data
-// BitcodeWriter.h includes ScaledNumber.h which does a bunch of conversions of std::pair with numbers
-// C4996 use of function, class member, variable, or typedef that's marked deprecated
-#pragma warning(disable : 4244 4996)
-
+#pragma warning(disable : 4244 4267)
 #include <llvm/Bitcode/BitcodeWriter.h>
-
+#pragma warning(default : 4244 4267)
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/Path.h>
 
-#pragma warning(pop)
-
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
 
 
-static llvm::cl::list<std::string> InputFilenames(llvm::cl::Positional, llvm::cl::desc("<Input files>"), llvm::cl::ZeroOrMore);
-static llvm::cl::opt<std::string>  OutputFilename("o", llvm::cl::desc("Output filename"), llvm::cl::value_desc("filename"));
+static llvm::cl::OptionCategory LLFPOptionCategory("LLFP Options");
+
+static llvm::cl::list<std::string> InputFilenames(
+    llvm::cl::Positional,
+    llvm::cl::desc("<Input files>"),
+    llvm::cl::OneOrMore,
+    llvm::cl::cat(LLFPOptionCategory));
+static llvm::cl::opt<std::string> OutputFilename(
+    "o",
+    llvm::cl::desc("Output filename"),
+    llvm::cl::value_desc("filename"),
+    llvm::cl::cat(LLFPOptionCategory));
+static llvm::cl::opt<std::string> OutputDirectory(
+    "d",
+    llvm::cl::desc("Output directory"),
+    llvm::cl::value_desc("directory"),
+    llvm::cl::cat(LLFPOptionCategory));
+
+namespace
+{
 
 llfp::Source readInput(const std::string& inputFilename)
 {
@@ -83,28 +95,31 @@ llfp::ReturnCode writeBitcode(llvm::Module* llvmModule, llvm::SmallString<128>& 
     return write(output, ".bc", [llvmModule](llvm::raw_fd_ostream& os) { llvm::WriteBitcodeToFile(*llvmModule, os); });
 }
 
-llfp::ReturnCode writeDefFile(llfp::SourceModule* sourceModule, llvm::SmallString<128>& output)
+llfp::ReturnCode writeDefFile(llvm::ArrayRef<llfp::CompiledModule> modules, llvm::SmallString<128>& output)
 {
     return write(output, ".def",
-                 [&sourceModule](llvm::raw_fd_ostream& os) {
-                     os << "LIBRARY " << sourceModule->name() << "\n";
+                 [&modules, &output](llvm::raw_fd_ostream& os) {
+                     os << "LIBRARY " << llvm::sys::path::filename(output) << "\n";
                      os << "EXPORTS\n";
-                     for (auto& f : sourceModule->getAST()->functions)
+                     for (auto& m : modules)
                      {
-                         if (f->exported)
+                         for (auto& f : m.sourceModule->getAST()->functions)
                          {
-                             os << "    " << sourceModule->getExportedName(f.get()) << "\n";
+                             if (f->exported)
+                             {
+                                 os << "    " << m.sourceModule->getExportedName(f.get()) << "\n";
+                             }
                          }
                      }
                  });
 }
 
-llfp::ReturnCode writeHeaderFile(llfp::SourceModule* module, llvm::SmallString<128>& output)
+llfp::ReturnCode writeHeaderFile(llfp::SourceModule& module, llvm::SmallString<128>& output)
 {
     return write(output, ".h",
                  [&module](llvm::raw_fd_ostream& os) {
                      llfp::HeaderWriter writer;
-                     writer.write(os, *module);
+                     writer.write(os, module);
                  });
 }
 
@@ -113,33 +128,50 @@ llfp::ReturnCode write(llfp::CompiledModule& compiledModule, llvm::SmallString<1
     auto srcModule  = compiledModule.sourceModule.get();
     auto llvmModule = compiledModule.llvmModule.get();
 
-    llfp::ReturnCode result = writeIR(llvmModule, output);
-    if (llfp::error(result)) { return result; }
+    auto result = writeIR(llvmModule, output);
+    if (llfp::error(result))
+    {
+        return result;
+    }
 
     result = writeBitcode(llvmModule, output);
-    if (llfp::error(result)) { return result; }
+    if (llfp::error(result))
+    {
+        return result;
+    }
 
-    result = writeDefFile(srcModule, output);
-    if (llfp::error(result)) { return result; }
+    result = writeDefFile(compiledModule, output);
+    if (llfp::error(result))
+    {
+        return result;
+    }
 
-    return writeHeaderFile(srcModule, output);
+    return writeHeaderFile(*srcModule, output);
+}
+
+llfp::ReturnCode write(llfp::LinkedModule& compiledModule, llvm::SmallString<128>& output)
+{
+    auto llvmModule = compiledModule.llvmModule.get();
+
+    auto result = writeIR(llvmModule, output);
+    if (llfp::error(result))
+    {
+        return result;
+    }
+
+    return writeBitcode(llvmModule, output);
+}
+
+void combinePath(llvm::SmallString<128>& out, const std::string& dir, const std::string& name)
+{
+    out = (std::filesystem::path{ dir } / name).string();
 }
 
 llfp::ReturnCode llfp_main(int argc, char* argv[])
 {
+    llvm::cl::HideUnrelatedOptions(LLFPOptionCategory);
     if (!llvm::cl::ParseCommandLineOptions(argc, argv, "", &llvm::errs()))
     {
-        return llfp::ReturnCode::CommandLineArgumentError;
-    }
-
-    if (InputFilenames.empty())
-    {
-        InputFilenames.push_back("-");
-    }
-
-    if (InputFilenames.size() > 1 && !OutputFilename.empty())
-    {
-        llvm::errs() << "multiple input files specified while also specifying an output file\n";
         return llfp::ReturnCode::CommandLineArgumentError;
     }
 
@@ -157,7 +189,7 @@ llfp::ReturnCode llfp_main(int argc, char* argv[])
             returnCode = llfp::ReturnCode::CommandLineArgumentError;
         }
     }
-    if (returnCode != llfp::ReturnCode::NoError)
+    if (llfp::error(returnCode))
     {
         return returnCode;
     }
@@ -168,27 +200,44 @@ llfp::ReturnCode llfp_main(int argc, char* argv[])
         auto count  = result.size();
 
         llvm::SmallString<128> output;
-        if (count == 1)
-        {
-            output = OutputFilename.empty() ? InputFilenames.front() : OutputFilename;
-            if (output == "-")
-            {
-                auto& llvmModule = *result[0].llvmModule;
-                llvm::outs() << llvmModule;
-            }
-            else
-            {
-                return write(result[0], output);
-            }
-        }
-        else
+
+        if (OutputFilename.empty())
         {
             for (size_t index = 0; index < count; ++index)
             {
-                output    = result[index].source->name();
-                // output    = path + result[index].sourceModule->name();
-                auto code = write(result[index], output);
-                if (llfp::error(code)) { return code; }
+                combinePath(output, OutputDirectory.getValue(), result[index].sourceModule->name());
+                returnCode = write(result[index], output);
+                if (llfp::error(returnCode))
+                {
+                    return returnCode;
+                }
+            }
+        }
+        else // link
+        {
+            combinePath(output, OutputDirectory.getValue(), OutputFilename.getValue());
+            auto linkResult = llfp::link(OutputFilename, result);
+
+            returnCode = write(linkResult, output);
+            if (llfp::error(returnCode))
+            {
+                return returnCode;
+            }
+
+            returnCode = writeDefFile(result, output);
+            if (llfp::error(returnCode))
+            {
+                return returnCode;
+            }
+
+            for (auto& compiledModule : result)
+            {
+                combinePath(output, OutputDirectory.getValue(), compiledModule.sourceModule->name());
+                returnCode = writeHeaderFile(*compiledModule.sourceModule, output);
+                if (llfp::error(returnCode))
+                {
+                    return returnCode;
+                }
             }
         }
     }
@@ -199,6 +248,8 @@ llfp::ReturnCode llfp_main(int argc, char* argv[])
 
     return llfp::ReturnCode::NoError;
 }
+
+} // namespace
 
 int main(int argc, char* argv[])
 {
