@@ -1032,42 +1032,49 @@ std::optional<ast::NamedArgument> Parser::parseNamedArgument()
 {
     auto location = lexer->getLocation();
 
-    std::string               name;
-    std::unique_ptr<ast::Exp> exp;
-    if (lexer->getToken() == lex::Token::Identifier)
+    auto        exp = parseExp();
+    std::string name;
+
+    if (!exp)
     {
-        GlobalIdentifier ident;
-        if (!parseGlobalIdentifier(ident)) { return std::nullopt; }
+        return std::nullopt;
+    }
 
-        assert(!ident.name.empty());
+    if (lexer->getToken() == lex::Token::Equal)
+    {
+        ast::VariableExp* variable = nullptr;
+        exp->visit([&variable](auto& typedExp) -> void {
+            if constexpr (std::is_same_v<decltype(typedExp), ast::VariableExp&>)
+            {
+                variable = &typedExp;
+            }
+        });
 
-        if (ident.moduleName.empty() && lexer->getToken() == lex::Token::Equal)
+        if (variable == nullptr)
         {
-            // " = exp"
-            lexer->nextToken(); // eat '='
-            name = std::move(ident.name);
-            exp  = parseExp();
+            // throw
+            Log(lexer->getLocation(), "expected 'comma'");
+            return std::nullopt;
+        }
+        else if (!variable->identifier.moduleName.empty())
+        {
+            // throw
+            Log(location, "expected a data member identifier");
+            return std::nullopt;
         }
         else
         {
-            // "x," or "x + 1," or "x(),"
-            if (lexer->getToken() == lex::Token::Open_parenthesis || lexer->getToken() == lex::Token::Open_brace)
+            name = variable->identifier.name;
+            lexer->nextToken(); // eat '='
+            exp = parseExp();
+
+            if (!exp)
             {
-                exp = parseCallExp(location, std::move(ident));
-            }
-            else
-            {
-                exp = std::make_unique<ast::VariableExp>(location, std::move(ident));
-                exp = parseBinaryExp(0, std::move(exp));
+                return std::nullopt;
             }
         }
     }
-    else
-    {
-        exp = parseExp();
-    }
 
-    if (!exp) { return std::nullopt; }
     return std::make_optional<ast::NamedArgument>(location, std::move(name), std::move(exp));
 }
 

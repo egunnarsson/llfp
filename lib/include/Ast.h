@@ -35,7 +35,6 @@ struct FieldExp;
 struct ConstructorExp;
 struct IntrinsicExp;
 
-// template?
 class ExpVisitor
 {
 public:
@@ -55,6 +54,31 @@ public:
 protected:
 
     virtual ~ExpVisitor() {}
+};
+
+template<class T>
+class ExpVisitorCallable : public ExpVisitor
+{
+    T visitor_;
+
+public:
+
+    explicit ExpVisitorCallable(T&& visitor)
+        : visitor_{ visitor }
+    {}
+    virtual ~ExpVisitorCallable() = default;
+
+    void visit(LetExp& exp) override { visitor_(exp); }
+    void visit(IfExp& exp) override { visitor_(exp); }
+    void visit(CaseExp& exp) override { visitor_(exp); }
+    void visit(BinaryExp& exp) override { visitor_(exp); }
+    void visit(UnaryExp& exp) override { visitor_(exp); }
+    void visit(LiteralExp& exp) override { visitor_(exp); }
+    void visit(CallExp& exp) override { visitor_(exp); }
+    void visit(VariableExp& exp) override { visitor_(exp); }
+    void visit(FieldExp& exp) override { visitor_(exp); }
+    void visit(ConstructorExp& exp) override { visitor_(exp); }
+    void visit(IntrinsicExp& exp) override { visitor_(exp); }
 };
 
 struct BoolPattern;
@@ -143,6 +167,13 @@ struct Exp : public Node
     virtual ~Exp() = default;
 
     virtual void accept(ExpVisitor* visitor) = 0;
+
+    template<class T>
+    void visit(T&& visitor)
+    {
+        ExpVisitorCallable callableWrapper{ std::move(visitor) };
+        accept(&callableWrapper);
+    }
 
 protected:
 

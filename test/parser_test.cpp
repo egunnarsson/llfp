@@ -313,6 +313,7 @@ TEST(ParserTest, Imports)
 
     // negative
     EXPECT_EQ(ParseError("module m\nf = 1;"),  "string(2,1): expected 'semicolon'\n");
+    EXPECT_EQ(ParseError("module m:a;"),       "string(1,9): expected 'semicolon'\n");
     EXPECT_EQ(ParseError("f = 1; module m;"),  "string(1,1): expected 'module'\n");
     EXPECT_EQ(ParseError("module m; import;"), "string(1,17): expected an identifier\n");
 }
@@ -379,11 +380,25 @@ TEST(ParserTest, DataConstructor)
         Constructor({ 0,0 }, { "", "a" }, { llfp::ast::NamedArgument({ 0,0 }, "",
             Constructor({ 0,0 }, { "", "b" }, { llfp::ast::NamedArgument({ 0,0 }, "",
                 Integer({ 0,0 }, "1")) })) })));
+    EXPECT_EQ(Parse(M"f = a{foo() * x};"), m_f(
+        Constructor({ 0,0 }, { "", "a" }, {
+            llfp::ast::NamedArgument({ 0,0 }, "",
+                Binary({ 0,0 }, "*",
+                    Call({ 0,0 }, "", "foo",{}),
+                    Variable({ 0,0 }, "", "x")))})));
+    EXPECT_EQ(Parse(M"f = a{x = foo() * y};"), m_f(
+        Constructor({ 0,0 }, { "", "a" }, {
+            llfp::ast::NamedArgument({ 0,0 }, "x",
+                Binary({ 0,0 }, "*",
+                    Call({ 0,0 }, "", "foo", {}),
+                    Variable({ 0,0 }, "", "y")))})));
 
     // negative
-    EXPECT_EQ(ParseError(M"f = a{x:}"),     "string(2,9): expected an identifier\n");
-    EXPECT_EQ(ParseError(M"f = a{x: = 1}"), "string(2,10): expected an identifier\n");
-    EXPECT_EQ(ParseError(M"f = a{x=}"),     "string(2,9): expected an expression\n");
+    EXPECT_EQ(ParseError(M"f = a{x:}"),             "string(2,9): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"f = a{x: = 1}"),         "string(2,10): expected an identifier\n");
+    EXPECT_EQ(ParseError(M"f = a{x=}"),             "string(2,9): expected an expression\n");
+    EXPECT_EQ(ParseError(M"f = a{x + 1 = foo()};"), "string(2,13): expected 'comma'\n");
+    EXPECT_EQ(ParseError(M"f = a{x:y = 1};"),       "string(2,7): expected a data member identifier\n");
 }
 
 TEST(ParserTest, Functions)
@@ -654,7 +669,7 @@ TEST(ParserTest, CallExp)
     EXPECT_EQ(Parse(M"f = f2(x,y);"),
         m_f(Call({ 0,0 }, "", "f2",
                 { Variable({0,0}, "", "x"),
-                 Variable({0,0}, "", "y") })));
+                  Variable({0,0}, "", "y") })));
 
     // local function
 
@@ -665,7 +680,7 @@ TEST(ParserTest, CallExp)
     EXPECT_EQ(Parse(M"f = m2:f1(x,y);"),
         m_f(Call({ 0,0 }, "m2", "f1",
                 { Variable({0,0}, "", "x"),
-                 Variable({0,0}, "", "y") })));
+                  Variable({0,0}, "", "y") })));
 
     // exp in params
     EXPECT_EQ(Parse(M"f = f2(x+y, f3(z));"),
