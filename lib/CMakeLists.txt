@@ -20,6 +20,8 @@ add_library(llfp_lib
 	Type/TypeContext.cpp
 	Type/TypeInference.cpp
 	Type/TypeInstance.cpp
+	Utils/DotFileWriter.cpp
+
 	include/Ast.h
 	include/Codegen.h
 	include/Common/Algorithm.h
@@ -43,6 +45,7 @@ add_library(llfp_lib
 	include/Type/TypeContext.h
 	include/Type/TypeInference.h
 	include/Type/TypeInstance.h
+	include/Utils/DotFileWriter.h
 )
 
 if (MSVC)

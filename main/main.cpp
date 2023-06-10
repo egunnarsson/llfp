@@ -4,6 +4,7 @@
 #include "Lexer.h"
 #include "llfp.h"
 #include "Module.h"
+#include "Utils/DotFileWriter.h"
 
 #pragma warning(disable : 4244 4267)
 #include <llvm/Bitcode/BitcodeWriter.h>
@@ -34,6 +35,10 @@ static llvm::cl::opt<std::string> OutputDirectory(
     "d",
     llvm::cl::desc("Output directory"),
     llvm::cl::value_desc("directory"),
+    llvm::cl::cat(LLFPOptionCategory));
+static llvm::cl::opt<bool> GenDotFiles(
+    "graph",
+    llvm::cl::desc("Generate dot graph file from parsed AST"),
     llvm::cl::cat(LLFPOptionCategory));
 
 namespace
@@ -123,6 +128,14 @@ llfp::ReturnCode writeHeaderFile(llfp::SourceModule& module, llvm::SmallString<1
                  });
 }
 
+llfp::ReturnCode writeDotFile(llfp::SourceModule& module, llvm::SmallString<128>& output)
+{
+    return write(output, ".dot",
+                 [&module](llvm::raw_fd_ostream& os) {
+                     llfp::utils::dot::writeDotFile(os, *module.getAST());
+                 });
+}
+
 llfp::ReturnCode write(llfp::CompiledModule& compiledModule, llvm::SmallString<128>& output)
 {
     auto srcModule  = compiledModule.sourceModule.get();
@@ -144,6 +157,15 @@ llfp::ReturnCode write(llfp::CompiledModule& compiledModule, llvm::SmallString<1
     if (llfp::error(result))
     {
         return result;
+    }
+
+    if (GenDotFiles)
+    {
+        result = writeDotFile(*compiledModule.sourceModule, output);
+        if (llfp::error(result))
+        {
+            return result;
+        }
     }
 
     return writeHeaderFile(*srcModule, output);
@@ -237,6 +259,15 @@ llfp::ReturnCode llfp_main(int argc, char* argv[])
                 if (llfp::error(returnCode))
                 {
                     return returnCode;
+                }
+
+                if (GenDotFiles)
+                {
+                    returnCode = writeDotFile(*compiledModule.sourceModule, output);
+                    if (llfp::error(returnCode))
+                    {
+                        return returnCode;
+                    }
                 }
             }
         }
