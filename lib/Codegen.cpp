@@ -123,6 +123,74 @@ bool CodeGenerator::generateFunction(const ast::Function* ast, std::vector<const
     return f != nullptr;
 }
 
+namespace
+{
+
+void injectFunctionTypes(hm::TypeAnnotation& typeAnnotation, SourceModule& sourceModule, type::TypeContext& typeContext)
+{
+    for (const auto& [funName, varTypePtr] : typeAnnotation.getFunctions())
+    {
+        auto funAst = sourceModule.lookupFunction(GlobalIdentifier::split(funName)); // module? not sourceModule?
+        if (funAst.empty())
+        {
+            auto funDecl = sourceModule.lookupFunctionDecl(GlobalIdentifier::split(funName));
+            assert(!funDecl.empty());
+            auto& funType = typeContext.getAnnotation(funDecl.class_, funDecl.function);
+            typeAnnotation.addConstraint(funName, funType);
+        }
+        else
+        {
+            const auto& funAnnotation = typeContext.getAnnotation(funAst.importedModule, funAst.function);
+            const auto  funType       = funAnnotation.getFun(funName);
+            typeAnnotation.addConstraint(funName, funType);
+        }
+    }
+}
+
+void injectFieldTypes(hm::TypeAnnotation& typeAnnotation, type::TypeContext& typeContext)
+{
+    bool didApplyUpdate = false;
+    do {
+        didApplyUpdate = false;
+        for (auto& [node, type] : typeAnnotation.getTypes())
+        {
+            class : public hm::TypeVisitor
+            {
+            public:
+
+                bool                didApplyUpdate  = false;
+                hm::TypeAnnotation* typeAnnotation_ = nullptr;
+                type::TypeContext*  typeContext_    = nullptr;
+
+                void visit(hm::TypeVar&) override {}
+                void visit(hm::TypeConstant& t) override
+                {
+                    type::Identifier  typeId{ GlobalIdentifier::split(t.id), {} };
+                    type::TypeInstPtr typeInstance = typeContext_->getType(typeId);
+                    for (auto& [fieldName, fieldType] : t.fields)
+                    {
+                        // if fieldType is now known?
+                        // { didApplyUpdate = true;
+                        assert(!typeInstance->isBasicType());
+                        const auto  index             = typeInstance->getFieldIndex(fieldName);
+                        const auto& fieldTypeInstance = typeInstance->getFields().at(index);
+
+                        didApplyUpdate = didApplyUpdate || typeAnnotation_->addConstraint(fieldType, fieldTypeInstance->getType());
+                    }
+                }
+                void visit(hm::FunctionType&) override {}
+            } visitor;
+            visitor.typeAnnotation_ = &typeAnnotation;
+            visitor.typeContext_    = &typeContext;
+
+            type->accept(&visitor);
+            didApplyUpdate = didApplyUpdate || visitor.didApplyUpdate;
+        }
+    } while (didApplyUpdate);
+}
+
+} // namespace
+
 Function* CodeGenerator::generatePrototype(const ImportedModule* module, const ast::Function* ast, std::vector<const type::TypeInstance*> types)
 {
     if (types.empty())
@@ -140,24 +208,8 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
     try
     {
         typeAnnotation = typeContext.getAnnotation(module, ast);
-
-        for (const auto& [funName, varTypePtr] : typeAnnotation.getFunctions())
-        {
-            auto funAst = sourceModule->lookupFunction(GlobalIdentifier::split(funName)); // module? not sourceModule?
-            if (funAst.empty())
-            {
-                auto funDecl = sourceModule->lookupFunctionDecl(GlobalIdentifier::split(funName));
-                assert(!funDecl.empty());
-                auto& funType = typeContext.getAnnotation(funDecl.class_, funDecl.function);
-                typeAnnotation.add(funName, funType);
-            }
-            else
-            {
-                const auto& funAnnotation = typeContext.getAnnotation(funAst.importedModule, funAst.function);
-                const auto  funType       = funAnnotation.getFun(funName);
-                typeAnnotation.add(funName, funType);
-            }
-        }
+        injectFunctionTypes(typeAnnotation, *sourceModule, typeContext);
+        injectFieldTypes(typeAnnotation, typeContext);
 
         // standard module may not have implementation
         if (ast->functionBody != nullptr)

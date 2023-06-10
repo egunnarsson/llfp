@@ -3,10 +3,11 @@
 
 #include "Driver.h"
 #include "GlobalContext.h"
-#include "MathModule.h"
 #include "Module.h"
 #include "Parser.h"
 #include "ResolveIdentifiers.h"
+#include "StdLib/MathModule.h"
+#include "StdLib/RandomModule.h"
 
 #include <llvm/MC/TargetRegistry.h>
 
@@ -180,6 +181,7 @@ std::vector<CompiledModule> compile(const std::vector<Source>& sourceFiles)
     }
 
     lexAndParseModule(MathModule::getSource());
+    lexAndParseModule(RandomModule::getSource());
 
     // Resolve imports
     for (auto& unit : result)

@@ -407,12 +407,21 @@ void TypeAnnotation::print()
 namespace
 {
 
+// moves type ids into this a TypeAnnotation with nextFreeVariable
 class TypeIdConverter : public TypeVisitor
 {
     std::map<TypeVarId, TypeVarId> conversion;
     TypeVarId&                     nextFreeVariable;
 
 public:
+
+    static TypePtr convert(TypeVarId& nextFreeVariable, const TypePtr& inType)
+    {
+        auto            type = inType->copy();
+        TypeIdConverter converter{ nextFreeVariable };
+        type->accept(&converter);
+        return type;
+    }
 
     TypeIdConverter(TypeVarId& nextFreeVariable_)
         : nextFreeVariable{ nextFreeVariable_ }
@@ -451,13 +460,9 @@ public:
 
 } // namespace
 
-// rename addConstraint?
-void TypeAnnotation::add(const std::string& funName, const TypePtr& inType)
+bool TypeAnnotation::addConstraint(const std::string& funName, const TypePtr& inType)
 {
-    // moves type ids into this TypeAnnotation
-    auto            type = inType->copy();
-    TypeIdConverter converter{ nextFreeVariable };
-    type->accept(&converter);
+    auto type = TypeIdConverter::convert(nextFreeVariable, inType);
 
     auto subs = hm::TypeUnifier::unify(getFun(funName), type);
     for (size_t i = 0; i < subs.size(); ++i)
@@ -468,6 +473,23 @@ void TypeAnnotation::add(const std::string& funName, const TypePtr& inType)
             Type::apply(subs[j].type, subs[i]);
         }
     }
+    return !subs.empty();
+}
+
+bool TypeAnnotation::addConstraint(const TypePtr& typeA, const TypeConstantPtr& typeConstant)
+{
+    auto typeB = TypeIdConverter::convert(nextFreeVariable, typeConstant);
+
+    auto subs = hm::TypeUnifier::unify(typeA, typeB);
+    for (size_t i = 0; i < subs.size(); ++i)
+    {
+        substitute(subs[i]);
+        for (size_t j = i + 1; j < subs.size(); ++j)
+        {
+            Type::apply(subs[j].type, subs[i]);
+        }
+    }
+    return !subs.empty();
 }
 
 // ----------------------------------------------------------------------------

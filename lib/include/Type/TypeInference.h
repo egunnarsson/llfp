@@ -41,6 +41,7 @@ class FunctionType;
 
 typedef std::shared_ptr<Type>         TypePtr;
 typedef std::shared_ptr<TypeVar>      TypeVarPtr;
+typedef std::shared_ptr<TypeConstant> TypeConstantPtr;
 typedef std::shared_ptr<FunctionType> FunTypePtr;
 
 
@@ -132,6 +133,7 @@ class TypeConstant : public SimpleType
 public:
 
     std::string id;
+    // DataAst astType; // nullptr for basic types
 
     TypeConstant(std::string id);
 
@@ -268,10 +270,13 @@ public:
     TypePtr    getVar(const std::string& id) const;
     FunTypePtr getFun(const std::string& id) const;
 
+    const auto& getTypes() { return ast; }
     const auto& getFunctions() { return functions; }
-    void        substitute(Substitution sub);
-    // more like update
-    void        add(const std::string& var, const TypePtr& type);
+
+    void substitute(Substitution sub);
+
+    bool addConstraint(const std::string& var, const TypePtr& type);
+    bool addConstraint(const TypePtr& a, const TypeConstantPtr& b);
 
     void print();
 };
