@@ -351,6 +351,7 @@ TypeInstPtr TypeContext::getType(const Identifier& identifier)
             throw Error(std::string{ "type arity mismatch between " } + identifier.str() + " and " +
                         ast.importedModule->name() + ':' + ast.data->name + '/' + std::to_string(ast.data->typeVariables.size()));
         }
+        assert(ast.data->typeVariables.size() == identifier.parameters.size());
 
         std::vector<std::string> typeClasses; // TODO!!!
 

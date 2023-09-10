@@ -154,37 +154,47 @@ void injectFieldTypes(hm::TypeAnnotation& typeAnnotation, type::TypeContext& typ
         didApplyUpdate = false;
         for (auto& [node, type] : typeAnnotation.getTypes())
         {
-            class : public hm::TypeVisitor
+            try
             {
-            public:
-
-                bool                didApplyUpdate  = false;
-                hm::TypeAnnotation* typeAnnotation_ = nullptr;
-                type::TypeContext*  typeContext_    = nullptr;
-
-                void visit(hm::TypeVar&) override {}
-                void visit(hm::TypeConstant& t) override
+                class : public hm::TypeVisitor
                 {
-                    type::Identifier  typeId{ GlobalIdentifier::split(t.id), {} };
-                    type::TypeInstPtr typeInstance = typeContext_->getType(typeId);
-                    for (auto& [fieldName, fieldType] : t.fields)
+                public:
+
+                    bool                didApplyUpdate  = false;
+                    hm::TypeAnnotation* typeAnnotation_ = nullptr;
+                    type::TypeContext*  typeContext_    = nullptr;
+
+                    void visit(hm::TypeVar&) override {}
+                    void visit(hm::TypeConstant& t) override
                     {
-                        // if fieldType is now known?
-                        // { didApplyUpdate = true;
-                        assert(!typeInstance->isBasicType());
-                        const auto  index             = typeInstance->getFieldIndex(fieldName);
-                        const auto& fieldTypeInstance = typeInstance->getFields().at(index);
+                        if (!t.fields.empty())
+                        {
+                            type::Identifier  typeId{ GlobalIdentifier::split(t.id), {} };
+                            type::TypeInstPtr typeInstance = typeContext_->getType(typeId);
+                            for (auto& [fieldName, fieldType] : t.fields)
+                            {
+                                // if fieldType is now known?
+                                // { didApplyUpdate = true;
+                                assert(!typeInstance->isBasicType());
+                                const auto  index             = typeInstance->getFieldIndex(fieldName);
+                                const auto& fieldTypeInstance = typeInstance->getFields().at(index);
 
-                        didApplyUpdate = didApplyUpdate || typeAnnotation_->addConstraint(fieldType, fieldTypeInstance->getType());
+                                didApplyUpdate = didApplyUpdate || typeAnnotation_->addConstraint(fieldType, fieldTypeInstance->getType());
+                            }
+                        }
                     }
-                }
-                void visit(hm::FunctionType&) override {}
-            } visitor;
-            visitor.typeAnnotation_ = &typeAnnotation;
-            visitor.typeContext_    = &typeContext;
+                    void visit(hm::FunctionType&) override {}
+                } visitor;
+                visitor.typeAnnotation_ = &typeAnnotation;
+                visitor.typeContext_    = &typeContext;
 
-            type->accept(&visitor);
-            didApplyUpdate = didApplyUpdate || visitor.didApplyUpdate;
+                type->accept(&visitor);
+                didApplyUpdate = didApplyUpdate || visitor.didApplyUpdate;
+            }
+            catch (const Error& error)
+            {
+                throw ErrorLocation{ node->location, error.what() };
+            }
         }
     } while (didApplyUpdate);
 }
@@ -339,10 +349,10 @@ bool CodeGenerator::generateFunctionBody(Function* function)
     ExpCodeGeneratorContext context{ *this, function->typeAnnotation };
     ExpCodeGenerator        expGenerator(types[0], context, std::move(namedValues));
     ast->functionBody->accept(&expGenerator);
-    expGenerator.generateCleanup(*ast->functionBody);
 
     if (expGenerator.getResult() != nullptr)
     {
+        expGenerator.generateCleanup(*ast->functionBody);
         if (types[0]->isBasicType() || types[0]->isRefType())
         {
             llvmBuilder.CreateRet(expGenerator.getResult());
@@ -867,8 +877,18 @@ void ExpCodeGenerator::visit(ast::CaseExp& exp)
     auto& builder  = llvmBuilder();
     auto  function = builder.GetInsertBlock()->getParent();
 
-    auto caseT = getTypeContext()->constructTypeUsingAnnotationStuff(context_.typeAnnotation_, *exp.caseExp);
-    auto caseV = ExpCodeGenerator::generateScoped(*exp.caseExp, caseT, this);
+    type::TypeInstPtr caseT = nullptr;
+    llvm::Value*      caseV = nullptr;
+    try
+    {
+        caseT = getTypeContext()->constructTypeUsingAnnotationStuff(context_.typeAnnotation_, *exp.caseExp);
+        caseV = ExpCodeGenerator::generateScoped(*exp.caseExp, caseT, this);
+    }
+    catch (const Error& e)
+    {
+        Log(exp.caseExp->location, e.what());
+        return;
+    }
 
     std::vector<llvm::BasicBlock*> expBlocks;
     std::vector<llvm::BasicBlock*> patternBlocks;
@@ -885,31 +905,47 @@ void ExpCodeGenerator::visit(ast::CaseExp& exp)
     // simplify with -jump-threading?
     for (size_t i = 0; i < count; ++i)
     {
-        auto                        uglyHack  = expBlocks.back(); // TODO: replace with call to abort()
-        auto                        failBlock = i == count - 1 ? uglyHack : patternBlocks[i + 1];
-        PatternCodeGeneratorContext context{ builder, failBlock, getTypeContext(), &context_.typeAnnotation_ };
-        PatternCodeGenerator        gen{ context, { caseT, caseV }, expBlocks[i] };
+        try
+        {
+            auto                        uglyHack  = expBlocks.back(); // TODO: replace with call to abort()
+            auto                        failBlock = i == count - 1 ? uglyHack : patternBlocks[i + 1];
+            PatternCodeGeneratorContext context{ builder, failBlock, getTypeContext(), &context_.typeAnnotation_ };
+            PatternCodeGenerator        gen{ context, { caseT, caseV }, expBlocks[i] };
 
-        function->getBasicBlockList().push_back(patternBlocks[i]);
-        builder.SetInsertPoint(patternBlocks[i]);
-        exp.clauses[i].pattern->accept(&gen);
+            function->getBasicBlockList().push_back(patternBlocks[i]);
+            builder.SetInsertPoint(patternBlocks[i]);
+            exp.clauses[i].pattern->accept(&gen);
 
-        variables.push_back(std::move(context.variables));
+            variables.push_back(std::move(context.variables));
+        }
+        catch (const Error& e)
+        {
+            Log(exp.clauses[i].pattern->location, e.what());
+            return;
+        }
     }
 
     std::vector<llvm::Value*> caseValues;
     for (size_t i = 0; i < count; ++i)
     {
-        function->getBasicBlockList().push_back(expBlocks[i]);
-        builder.SetInsertPoint(expBlocks[i]);
-        auto clauseV = ExpCodeGenerator::generateScoped(*exp.clauses[i].exp, expectedType, this, std::move(variables[i]));
-        // Codegen of 'Clause' can change the current block, update ClauseBB for the PHI.
-        expBlocks[i] = builder.GetInsertBlock();
-        if (clauseV != nullptr)
+        try
         {
-            caseValues.push_back(clauseV);
+            function->getBasicBlockList().push_back(expBlocks[i]);
+            builder.SetInsertPoint(expBlocks[i]);
+            auto clauseV = ExpCodeGenerator::generateScoped(*exp.clauses[i].exp, expectedType, this, std::move(variables[i]));
+            // Codegen of 'Clause' can change the current block, update ClauseBB for the PHI.
+            expBlocks[i] = builder.GetInsertBlock();
+            if (clauseV != nullptr)
+            {
+                caseValues.push_back(clauseV);
+            }
+            builder.CreateBr(mergeBB);
         }
-        builder.CreateBr(mergeBB);
+        catch (const Error& e)
+        {
+            Log(exp.clauses[i].exp->location, e.what());
+            return;
+        }
     }
 
     if (caseValues.size() != count)
