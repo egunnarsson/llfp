@@ -25,10 +25,10 @@ struct GlobalIdentifier
           name{ std::move(name_) }
     {}
 
-    static GlobalIdentifier split(const std::string& fullName)
+    static GlobalIdentifier split(llvm::StringRef fullName)
     {
-        auto split = llvm::StringRef{ fullName }.split(':');
-        return split.second.empty() ? GlobalIdentifier{ "", fullName } : GlobalIdentifier{ split.first.str(), split.second.str() };
+        auto split = fullName.split(':');
+        return split.second.empty() ? GlobalIdentifier{ "", fullName.str() } : GlobalIdentifier{ split.first.str(), split.second.str() };
     }
 
     std::string str() const

@@ -106,12 +106,18 @@ std::shared_ptr<hm::TypeConstant> TypeInstance::getType(std::map<const TypeInsta
         return it->second;
     }
 
-    auto type   = std::make_shared<hm::TypeConstant>(identifier_.name.str());
+    auto type   = std::make_shared<hm::TypeConstant>(identifier_.str());
     types[this] = type;
 
     for (auto& typeClass : typeClasses)
     {
         type->typeClasses.insert(typeClass);
+    }
+    type->parameters.emplace();
+    for (auto paramIt : llvm::enumerate(identifier_.parameters))
+    {
+        auto paramInstance = getTypeParameter(paramIt.index());
+        type->parameters->push_back(paramInstance->getType(types));
     }
 
     return type;

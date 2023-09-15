@@ -23,6 +23,7 @@ constructor? possible typevars?
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -89,13 +90,14 @@ class SimpleType : public Type
 {
 public:
 
-    std::set<std::string>          typeClasses;
-    std::map<std::string, TypePtr> fields;
-    std::set<std::string>          constructors;
+    std::set<std::string>               typeClasses;
+    std::map<std::string, TypePtr>      fields;
+    std::set<std::string>               constructors;
+    std::optional<std::vector<TypePtr>> parameters;
     // assert(!(!fields.empty() && constructors.size() > 1));
 
     std::vector<Substitution> addConstraints(const SimpleType& other);
-    std::string               printConstraints(std::string base) const;
+    std::string               printConstraints(const std::string& base) const;
     void                      apply(Substitution s) override;
 
 protected:
@@ -285,7 +287,7 @@ class PatternTypeVisitor;
 
 class Annotator : public ast::ExpVisitor
 {
-    std::map<std::string, TypePtr> typeConstants;
+    std::map<std::string, TypeConstantPtr> typeConstants;
     // std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
 
 public:
@@ -312,10 +314,12 @@ public:
 
 private:
 
-    TypeVarPtr makeVar();
-    TypePtr    makeConst(llvm::StringRef s);
-    TypePtr    makeClass(llvm::StringRef s);
-    FunTypePtr makeFunction(std::vector<TypePtr> types);
+    TypeVarPtr      makeVar();
+    TypeConstantPtr makeConst(llvm::StringRef s);
+    TypePtr         makeClass(llvm::StringRef s);
+    FunTypePtr      makeFunction(std::vector<TypePtr> types);
+
+    TypePtr typeFromIdentifier(const ast::TypeIdentifier& id);
 
     TypePtr tv(const std::string& name);
     TypePtr tv(ast::Node& ast);

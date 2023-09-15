@@ -24,6 +24,39 @@ namespace llfp::type
 namespace
 {
 
+class TypeIdentifierBuilder : public hm::TypeVisitor
+{
+public:
+
+    type::Identifier result;
+
+    void visit(hm::TypeVar&) override
+    {
+        assert(false);
+    }
+
+    void visit(hm::TypeConstant& t) override
+    {
+        const auto              constantId      = llvm::StringRef{ t.id };
+        const auto              firstBraceIndex = constantId.find_first_of('[');
+        auto                    id              = GlobalIdentifier::split(constantId.substr(0, firstBraceIndex));
+        std::vector<Identifier> parameters;
+        assert(t.parameters.has_value());
+        for (auto& param : *t.parameters)
+        {
+            TypeIdentifierBuilder visitor;
+            param->accept(&visitor);
+            parameters.push_back(std::move(visitor.result));
+        }
+        result = type::Identifier{ std::move(id), std::move(parameters) };
+    }
+
+    void visit(hm::FunctionType&) override
+    {
+        assert(false);
+    }
+};
+
 // assumes basic type
 class NaiveTypeConstructor : public hm::TypeVisitor
 {
@@ -68,9 +101,10 @@ public:
 
     void visit(hm::TypeConstant& t) override
     {
-        auto id = GlobalIdentifier::split(t.id);
-        assert(!id.moduleName.empty() || t.fields.empty());
-        result = context->getType(type::Identifier{ std::move(id), {} });
+        TypeIdentifierBuilder visitor;
+        t.accept(&visitor);
+        assert(!visitor.result.name.moduleName.empty() || t.fields.empty()); // either have module name, or be basic type without fields
+        result = context->getType(std::move(visitor.result));
     }
 
     void visit(hm::FunctionType&) override

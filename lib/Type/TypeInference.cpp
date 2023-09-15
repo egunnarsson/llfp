@@ -12,6 +12,7 @@
 #pragma warning(pop)
 
 #include <iostream> //TODO: remove only for debug
+#include <tuple>
 
 
 namespace llfp::hm
@@ -38,7 +39,7 @@ std::vector<Substitution> Type::unify(TypeVar& a, SimpleType& b, const TypePtr& 
 
 std::vector<Substitution> Type::unify(TypeVar& a, FunctionType& b, const TypePtr& ptrB)
 {
-    if (a.fields.empty() && a.typeClasses.empty() && a.constructors.empty())
+    if (a.fields.empty() && a.typeClasses.empty() && a.constructors.empty() && (!a.parameters.has_value() || a.parameters->empty()))
     {
         return { { a.id, ptrB } };
     }
@@ -73,36 +74,53 @@ std::vector<Substitution> SimpleType::addConstraints(const SimpleType& other)
         }
     }
 
+    if (!parameters.has_value())
+    {
+        parameters = other.parameters;
+    }
+    else if (other.parameters.has_value())
+    {
+        assert(parameters->size() == other.parameters->size());
+        for (auto param : llvm::zip(*parameters, *other.parameters))
+        {
+            auto subs = TypeUnifier::unify(std::get<0>(param), std::get<1>(param));
+            result.insert(std::begin(result), std::begin(subs), std::end(subs));
+        }
+    }
+
     typeClasses.insert(std::begin(other.typeClasses), std::end(other.typeClasses));
     constructors.insert(std::begin(other.constructors), std::end(other.constructors));
     return result;
 }
 
-std::string SimpleType::printConstraints(std::string base) const
+std::string SimpleType::printConstraints(const std::string& base) const
 {
+    std::string result{};
     if (!typeClasses.empty())
     {
-        std::string result{};
         for (auto& typeClass : typeClasses)
         {
             result += typeClass;
             result += ',';
         }
         result.back() = ' ';
-        result += base;
-        return result;
     }
-    else
-    {
-        return base;
-    }
+    result += base;
+    return result;
 }
 
 void SimpleType::apply(Substitution s)
 {
-    for (auto& f : fields)
+    for (auto& [name, type] : fields)
     {
-        Type::apply(f.second, s);
+        Type::apply(type, s);
+    }
+    if (parameters.has_value())
+    {
+        for (auto& param : *parameters)
+        {
+            Type::apply(param, s);
+        }
     }
 }
 
@@ -112,6 +130,14 @@ void SimpleType::copy(SimpleType* newObj) const
     for (const auto& [name, type] : fields)
     {
         newObj->fields.insert({ name, type->copy() });
+    }
+    if (parameters.has_value())
+    {
+        newObj->parameters.emplace();
+        for (const auto& param : *parameters)
+        {
+            newObj->parameters->push_back(param->copy());
+        }
     }
     newObj->constructors = constructors;
 }
@@ -185,6 +211,7 @@ std::vector<Substitution> TypeConstant::unify(TypeConstant& a, TypeConstant& b, 
 {
     if (a.id == b.id)
     {
+        // unify params probably, maybe
         return {};
     }
     else
@@ -429,6 +456,7 @@ public:
 
     virtual void visit(TypeVar& t)
     {
+        visitSimpleType(t);
         auto it = conversion.find(t.id);
         if (it != conversion.end())
         {
@@ -443,10 +471,7 @@ public:
 
     virtual void visit(TypeConstant& typeConstant)
     {
-        for (const auto& [n, t] : typeConstant.fields)
-        {
-            t->accept(this);
-        }
+        visitSimpleType(typeConstant);
     }
 
     virtual void visit(FunctionType& funType)
@@ -454,6 +479,23 @@ public:
         for (const auto& t : funType.types)
         {
             t->accept(this);
+        }
+    }
+
+private:
+
+    void visitSimpleType(SimpleType& type)
+    {
+        for (const auto& [n, t] : type.fields)
+        {
+            t->accept(this);
+        }
+        if (type.parameters.has_value())
+        {
+            for (const auto& param : *type.parameters)
+            {
+                param->accept(this);
+            }
         }
     }
 };
@@ -518,6 +560,29 @@ std::vector<Substitution> Constraint::solve()
 
 // ----------------------------------------------------------------------------
 
+/* Tests
+
+T1 foo(T2[T3] x) =
+    case x of
+        ...
+    end
+
+T1 foo(T2[T3] x, T2[T4] y) = ...;
+
+*/
+
+// Maybe[int], Maybe[bool]... Maybe[a]?
+TypePtr Annotator::typeFromIdentifier(const ast::TypeIdentifier& id)
+{
+    auto typePtr = makeConst(id.str());
+    typePtr->parameters.emplace();
+    for (auto& param : id.parameters)
+    {
+        typePtr->parameters->push_back(typeFromIdentifier(param));
+    }
+    return typePtr;
+}
+
 void Annotator::operator()(const std::string& moduleName, const ast::Function& fun)
 {
     current = 0;
@@ -526,13 +591,13 @@ void Annotator::operator()(const std::string& moduleName, const ast::Function& f
     result.clear();
     constraints.clear();
 
-    auto bodyType = fun.type.empty() ? makeVar() : makeConst(fun.type.identifier.str());
+    auto bodyType = fun.type.empty() ? static_cast<TypePtr>(makeVar()) : typeFromIdentifier(fun.type);
 
     std::vector<TypePtr> args;
     args.push_back(bodyType);
     for (auto& arg : fun.parameters)
     {
-        auto argTV          = arg->type.empty() ? makeVar() : makeConst(arg->type.identifier.str()); // Maybe[int], Maybe[bool]... Maybe[a]?
+        auto argTV          = arg->type.empty() ? makeVar() : typeFromIdentifier(arg->type);
         // TODO: nested type parameters
         auto [it, inserted] = variables.insert({ arg->identifier, argTV });
         if (!inserted)
@@ -567,7 +632,7 @@ void Annotator::visit(ast::LetExp& exp)
             auto it = variables.find(let->name);
             if (it == variables.end())
             {
-                TypePtr letTV        = let->type.empty() ? makeVar() : makeConst(let->type.str());
+                TypePtr letTV        = let->type.empty() ? static_cast<TypePtr>(makeVar()) : typeFromIdentifier(let->type);
                 variables[let->name] = letTV;
                 add({ let->location, letTV, tv(let->functionBody) });
             }
@@ -634,6 +699,7 @@ void PatternTypeVisitor::visit(ast::ConstructorPattern& pattern)
     for (auto& arg : pattern.arguments)
     {
         // TODO: add constraints for fields... by index!
+        // and make constraint for parameters...
         arg.pattern->accept(this);
     }
 }
@@ -808,6 +874,8 @@ void Annotator::visit(ast::FieldExp& exp)
     auto t = makeVar();
     t->fields.insert(std::make_pair(exp.fieldIdentifier, expTV));
     add({ exp.location, tv(exp.lhs), t });
+
+    // make constraint for parameters...
 }
 
 void Annotator::visit(ast::ConstructorExp& exp)
@@ -827,6 +895,8 @@ void Annotator::visit(ast::ConstructorExp& exp)
     // application, treat as functions?
     // no, constructor tells me something about the type constant for this exp
     auto it = variables.find(exp.identifier.name); // ?
+
+    // make constraint for parameters...
 }
 
 void Annotator::visit(ast::IntrinsicExp& exp)
@@ -847,7 +917,7 @@ TypeVarPtr Annotator::makeVar()
     return std::make_shared<TypeVar>(current++);
 }
 
-TypePtr Annotator::makeConst(llvm::StringRef stringRef)
+TypeConstantPtr Annotator::makeConst(llvm::StringRef stringRef)
 {
     std::string str{ stringRef.str() };
     auto        it = typeConstants.find(str);
