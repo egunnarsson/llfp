@@ -3,7 +3,6 @@
 
 #include "Common/Algorithm.h"
 #include "Error.h"
-#include "GlobalContext.h"
 #include "Log.h"
 #include "Module.h"
 #include "Type/TypeContext.h"

@@ -6,6 +6,7 @@
 #include "GlobalContext.h"
 #include "Log.h"
 #include "Module.h"
+#include "NameMangling.h"
 #include "String/StringConstants.h"
 
 #pragma warning(push, 0)
@@ -126,6 +127,13 @@ bool CodeGenerator::generateFunction(const ast::Function* ast, std::vector<const
 namespace
 {
 
+// TODO implement
+hm::FunTypePtr replaceClassTypeVariableWithTypeVar(const ast::Class* astClass, const hm::FunTypePtr& funType)
+{
+    std::map<std::string, hm::TypePtr> typeConstants;
+    return funType->copyFun(typeConstants);
+}
+
 void injectFunctionTypes(hm::TypeAnnotation& typeAnnotation, SourceModule& sourceModule, type::TypeContext& typeContext)
 {
     for (const auto& [funName, varTypePtr] : typeAnnotation.getFunctions())
@@ -135,8 +143,9 @@ void injectFunctionTypes(hm::TypeAnnotation& typeAnnotation, SourceModule& sourc
         {
             auto funDecl = sourceModule.lookupFunctionDecl(GlobalIdentifier::split(funName));
             assert(!funDecl.empty());
-            auto& funType = typeContext.getAnnotation(funDecl.class_, funDecl.function);
-            typeAnnotation.addConstraint(funName, funType);
+            auto& funType    = typeContext.getAnnotation(funDecl.class_, funDecl.function);
+            auto  newFunType = replaceClassTypeVariableWithTypeVar(funDecl.class_, funType);
+            typeAnnotation.addConstraint(funName, newFunType);
         }
         else
         {
@@ -201,7 +210,7 @@ void injectFieldTypes(hm::TypeAnnotation& typeAnnotation, type::TypeContext& typ
 
 } // namespace
 
-Function* CodeGenerator::generatePrototype(const ImportedModule* module, const ast::Function* ast, std::vector<const type::TypeInstance*> types)
+Function* CodeGenerator::generatePrototype(const ImportedModule* mod, const ast::Function* ast, std::vector<const type::TypeInstance*> types)
 {
     if (types.empty())
     {
@@ -217,9 +226,10 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
     hm::TypeAnnotation typeAnnotation;
     try
     {
-        typeAnnotation = typeContext.getAnnotation(module, ast);
+        typeAnnotation = typeContext.getAnnotation(mod, ast);
+        // should I inject when we generate the prototype? Or later?
         injectFunctionTypes(typeAnnotation, *sourceModule, typeContext);
-        injectFieldTypes(typeAnnotation, typeContext);
+        // injectFieldTypes(typeAnnotation, typeContext); // do we need this if we lookup ast in type inference?
 
         // standard module may not have implementation
         if (ast->functionBody != nullptr)
@@ -244,7 +254,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* module, const a
         return nullptr;
     }
 
-    auto name = module->getMangledName(ast, types);
+    auto name = getMangledName(*mod, ast, types);
 
     auto funIt = functions.find(name);
     if (funIt == functions.end())
@@ -1450,7 +1460,7 @@ void ExpCodeGenerator::visit(ast::FieldExp& exp)
         auto fieldType = lhsType->getFields()[index];
         if (fieldType != expectedType)
         {
-            Log(exp.location, "Failed to unify types ", fieldType->identifier().str(), " and ", expectedType->identifier().str());
+            Log(exp.location, "Failed to unify types '", fieldType->identifier().str(), "' and '", expectedType->identifier().str() + '\'');
             return;
         }
         // I think we need both since check might do subs
@@ -1881,7 +1891,7 @@ llvm::Function* CodeGenerator::getReleaseFunction(type::TypeInstPtr type)
 
     driver->push(type);
 
-    auto name = sourceModule->getMangledName("release", type);
+    auto name = getMangledName(*sourceModule, "release", type);
 
     llvm::Type*                returnType     = llvm::Type::getVoidTy(*llvmContext);
     std::array<llvm::Type*, 1> parameterTypes = { llvm::PointerType::get(*llvmContext, 0) };
@@ -1902,7 +1912,7 @@ llvm::Function* CodeGenerator::getDeleteFunction(type::TypeInstPtr type)
 
     driver->push(type);
 
-    auto name = sourceModule->getMangledName("delete", type);
+    auto name = getMangledName(*sourceModule, "delete", type);
 
     llvm::Type*                returnType     = llvm::Type::getVoidTy(*llvmContext);
     std::array<llvm::Type*, 1> parameterTypes = { llvm::PointerType::get(*llvmContext, 0) };

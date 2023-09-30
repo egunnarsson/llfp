@@ -1,9 +1,11 @@
 #pragma once
 
 #include "IModule.h"
+#include "Type/TypeInstance.h"
 
 #include <string>
 #include <unordered_map>
+
 
 namespace llfp
 {

@@ -210,6 +210,8 @@ std::vector<CompiledModule> compile(const std::vector<Source>& sourceFiles)
         }
     }
 
+    // TODO: Generate type annotations (type check)
+
     // Generate exported functions
     Driver driver;
     for (auto& unit : result)

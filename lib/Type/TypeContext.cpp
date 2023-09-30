@@ -6,6 +6,7 @@
 #include "GlobalContext.h"
 #include "Log.h"
 #include "Module.h"
+#include "NameMangling.h"
 
 #pragma warning(push, 0)
 
@@ -150,13 +151,53 @@ const hm::TypeAnnotation& TypeContext::getAnnotation(const ImportedModule* modul
     auto it = annotations.find(ast);
     if (it == annotations.end())
     {
-        auto ptr = std::make_unique<hm::TypeAnnotation>(llfp::hm::inferType(module->name(), *ast));
+        auto ptr = std::make_unique<hm::TypeAnnotation>(llfp::hm::inferType(module, *ast));
         auto it2 = annotations.insert({ ast, std::move(ptr) });
         return *it2.first->second;
     }
     return *it->second;
 }
 
+namespace
+{
+
+struct FunctionDeclarationTypeAnnotationBuilder
+{
+    std::map<std::string, hm::TypePtr> typeMap;
+
+    hm::TypePtr add(const ast::TypeIdentifier& argTypeId)
+    {
+        std::string argType = argTypeId.str();
+        auto        it      = typeMap.find(argType);
+        if (it == typeMap.end())
+        {
+            auto type = std::make_shared<hm::TypeConstant>(std::string{ argType });
+            type->parameters.emplace();
+            for (auto& param : argTypeId.parameters)
+            {
+                type->parameters->push_back(add(param));
+            }
+            it = typeMap.insert(std::make_pair(std::move(argType), std::move(type))).first;
+        }
+        return it->second;
+    }
+
+    hm::FunTypePtr build(const ast::Class* class_, const ast::FunctionDeclaration* ast)
+    {
+        typeMap[class_->typeVariable] = std::make_shared<hm::TypeVar>(0);
+
+        std::vector<hm::TypePtr> functionTypes;
+        functionTypes.push_back(add(ast->type));
+        for (auto& arg : ast->parameters)
+        {
+            functionTypes.push_back(add(arg->type));
+        }
+
+        return std::make_shared<hm::FunctionType>(std::move(functionTypes));
+    }
+};
+
+} // namespace
 
 const hm::FunTypePtr& TypeContext::getAnnotation(const ast::Class* class_, const ast::FunctionDeclaration* ast)
 {
@@ -166,33 +207,9 @@ const hm::FunTypePtr& TypeContext::getAnnotation(const ast::Class* class_, const
         return it->second;
     }
 
-    hm::TypePtr                        varPtr = std::make_shared<hm::TypeVar>(0);
-    std::map<std::string, hm::TypePtr> typeMap;
-    typeMap[class_->typeVariable] = varPtr;
+    FunctionDeclarationTypeAnnotationBuilder builder;
 
-    auto insert = [&typeMap](std::string argType) {
-        auto it = typeMap.find(argType);
-        if (it == typeMap.end())
-        {
-            auto copy                   = argType;
-            typeMap[std::move(argType)] = std::make_shared<hm::TypeConstant>(std::move(copy));
-        }
-    };
-
-    insert(ast->type.identifier.str());
-    for (auto& arg : ast->parameters)
-    {
-        insert(arg->type.str());
-    }
-
-    std::vector<hm::TypePtr> functionTypes;
-    functionTypes.push_back(typeMap[ast->type.identifier.str()]);
-    for (auto& arg : ast->parameters)
-    {
-        functionTypes.push_back(typeMap[arg->type.str()]);
-    }
-
-    auto result = annotationsDecls.insert({ ast, std::make_shared<hm::FunctionType>(std::move(functionTypes)) });
+    auto result = annotationsDecls.insert({ ast, builder.build(class_, ast) });
     return result.first->second;
 }
 
@@ -248,7 +265,7 @@ TypeInstPtr TypeContext::getTypeFromAst(const ast::TypeIdentifier& identifier)
 TypeInstPtr TypeContext::getTypeFromAst(const ast::TypeIdentifier& identifier, const ImportedModule* lookupModule)
 {
     Identifier id;
-    if (lookupModule->fullyQualifiedName(id, identifier))
+    if (fullyQualifiedName(*lookupModule, id, identifier))
     {
         return getType(id);
     }
@@ -330,7 +347,7 @@ TypeInstPtr TypeContext::makeTypeInstanceAggregate(const Identifier& identifier,
     auto& constructor = ast.data->constructors.front();
     auto  fieldTypes  = getFieldTypes(ast, constructor.fields, typeVariables);
 
-    llvmType->setName(ast.importedModule->getMangledName(ast.data)); // should be type variables
+    llvmType->setName(getMangledName(*ast.importedModule, ast.data, typeVariables));
     typePtr->setFields(std::move(fieldTypes));
 
     return typePtr;
@@ -350,7 +367,7 @@ TypeInstPtr TypeContext::makeTypeInstanceVariant(const Identifier& identifier, l
         auto llvmType   = llvm::StructType::create(llvmContext, "");
         auto fieldTypes = getFieldTypes(ast, it.value().fields, typeVariables);
 
-        llvmType->setName(ast.importedModule->getMangledName(ast.data, it.index(), typeVariables));
+        llvmType->setName(getMangledName(*ast.importedModule, ast.data, it.index(), typeVariables));
 
         std::vector<llvm::Type*> llvmTypes;
         std::transform(fieldTypes.begin(), fieldTypes.end(), std::back_inserter(llvmTypes),
@@ -431,7 +448,7 @@ TypeInstPtr TypeContext::getTypeFromConstructor(const std::string& name)
 bool TypeContext::equals(TypeInstPtr type, const ast::TypeIdentifier& identifier)
 {
     Identifier id;
-    if (sourceModule->fullyQualifiedName(id, identifier))
+    if (fullyQualifiedName(*sourceModule, id, identifier))
     {
         return type->identifier() == id;
     }

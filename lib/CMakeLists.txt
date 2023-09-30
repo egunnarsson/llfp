@@ -13,6 +13,7 @@ add_library(llfp_lib
 	llfp.cpp
 	Log.cpp
 	Module.cpp
+	NameMangling.cpp
 	Parser.cpp
 	ResolveIdentifiers.cpp
 	Source.cpp
@@ -38,6 +39,7 @@ add_library(llfp_lib
 	include/llfp.h
 	include/Log.h
 	include/Module.h
+	include/NameMangling.h
 	include/Parser.h
 	include/ResolveIdentifiers.h
 	include/Source.h

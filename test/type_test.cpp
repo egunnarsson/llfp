@@ -26,7 +26,7 @@ llfp::hm::FunTypePtr Infer(llfp::SourceModule& srcModule, const char* funName)
     auto fun = srcModule.getFunction(funName);
     if (fun.function != nullptr)
     {
-        auto annotation = llfp::hm::inferType("m", *fun.function);
+        auto annotation = llfp::hm::inferType(&srcModule, *fun.function);
         return annotation.getFun(std::string{ "m:" } + funName);
     }
     return nullptr;

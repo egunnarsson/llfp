@@ -1,8 +1,10 @@
 
+#include "GlobalContext.h"
+
 #include "Log.h"
 #include "Module.h"
+#include "NameMangling.h"
 
-#include "GlobalContext.h"
 
 namespace llfp
 {
@@ -22,7 +24,7 @@ bool GlobalContext::buildFunctionInstances(SourceModule* sourceModule)
         // check that instance->classIdentifier is visible from this module
 
         type::Identifier id;
-        if (sourceModule->fullyQualifiedName(id, instance->typeArgument))
+        if (fullyQualifiedName(*sourceModule, id, instance->typeArgument))
         {
             for (auto& function : instance->functions)
             {

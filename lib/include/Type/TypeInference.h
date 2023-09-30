@@ -14,6 +14,7 @@ constructor? possible typevars?
 */
 
 #include "Ast.h"
+#include "IModule.h"
 
 #pragma warning(push, 0)
 
@@ -43,6 +44,7 @@ class FunctionType;
 typedef std::shared_ptr<Type>         TypePtr;
 typedef std::shared_ptr<TypeVar>      TypeVarPtr;
 typedef std::shared_ptr<TypeConstant> TypeConstantPtr;
+typedef std::shared_ptr<SimpleType>   SimpleTypePtr;
 typedef std::shared_ptr<FunctionType> FunTypePtr;
 
 
@@ -76,7 +78,7 @@ public:
 
     virtual void accept(TypeVisitor* visitor) = 0;
 
-    virtual TypePtr copy() const = 0;
+    virtual TypePtr copy(std::map<std::string, TypePtr>& typeConstants) const = 0;
 
 protected:
 
@@ -102,7 +104,7 @@ public:
 
 protected:
 
-    void copy(SimpleType* newObj) const;
+    void copy(std::map<std::string, TypePtr>& typeConstants, SimpleType* newObj) const;
 };
 
 
@@ -126,7 +128,7 @@ public:
 
     void accept(TypeVisitor* visitor) override;
 
-    TypePtr copy() const override;
+    TypePtr copy(std::map<std::string, TypePtr>& typeConstants) const override;
 };
 
 
@@ -147,7 +149,7 @@ public:
 
     void accept(TypeVisitor* visitor) override;
 
-    TypePtr copy() const override;
+    TypePtr copy(std::map<std::string, TypePtr>& typeConstants) const override;
 };
 
 
@@ -169,8 +171,8 @@ public:
 
     void accept(TypeVisitor* visitor) override;
 
-    TypePtr    copy() const override;
-    FunTypePtr copyFun() const;
+    TypePtr    copy(std::map<std::string, TypePtr>& typeConstants) const override;
+    FunTypePtr copyFun(std::map<std::string, TypePtr>& typeConstants) const;
 };
 
 
@@ -283,14 +285,18 @@ public:
     void print();
 };
 
+
 class PatternTypeVisitor;
 
 class Annotator : public ast::ExpVisitor
 {
+    const ImportedModule*                  astModule_ = nullptr;
     std::map<std::string, TypeConstantPtr> typeConstants;
     // std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
 
 public:
+
+    Annotator(const ImportedModule* astModule);
 
     TypeVarId                           current = 0;
     std::map<std::string, TypePtr>      variables;
@@ -298,7 +304,7 @@ public:
     std::map<const ast::Node*, TypePtr> result;
     std::vector<Constraint>             constraints;
 
-    void operator()(const std::string& moduleName, const ast::Function& fun);
+    void operator()(const ast::Function& fun);
 
     void visit(ast::LetExp& exp) override;
     void visit(ast::IfExp& exp) override;
@@ -319,7 +325,7 @@ private:
     TypePtr         makeClass(llvm::StringRef s);
     FunTypePtr      makeFunction(std::vector<TypePtr> types);
 
-    TypePtr typeFromIdentifier(const ast::TypeIdentifier& id);
+    TypePtr typeFromIdentifier(const ast::TypeIdentifier& id, const std::map<std::string, TypeVarPtr>& typeVariables = {});
 
     TypePtr tv(const std::string& name);
     TypePtr tv(ast::Node& ast);
@@ -360,8 +366,8 @@ private:
 };
 
 
-std::string test(const std::string& moduleName, ast::Function& fun);
+std::string test(const ImportedModule* astModule, ast::Function& fun);
 
-TypeAnnotation inferType(const std::string& moduleName, const ast::Function& fun);
+TypeAnnotation inferType(const ImportedModule* astModule, const ast::Function& fun);
 
 } // namespace llfp::hm

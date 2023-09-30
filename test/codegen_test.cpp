@@ -170,7 +170,7 @@ TEST(CodegenTest, DataConstructor)
 
     // negative
     // clang-format off
-    // unkown type, how do I trigger that code? type checks will fail before that always...
+    // unknown type, how do I trigger that code? type checks will fail before that always...
     // EXPECT_EQ(compileError(M"export d f(i32 x) = d{1,2};"), "string(3,1): \n");
     EXPECT_EQ(compileError(M "data d = {i32 x; i32 y;};\nexport d f(i32 z) = d{z,z,z};"),   "string(3,21): incorrect number of arguments\n");
     EXPECT_EQ(compileError(M "data d = {i32 x; i32 y;};\nexport d f(i32 z) = d{x=z,j=z};"), "string(3,27): unknown field name\n");

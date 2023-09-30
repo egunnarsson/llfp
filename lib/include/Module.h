@@ -44,13 +44,6 @@ public:
     DataAst    getType(const std::string& name) const override;
     DataAst    getConstructor(const std::string& name) const override;
 
-    std::string getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const override;
-    std::string getMangledName(const ast::Data* data, const std::map<std::string, type::Identifier>& typeVariables = {}) const override;
-    std::string getMangledName(const ast::Data* data, size_t constructorIndex, const std::map<std::string, type::Identifier>& typeVariables = {}) const override;
-    std::string getMangledName(const char* internalFunctionName, type::TypeInstPtr type) const override;
-    std::string getExportedName(const ast::Function* function) const override;
-    bool        fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const override;
-
     // lookup local function or global from imported modules
     FunAst     lookupFunction(const GlobalIdentifier& identifier) override;
     FunDeclAst lookupFunctionDecl(const GlobalIdentifier& identifier) override;

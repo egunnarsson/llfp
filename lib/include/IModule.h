@@ -20,14 +20,6 @@ namespace llfp
 
 class ImportedModule;
 
-namespace type
-{
-
-class TypeInstance;
-struct Identifier;
-
-} // namespace type
-
 // Structs
 
 struct FunAst
@@ -64,21 +56,13 @@ public:
     virtual ~ImportedModule();
 
     virtual const std::string& name() const = 0;
-
-    virtual ast::Module* getAST() = 0;
+    virtual ast::Module*       getAST()     = 0;
 
     // Get public
     virtual FunAst     getFunction(const std::string& name)          = 0;
     virtual FunDeclAst getFunctionDecl(const std::string& name)      = 0;
     virtual DataAst    getType(const std::string& name) const        = 0;
     virtual DataAst    getConstructor(const std::string& name) const = 0;
-
-    virtual std::string getMangledName(const ast::Function* function, const llvm::ArrayRef<const type::TypeInstance*> types) const                              = 0;
-    virtual std::string getMangledName(const ast::Data* data, const std::map<std::string, type::Identifier>& typeVariables = {}) const                          = 0;
-    virtual std::string getMangledName(const ast::Data* data, size_t constructorIndex, const std::map<std::string, type::Identifier>& typeVariables = {}) const = 0;
-    virtual std::string getMangledName(const char* internalName, const type::TypeInstance* type) const                                                          = 0;
-    virtual std::string getExportedName(const ast::Function* function) const                                                                                    = 0;
-    virtual bool        fullyQualifiedName(type::Identifier& identifier, const ast::TypeIdentifier& tid) const                                                  = 0;
 
     // Lookup global
     virtual FunAst     lookupFunction(const GlobalIdentifier& identifier)          = 0;
