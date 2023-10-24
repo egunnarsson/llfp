@@ -37,15 +37,17 @@ typedef int TypeVarId;
 
 class Type;
 class SimpleType;
-class TypeVar;
+class UnboundTypeVar;
+class BoundTypeVar;
 class TypeConstant;
 class FunctionType;
 
-typedef std::shared_ptr<Type>         TypePtr;
-typedef std::shared_ptr<TypeVar>      TypeVarPtr;
-typedef std::shared_ptr<TypeConstant> TypeConstantPtr;
-typedef std::shared_ptr<SimpleType>   SimpleTypePtr;
-typedef std::shared_ptr<FunctionType> FunTypePtr;
+typedef std::shared_ptr<Type>           TypePtr;
+typedef std::shared_ptr<UnboundTypeVar> UnboundTypeVarPtr;
+typedef std::shared_ptr<BoundTypeVar>   BoundTypeVarPtr;
+typedef std::shared_ptr<TypeConstant>   TypeConstantPtr;
+typedef std::shared_ptr<SimpleType>     SimpleTypePtr;
+typedef std::shared_ptr<FunctionType>   FunTypePtr;
 
 
 struct Substitution
@@ -59,9 +61,10 @@ class TypeVisitor
 {
 public:
 
-    virtual void visit(TypeVar& t)      = 0;
-    virtual void visit(TypeConstant& t) = 0;
-    virtual void visit(FunctionType& t) = 0;
+    virtual void visit(UnboundTypeVar& t) = 0;
+    virtual void visit(BoundTypeVar& t)   = 0;
+    virtual void visit(TypeConstant& t)   = 0;
+    virtual void visit(FunctionType& t)   = 0;
 };
 
 
@@ -70,21 +73,17 @@ class Type
 public:
 
     virtual std::string str() const = 0;
+    virtual bool        equals(TypeVarId) const { return false; }
+    virtual TypePtr     copy(std::map<std::string, TypeConstantPtr>& typeConstants) const = 0;
+    virtual void        accept(TypeVisitor* visitor)                              = 0;
 
-    virtual bool equals(TypeVarId) const { return false; }
-
-    static void  apply(TypePtr& ptr, Substitution s);
-    virtual void apply(Substitution s) = 0;
-
-    virtual void accept(TypeVisitor* visitor) = 0;
-
-    virtual TypePtr copy(std::map<std::string, TypePtr>& typeConstants) const = 0;
+    static void apply(TypePtr& ptr, Substitution s);
 
 protected:
 
-    static std::vector<Substitution> unify(TypeVar& a, SimpleType& b, const TypePtr& ptrB);
-    static std::vector<Substitution> unify(TypeVar& a, FunctionType& b, const TypePtr& ptrB);
-    [[noreturn]] static void         unifyError(const Type& a, const Type& b);
+    [[noreturn]] static void unifyError(const Type& a, const Type& b);
+
+    virtual void apply(Substitution s) = 0;
 };
 
 
@@ -92,64 +91,105 @@ class SimpleType : public Type
 {
 public:
 
-    std::set<std::string>               typeClasses;
-    std::map<std::string, TypePtr>      fields;
-    std::set<std::string>               constructors;
-    std::optional<std::vector<TypePtr>> parameters;
-    // assert(!(!fields.empty() && constructors.size() > 1));
+    std::set<std::string>          typeClasses;
+    std::map<std::string, TypePtr> fields;
+    // std::optional<std::vector<TypePtr>> parameters;
+    //  assert(!(!fields.empty() && constructors.size() > 1));
 
-    std::vector<Substitution> addConstraints(const SimpleType& other);
+    std::vector<Substitution> addConstraints(const SimpleType& other); // rename?
     std::string               printConstraints(const std::string& base) const;
-    void                      apply(Substitution s) override;
+
+    void copy(std::map<std::string, TypeConstantPtr>& typeConstants, SimpleType* newObj) const;
 
 protected:
 
-    void copy(std::map<std::string, TypePtr>& typeConstants, SimpleType* newObj) const;
+    void apply(Substitution s) override;
 };
 
-
-class TypeVar : public SimpleType
+/* Unknown data construct */
+class UnboundTypeVar : public SimpleType
 {
 public:
 
-    TypeVarId id;
+    TypeVarId             id_;
+    std::set<std::string> constructors_; // when can I know about a constructor without having done a ast lookup and found the ast and thus bound the type?
 
-    TypeVar(TypeVarId id_);
+    UnboundTypeVar(TypeVarId id);
 
     std::string str() const override;
 
     bool equals(TypeVarId t) const override;
 
-    static std::vector<Substitution> unify(TypeVar& a, TypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
-    static std::vector<Substitution> unify(TypeVar& a, TypeConstant& b, const TypePtr& ptrA, const TypePtr& ptrB);
-    static std::vector<Substitution> unify(TypeVar& a, FunctionType& b, const TypePtr& ptrA, const TypePtr& ptrB);
-
-    void apply(Substitution s) override;
+    static std::vector<Substitution> unify(UnboundTypeVar& a, UnboundTypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
+    static std::vector<Substitution> unify(UnboundTypeVar& a, BoundTypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
+    static std::vector<Substitution> unify(UnboundTypeVar& a, TypeConstant& b, const TypePtr& ptrA, const TypePtr& ptrB);
+    static std::vector<Substitution> unify(UnboundTypeVar& a, FunctionType& b, const TypePtr& ptrA, const TypePtr& ptrB);
 
     void accept(TypeVisitor* visitor) override;
 
-    TypePtr copy(std::map<std::string, TypePtr>& typeConstants) const override;
+    TypePtr copy(std::map<std::string, TypeConstantPtr>& typeConstants) const override;
+
+protected:
+
+    void apply(Substitution s) override;
+};
+
+/* The data construct is known but at least one parameter is not known */
+class BoundTypeVar : public SimpleType
+{
+public:
+
+    TypeVarId            id_;
+    DataAst              ast_;
+    std::vector<TypePtr> parameters_;
+
+    BoundTypeVar(DataAst ast, TypeVarId id);
+
+    std::string str() const override;
+
+    bool equals(TypeVarId t) const override;
+
+    static std::vector<Substitution> unify(BoundTypeVar& a, UnboundTypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
+    static std::vector<Substitution> unify(BoundTypeVar& a, BoundTypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
+    static std::vector<Substitution> unify(BoundTypeVar& a, TypeConstant& b, const TypePtr& ptrA, const TypePtr& ptrB);
+    static std::vector<Substitution> unify(BoundTypeVar& a, FunctionType& b, const TypePtr& ptrA, const TypePtr& ptrB);
+
+    void accept(TypeVisitor* visitor) override;
+
+    TypePtr copy(std::map<std::string, TypeConstantPtr>& typeConstants) const override;
+
+protected:
+
+    void apply(Substitution s) override;
 };
 
 
+/* Data construct is known and all parameters are also constants */
 class TypeConstant : public SimpleType
 {
 public:
 
-    std::string id;
-    // DataAst astType; // nullptr for basic types
+    std::string                  id_;
+    DataAst                      ast_; // this this and return empty constructor/fields for basic types?
+    std::vector<TypeConstantPtr> parameters_;
 
-    TypeConstant(std::string id);
+    TypeConstant(DataAst ast, std::string id);
 
     std::string str() const override;
 
-    static std::vector<Substitution> unify(TypeConstant& a, TypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
+    static std::vector<Substitution> unify(TypeConstant& a, UnboundTypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
+    static std::vector<Substitution> unify(TypeConstant& a, BoundTypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
     static std::vector<Substitution> unify(TypeConstant& a, TypeConstant& b, const TypePtr& ptrA, const TypePtr& ptrB);
     static std::vector<Substitution> unify(TypeConstant& a, FunctionType& b, const TypePtr& ptrA, const TypePtr& ptrB);
 
     void accept(TypeVisitor* visitor) override;
 
-    TypePtr copy(std::map<std::string, TypePtr>& typeConstants) const override;
+    TypePtr         copy(std::map<std::string, TypeConstantPtr>& typeConstants) const override;
+    TypeConstantPtr copyConst(std::map<std::string, TypeConstantPtr>& typeConstants) const;
+
+protected:
+
+    void apply(Substitution s) override;
 };
 
 
@@ -163,16 +203,19 @@ public:
 
     std::string str() const override;
 
-    static std::vector<Substitution> unify(FunctionType& a, TypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
+    static std::vector<Substitution> unify(FunctionType& a, UnboundTypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
+    static std::vector<Substitution> unify(FunctionType& a, BoundTypeVar& b, const TypePtr& ptrA, const TypePtr& ptrB);
     static std::vector<Substitution> unify(FunctionType& a, TypeConstant& b, const TypePtr& ptrA, const TypePtr& ptrB);
     static std::vector<Substitution> unify(FunctionType& a, FunctionType& b, const TypePtr& ptrA, const TypePtr& ptrB);
 
-    void apply(Substitution s) override;
-
     void accept(TypeVisitor* visitor) override;
 
-    TypePtr    copy(std::map<std::string, TypePtr>& typeConstants) const override;
-    FunTypePtr copyFun(std::map<std::string, TypePtr>& typeConstants) const;
+    TypePtr    copy(std::map<std::string, TypeConstantPtr>& typeConstants) const override;
+    FunTypePtr copyFun(std::map<std::string, TypeConstantPtr>& typeConstants) const;
+
+    // protected:
+
+    void apply(Substitution s) override;
 };
 
 
@@ -198,7 +241,8 @@ public:
         result = T::unify(self, other, a, b);
     }
 
-    void visit(TypeVar& other) override { visit_(other); }
+    void visit(UnboundTypeVar& other) override { visit_(other); }
+    void visit(BoundTypeVar& other) override { visit_(other); }
     void visit(TypeConstant& other) override { visit_(other); }
     void visit(FunctionType& other) override { visit_(other); }
 };
@@ -228,7 +272,8 @@ public:
         result = std::move(u.result);
     }
 
-    void visit(TypeVar& self) override;
+    void visit(UnboundTypeVar& self) override;
+    void visit(BoundTypeVar& self) override;
     void visit(TypeConstant& self) override;
     void visit(FunctionType& self) override;
 };
@@ -267,22 +312,25 @@ public:
         std::map<std::string, TypePtr>      vars_,
         std::map<std::string, FunTypePtr>   functions_,
         TypeVarId                           nextFreeVariable_);
+    TypeAnnotation(TypeAnnotation&& other) = default;
     TypeAnnotation(const TypeAnnotation& other);
+
+    TypeAnnotation& operator=(TypeAnnotation&& other) = default;
     TypeAnnotation& operator=(const TypeAnnotation& other);
 
     TypePtr    get(const ast::Node* n) const;
     TypePtr    getVar(const std::string& id) const;
     FunTypePtr getFun(const std::string& id) const;
 
-    const auto& getTypes() { return ast; }
-    const auto& getFunctions() { return functions; }
+    auto& getTypes() const { return ast; }
+    auto& getFunctions() const { return functions; }
 
     void substitute(Substitution sub);
 
-    bool addConstraint(const std::string& var, const TypePtr& type);
+    void addConstraint(const std::string& funName, const FunTypePtr& type);
     bool addConstraint(const TypePtr& a, const TypeConstantPtr& b);
 
-    void print();
+    void print() const;
 };
 
 
@@ -320,12 +368,15 @@ public:
 
 private:
 
-    TypeVarPtr      makeVar();
-    TypeConstantPtr makeConst(llvm::StringRef s);
-    TypePtr         makeClass(llvm::StringRef s);
-    FunTypePtr      makeFunction(std::vector<TypePtr> types);
+    UnboundTypeVarPtr makeVar();
+    BoundTypeVarPtr   makeVar(DataAst ast);
+    TypeConstantPtr   makeConst(llvm::StringRef s);
+    TypeConstantPtr   makeConst(const GlobalIdentifier& id);
+    TypeConstantPtr   makeConst(const ast::TypeIdentifier& id);
+    TypePtr           makeClass(llvm::StringRef s);
+    FunTypePtr        makeFunction(std::vector<TypePtr> types);
 
-    TypePtr typeFromIdentifier(const ast::TypeIdentifier& id, const std::map<std::string, TypeVarPtr>& typeVariables = {});
+    TypePtr typeFromIdentifier(const ast::TypeIdentifier& id, const std::map<std::string, TypePtr>& typeVariables = {});
 
     TypePtr tv(const std::string& name);
     TypePtr tv(ast::Node& ast);
@@ -368,6 +419,7 @@ private:
 
 std::string test(const ImportedModule* astModule, ast::Function& fun);
 
-TypeAnnotation inferType(const ImportedModule* astModule, const ast::Function& fun);
+TypeAnnotation inferType(const ImportedModule* mod, const ast::Function& fun);
+hm::FunTypePtr inferType(const ImportedModule* mod, const ast::Class& class_, const ast::FunctionDeclaration& ast);
 
 } // namespace llfp::hm

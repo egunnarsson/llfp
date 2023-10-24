@@ -30,25 +30,6 @@ void Type::apply(TypePtr& ptr, Substitution s)
     }
 }
 
-std::vector<Substitution> Type::unify(TypeVar& a, SimpleType& b, const TypePtr& ptrB)
-{
-    auto subs = b.addConstraints(a);
-    subs.push_back({ a.id, ptrB });
-    return subs;
-}
-
-std::vector<Substitution> Type::unify(TypeVar& a, FunctionType& b, const TypePtr& ptrB)
-{
-    if (a.fields.empty() && a.typeClasses.empty() && a.constructors.empty() && (!a.parameters.has_value() || a.parameters->empty()))
-    {
-        return { { a.id, ptrB } };
-    }
-    else
-    {
-        unifyError(a, b);
-    }
-}
-
 void Type::unifyError(const Type& a, const Type& b)
 {
     throw Error(std::string{ "Failed to unify types '" } + a.str() + "' and '" + b.str() + '\'');
@@ -74,22 +55,7 @@ std::vector<Substitution> SimpleType::addConstraints(const SimpleType& other)
         }
     }
 
-    if (!parameters.has_value())
-    {
-        parameters = other.parameters;
-    }
-    else if (other.parameters.has_value())
-    {
-        assert(parameters->size() == other.parameters->size());
-        for (auto param : llvm::zip(*parameters, *other.parameters))
-        {
-            auto subs = TypeUnifier::unify(std::get<0>(param), std::get<1>(param));
-            result.insert(std::begin(result), std::begin(subs), std::end(subs));
-        }
-    }
-
     typeClasses.insert(std::begin(other.typeClasses), std::end(other.typeClasses));
-    constructors.insert(std::begin(other.constructors), std::end(other.constructors));
     return result;
 }
 
@@ -115,108 +81,294 @@ void SimpleType::apply(Substitution s)
     {
         Type::apply(type, s);
     }
-    if (parameters.has_value())
-    {
-        for (auto& param : *parameters)
-        {
-            Type::apply(param, s);
-        }
-    }
 }
 
-void SimpleType::copy(std::map<std::string, TypePtr>& typeConstants, SimpleType* newObj) const
+void SimpleType::copy(std::map<std::string, TypeConstantPtr>& typeConstants, SimpleType* newObj) const
 {
     newObj->typeClasses = typeClasses;
     for (const auto& [name, type] : fields)
     {
         newObj->fields.insert({ name, type->copy(typeConstants) });
     }
-    if (parameters.has_value())
-    {
-        newObj->parameters.emplace();
-        for (const auto& param : *parameters)
-        {
-            newObj->parameters->push_back(param->copy(typeConstants));
-        }
-    }
-    newObj->constructors = constructors;
 }
 
 // ----------------------------------------------------------------------------
 
-TypeVar::TypeVar(TypeVarId id_)
-    : id(id_)
-{}
-
-std::string TypeVar::str() const
+UnboundTypeVar::UnboundTypeVar(TypeVarId id)
+    : id_{ id }
 {
-    return SimpleType::printConstraints(std::to_string(id));
 }
 
-bool TypeVar::equals(TypeVarId t) const
+std::string UnboundTypeVar::str() const
 {
-    return t == id;
+    return SimpleType::printConstraints(std::to_string(id_));
 }
 
-std::vector<Substitution> TypeVar::unify(TypeVar& a, TypeVar& b, const TypePtr& /*ptrA*/, const TypePtr& ptrB)
+bool UnboundTypeVar::equals(TypeVarId t) const
 {
-    return SimpleType::unify(a, b, ptrB);
+    return id_ == t;
 }
 
-std::vector<Substitution> TypeVar::unify(TypeVar& a, TypeConstant& b, const TypePtr& /*ptrA*/, const TypePtr& ptrB)
+std::vector<Substitution> UnboundTypeVar::unify(UnboundTypeVar& a, UnboundTypeVar& b, const TypePtr& ptrA, const TypePtr& /*ptrB*/)
 {
-    return SimpleType::unify(a, b, ptrB);
+    a.constructors_.insert(b.constructors_.begin(), b.constructors_.end());
+
+    auto result = a.addConstraints(b);
+    result.push_back({ b.id_, ptrA });
+    return result;
 }
 
-std::vector<Substitution> TypeVar::unify(TypeVar& a, FunctionType& b, const TypePtr& /*ptrA*/, const TypePtr& ptrB)
+std::vector<Substitution> UnboundTypeVar::unify(UnboundTypeVar& a, BoundTypeVar& b, const TypePtr& /*ptrA*/, const TypePtr& ptrB)
 {
-    return Type::unify(a, b, ptrB);
+    for (auto& constructor : a.constructors_)
+    {
+        auto it = std::find_if(b.ast_.data->constructors.begin(), b.ast_.data->constructors.begin(),
+                               [&constructor](const ast::DataConstructor& astConstructor) { return astConstructor.name == constructor; });
+        if (it == b.ast_.data->constructors.end())
+        {
+            unifyError(a, b); // add info, missing constructor
+        }
+    }
+
+    auto result = b.addConstraints(a); // fields
+    result.push_back({ a.id_, ptrB });
+    return result;
 }
 
-void TypeVar::apply(Substitution s)
+std::vector<Substitution> UnboundTypeVar::unify(UnboundTypeVar& a, TypeConstant& b, const TypePtr& /*ptrA*/, const TypePtr& ptrB)
 {
-    assert(id != s.id); // implementation detail, maybe weird, but we cant just do id = s.id... right?
+    for (auto& constructor : a.constructors_)
+    {
+        if (b.ast_.empty()) // basic type
+        {
+            unifyError(a, b);
+        }
+        auto it = std::find_if(b.ast_.data->constructors.begin(), b.ast_.data->constructors.begin(),
+                               [&constructor](const ast::DataConstructor& astConstructor) { return astConstructor.name == constructor; });
+        if (it == b.ast_.data->constructors.end())
+        {
+            unifyError(a, b); // add info, missing constructor
+        }
+    }
+
+    auto result = b.addConstraints(a); // fields
+    result.push_back({ a.id_, ptrB });
+    return result;
+}
+
+std::vector<Substitution> UnboundTypeVar::unify(UnboundTypeVar& a, FunctionType& b, const TypePtr& /*ptrA*/, const TypePtr& ptrB)
+{
+    if (!a.constructors_.empty() || !a.fields.empty() || !a.typeClasses.empty())
+    {
+        unifyError(a, b);
+    }
+    return { { a.id_, ptrB } };
+}
+
+void UnboundTypeVar::apply(Substitution s)
+{
     SimpleType::apply(s);
 }
 
-void TypeVar::accept(TypeVisitor* visitor)
+void UnboundTypeVar::accept(TypeVisitor* visitor)
 {
     visitor->visit(*this);
 }
 
-TypePtr TypeVar::copy(std::map<std::string, TypePtr>& typeConstants) const
+TypePtr UnboundTypeVar::copy(std::map<std::string, TypeConstantPtr>& typeConstants) const
 {
-    auto newObj = std::make_shared<TypeVar>(id);
-    SimpleType::copy(typeConstants, newObj.get());
-    return newObj;
+    auto type           = std::make_shared<UnboundTypeVar>(id_);
+    type->typeClasses   = typeClasses;
+    type->constructors_ = constructors_;
+    for (auto& [fieldName, fieldType] : fields)
+    {
+        type->fields.insert({ fieldName, fieldType->copy(typeConstants) });
+    }
+    return type;
 }
 
 // ----------------------------------------------------------------------------
 
-TypeConstant::TypeConstant(std::string id_)
-    : id{ std::move(id_) }
+// BoundTypeVar
+
+BoundTypeVar::BoundTypeVar(DataAst ast, TypeVarId id)
+    : id_{ id },
+      ast_{ ast }
 {
-    parameters.emplace();
+}
+
+std::string BoundTypeVar::str() const
+{
+    return SimpleType::printConstraints(std::to_string(id_));
+}
+
+bool BoundTypeVar::equals(TypeVarId t) const
+{
+    return t == id_;
+}
+
+std::vector<Substitution> BoundTypeVar::unify(BoundTypeVar& a, UnboundTypeVar& b, const TypePtr& ptrA, const TypePtr& /*ptrB*/)
+{
+    for (auto& constructor : b.constructors_)
+    {
+        auto it = std::find_if(a.ast_.data->constructors.begin(), a.ast_.data->constructors.end(),
+                               [&constructor](const ast::DataConstructor& astConstructor) { return astConstructor.name == constructor; });
+        if (it == a.ast_.data->constructors.end())
+        {
+            unifyError(a, b);
+        }
+    }
+
+    auto result = a.addConstraints(b); // fields
+    result.push_back({ b.id_, ptrA });
+    return result;
+}
+
+std::vector<Substitution> BoundTypeVar::unify(BoundTypeVar& a, BoundTypeVar& b, const TypePtr& ptrA, const TypePtr& /*ptrB*/)
+{
+    if (a.ast_.data != b.ast_.data)
+    {
+        unifyError(a, b);
+    }
+
+    auto result = a.addConstraints(b); // fields
+
+    assert(a.parameters_.size() == b.parameters_.size());
+    for (auto [aParam, bParam] : llvm::zip(a.parameters_, b.parameters_))
+    {
+        auto paramSubs = TypeUnifier::unify(aParam, bParam);
+        result.insert(result.end(), paramSubs.begin(), paramSubs.end());
+    }
+
+    result.push_back({ b.id_, ptrA });
+    return result;
+}
+
+std::vector<Substitution> BoundTypeVar::unify(BoundTypeVar& a, TypeConstant& b, const TypePtr& /*ptrA*/, const TypePtr& ptrB)
+{
+    if (a.ast_.data != b.ast_.data)
+    {
+        unifyError(a, b);
+    }
+
+    auto result = b.addConstraints(a); // fields
+
+    assert(a.parameters_.size() == b.parameters_.size());
+    for (auto [aParam, bParam] : llvm::zip(a.parameters_, b.parameters_))
+    {
+        auto paramSubs = TypeUnifier::unify(aParam, bParam);
+        result.insert(result.end(), paramSubs.begin(), paramSubs.end());
+    }
+
+    result.push_back({ a.id_, ptrB });
+    return result;
+}
+
+std::vector<Substitution> BoundTypeVar::unify(BoundTypeVar& a, FunctionType& b, const TypePtr& /*ptrA*/, const TypePtr& /*ptrB*/)
+{
+    unifyError(a, b);
+}
+
+void BoundTypeVar::apply(Substitution s)
+{
+    SimpleType::apply(s);
+
+    for (auto& param : parameters_)
+    {
+        Type::apply(param, s);
+    }
+}
+
+void BoundTypeVar::accept(TypeVisitor* visitor)
+{
+    visitor->visit(*this);
+}
+
+TypePtr BoundTypeVar::copy(std::map<std::string, TypeConstantPtr>& typeConstants) const
+{
+    auto result         = std::make_shared<BoundTypeVar>(ast_, id_);
+    result->typeClasses = typeClasses;
+
+    for (auto& param : parameters_)
+    {
+        result->parameters_.push_back(param->copy(typeConstants));
+    }
+    for (auto& [name, type] : fields)
+    {
+        result->fields[name] = type->copy(typeConstants);
+    }
+    return result;
+}
+
+// ----------------------------------------------------------------------------
+
+TypeConstant::TypeConstant(DataAst ast, std::string id)
+    : id_{ std::move(id) },
+      ast_{ ast }
+{
 }
 
 std::string TypeConstant::str() const
 {
-    return SimpleType::printConstraints(id);
+    return SimpleType::printConstraints(id_);
 }
 
-std::vector<Substitution> TypeConstant::unify(TypeConstant& a, TypeVar& b, const TypePtr& ptrA, const TypePtr& /*ptrB*/)
+std::vector<Substitution> TypeConstant::unify(TypeConstant& a, UnboundTypeVar& b, const TypePtr& ptrA, const TypePtr& /*ptrB*/)
 {
-    return SimpleType::unify(b, a, ptrA);
+    auto result = a.addConstraints(b);
+
+    for (auto& constructor : b.constructors_)
+    {
+        auto it = std::find_if(a.ast_.data->constructors.begin(), a.ast_.data->constructors.end(),
+                               [&constructor](const ast::DataConstructor& astConstructor) { return astConstructor.name == constructor; });
+        if (it == a.ast_.data->constructors.end())
+        {
+            unifyError(a, b);
+        }
+    }
+
+    result.push_back({ b.id_, ptrA });
+    return result;
+}
+
+std::vector<Substitution> TypeConstant::unify(TypeConstant& a, BoundTypeVar& b, const TypePtr& ptrA, const TypePtr& /*ptrB*/)
+{
+    if (a.ast_.data != b.ast_.data)
+    {
+        unifyError(a, b);
+    }
+
+    auto result = a.addConstraints(b);
+
+    assert(a.parameters_.size() == b.parameters_.size());
+    for (auto [aParam, bParam] : llvm::zip(a.parameters_, b.parameters_))
+    {
+        auto resultParam = TypeUnifier::unify(aParam, bParam);
+        result.insert(result.begin(), resultParam.begin(), resultParam.end());
+    }
+
+    result.push_back({ b.id_, ptrA });
+    return result;
 }
 
 std::vector<Substitution> TypeConstant::unify(TypeConstant& a, TypeConstant& b, const TypePtr& /*ptrA*/, const TypePtr& /*ptrB*/)
 {
-    if (a.id == b.id)
+    if (&a == &b)
     {
-        // unify params probably, maybe
-        assert(a.parameters.has_value());
-        assert(b.parameters.has_value());
-        return a.addConstraints(b);
+        return {};
+    }
+    if (a.id_ == b.id_)
+    {
+        assert(a.parameters_.size() == b.parameters_.size());
+        for (auto [paramA, paramB] : llvm::zip(a.parameters_, b.parameters_))
+        {
+            auto subs = TypeUnifier::unify(paramA, paramB);
+            if (!subs.empty())
+            {
+                unifyError(a, b);
+            }
+        }
+        return {};
     }
     else
     {
@@ -231,17 +383,30 @@ std::vector<Substitution> TypeConstant::unify(TypeConstant& a, FunctionType& b, 
 
 void TypeConstant::accept(TypeVisitor* visitor) { visitor->visit(*this); }
 
-
-TypePtr TypeConstant::copy(std::map<std::string, TypePtr>& typeConstants) const
+void TypeConstant::apply(Substitution s)
 {
-    auto it = typeConstants.find(id);
+    SimpleType::apply(s);
+}
+
+TypePtr TypeConstant::copy(std::map<std::string, TypeConstantPtr>& typeConstants) const
+{
+    return copyConst(typeConstants);
+}
+
+TypeConstantPtr TypeConstant::copyConst(std::map<std::string, TypeConstantPtr>& typeConstants) const
+{
+    auto it = typeConstants.find(id_);
     if (it != typeConstants.end())
     {
         return it->second;
     }
-    auto newObj       = std::make_shared<TypeConstant>(id);
-    typeConstants[id] = newObj;
+    auto newObj        = std::make_shared<TypeConstant>(ast_, id_);
+    typeConstants[id_] = newObj;
     SimpleType::copy(typeConstants, newObj.get());
+    for (auto& param : parameters_)
+    {
+        newObj->parameters_.push_back(param->copyConst(typeConstants)); // :(
+    }
     return newObj;
 }
 
@@ -266,9 +431,21 @@ std::string FunctionType::str() const
     return result;
 }
 
-std::vector<Substitution> FunctionType::unify(FunctionType& a, TypeVar& b, const TypePtr& ptrA, const TypePtr& /*ptrB*/)
+std::vector<Substitution> FunctionType::unify(FunctionType& a, UnboundTypeVar& b, const TypePtr& ptrA, const TypePtr& /*ptrB*/)
 {
-    return Type::unify(b, a, ptrA);
+    if (b.constructors_.empty() || b.fields.empty() || b.typeClasses.empty())
+    {
+        return { { b.id_, ptrA } };
+    }
+    else
+    {
+        unifyError(a, b);
+    }
+}
+
+std::vector<Substitution> FunctionType::unify(FunctionType& a, BoundTypeVar& b, const TypePtr& /*ptrA*/, const TypePtr& /*ptrB*/)
+{
+    unifyError(a, b);
 }
 
 std::vector<Substitution> FunctionType::unify(FunctionType& a, TypeConstant& b, const TypePtr& /*ptrA*/, const TypePtr& /*ptrB*/)
@@ -309,12 +486,12 @@ void FunctionType::accept(TypeVisitor* visitor)
     visitor->visit(*this);
 }
 
-TypePtr FunctionType::copy(std::map<std::string, TypePtr>& typeConstants) const
+TypePtr FunctionType::copy(std::map<std::string, TypeConstantPtr>& typeConstants) const
 {
     return copyFun(typeConstants);
 }
 
-FunTypePtr FunctionType::copyFun(std::map<std::string, TypePtr>& typeConstants) const
+FunTypePtr FunctionType::copyFun(std::map<std::string, TypeConstantPtr>& typeConstants) const
 {
     std::vector<TypePtr> typesCopy;
     for (const auto& t : types)
@@ -339,7 +516,8 @@ std::vector<Substitution> TypeUnifier::unify(const TypePtr& a, const TypePtr& b)
     return std::move(u.result);
 }
 
-void TypeUnifier::visit(TypeVar& self) { visit_(self); }
+void TypeUnifier::visit(UnboundTypeVar& self) { visit_(self); }
+void TypeUnifier::visit(BoundTypeVar& self) { visit_(self); }
 void TypeUnifier::visit(TypeConstant& self) { visit_(self); }
 void TypeUnifier::visit(FunctionType& self) { visit_(self); }
 
@@ -358,7 +536,7 @@ TypeAnnotation::TypeAnnotation(
 
 TypeAnnotation::TypeAnnotation(const TypeAnnotation& other)
 {
-    std::map<std::string, TypePtr> typeConstants;
+    std::map<std::string, TypeConstantPtr> typeConstants;
     nextFreeVariable = other.nextFreeVariable;
     for (const auto& [node, type] : other.ast)
     {
@@ -380,7 +558,7 @@ TypeAnnotation& TypeAnnotation::operator=(const TypeAnnotation& other)
     variables.clear();
     functions.clear();
 
-    std::map<std::string, TypePtr> typeConstants;
+    std::map<std::string, TypeConstantPtr> typeConstants;
     nextFreeVariable = other.nextFreeVariable;
     for (const auto& [node, type] : other.ast)
     {
@@ -431,7 +609,7 @@ void TypeAnnotation::substitute(Substitution sub)
     }
 }
 
-void TypeAnnotation::print()
+void TypeAnnotation::print() const
 {
     for (auto& var : variables)
     {
@@ -456,9 +634,18 @@ public:
 
     static TypePtr convert(TypeVarId& nextFreeVariable, const TypePtr& inType)
     {
-        std::map<std::string, TypePtr> typeConstants;
-        auto                           type = inType->copy(typeConstants);
-        TypeIdConverter                converter{ nextFreeVariable };
+        std::map<std::string, TypeConstantPtr> typeConstants;
+        auto                                   type = inType->copy(typeConstants);
+        TypeIdConverter                        converter{ nextFreeVariable };
+        type->accept(&converter);
+        return type;
+    }
+
+    static FunTypePtr convert(TypeVarId& nextFreeVariable, const FunTypePtr& funType)
+    {
+        std::map<std::string, TypeConstantPtr> typeConstants;
+        auto                                   type = funType->copyFun(typeConstants);
+        TypeIdConverter                        converter{ nextFreeVariable };
         type->accept(&converter);
         return type;
     }
@@ -467,18 +654,39 @@ public:
         : nextFreeVariable{ nextFreeVariable_ }
     {}
 
-    virtual void visit(TypeVar& t)
+    virtual void visit(UnboundTypeVar& t)
     {
         visitSimpleType(t);
-        auto it = conversion.find(t.id);
+        auto it = conversion.find(t.id_);
         if (it != conversion.end())
         {
-            t.id = it->second;
+            t.id_ = it->second;
         }
         else
         {
-            conversion.insert({ t.id, nextFreeVariable });
-            t.id = nextFreeVariable++;
+            conversion.insert({ t.id_, nextFreeVariable });
+            t.id_ = nextFreeVariable++;
+        }
+    }
+
+    virtual void visit(BoundTypeVar& t)
+    {
+        visitSimpleType(t);
+
+        for (const auto& param : t.parameters_)
+        {
+            param->accept(this);
+        }
+
+        auto it = conversion.find(t.id_);
+        if (it != conversion.end())
+        {
+            t.id_ = it->second;
+        }
+        else
+        {
+            conversion.insert({ t.id_, nextFreeVariable });
+            t.id_ = nextFreeVariable++;
         }
     }
 
@@ -499,40 +707,63 @@ private:
 
     void visitSimpleType(SimpleType& type)
     {
-        for (const auto& [n, t] : type.fields)
+        for (const auto& [name, fieldType] : type.fields)
         {
-            t->accept(this);
-        }
-        if (type.parameters.has_value())
-        {
-            for (const auto& param : *type.parameters)
-            {
-                param->accept(this);
-            }
+            fieldType->accept(this);
         }
     }
 };
 
 } // namespace
 
-bool TypeAnnotation::addConstraint(const std::string& funName, const TypePtr& inType)
+void TypeAnnotation::addConstraint(const std::string& funName, const FunTypePtr& inType)
 {
-    auto type = TypeIdConverter::convert(nextFreeVariable, inType);
+    auto convertedFunctionType = TypeIdConverter::convert(nextFreeVariable, inType);
+    auto currentFunctionType   = getFun(funName);
+#if 1
+    std::vector<Constraint> constraints;
 
-    auto subs = hm::TypeUnifier::unify(getFun(funName), type);
+    assert(convertedFunctionType->types.size() == currentFunctionType->types.size());
+    for (auto [inParam, currentParam] : llvm::zip(convertedFunctionType->types, currentFunctionType->types))
+    {
+        constraints.push_back({ {}, inParam, currentParam });
+    }
+
+    for (size_t i = 0; i < constraints.size(); ++i)
+    {
+        auto subs = constraints[i].solve();
+        for (size_t j = 0; j < subs.size(); ++j)
+        {
+            substitute(subs[j]);
+            for (size_t k = i + 1; k < constraints.size(); ++k)
+            {
+                constraints[k].substitute(subs[j]);
+            }
+            for (size_t k = j + 1; k < subs.size(); ++k)
+            {
+                // TODO: assert(subs[i].id != subs[j].id);
+                Type::apply(subs[k].type, subs[j]);
+            }
+        }
+    }
+#else
+    auto subs = hm::TypeUnifier::unify(currentFunctionType, convertedFunctionType);
     for (size_t i = 0; i < subs.size(); ++i)
     {
         substitute(subs[i]);
         for (size_t j = i + 1; j < subs.size(); ++j)
         {
+            // TODO: assert(subs[i].id != subs[j].id);
             Type::apply(subs[j].type, subs[i]);
         }
     }
-    return !subs.empty();
+#endif
 }
 
 bool TypeAnnotation::addConstraint(const TypePtr& typeA, const TypeConstantPtr& typeConstant)
 {
+    // also do Constraint?
+
     auto typeB = TypeIdConverter::convert(nextFreeVariable, typeConstant);
 
     auto subs = hm::TypeUnifier::unify(typeA, typeB);
@@ -592,7 +823,7 @@ T1 foo(T2[T3] x, T2[T4] y) = ...;
 namespace
 {
 
-bool containsTypeVariable(const ast::TypeIdentifier& id, const std::map<std::string, TypeVarPtr>& typeVariables)
+bool containsTypeVariable(const ast::TypeIdentifier& id, const std::map<std::string, TypePtr>& typeVariables)
 {
     if (id.identifier.moduleName.empty() && typeVariables.find(id.identifier.name) != typeVariables.end())
     {
@@ -608,10 +839,32 @@ bool containsTypeVariable(const ast::TypeIdentifier& id, const std::map<std::str
     return false;
 }
 
+const ast::DataConstructor& lookupConstructor(const ast::Data& astData, const GlobalIdentifier& identifier, SourceLocation location)
+{
+    if (astData.constructors.size() == 1)
+    {
+        if (astData.name == identifier.name)
+        {
+            return astData.constructors.front();
+        }
+    }
+    else
+    {
+        for (const auto& con : astData.constructors)
+        {
+            if (con.name == identifier.name)
+            {
+                return con;
+            }
+        }
+    }
+    throw ErrorLocation{ location, std::string{ "unknown constructor: '" } + identifier.str() + '\'' };
+}
+
 } // namespace
 
 // Maybe[int], Maybe[bool]... Maybe[a]?
-TypePtr Annotator::typeFromIdentifier(const ast::TypeIdentifier& id, const std::map<std::string, TypeVarPtr>& typeVariables)
+TypePtr Annotator::typeFromIdentifier(const ast::TypeIdentifier& id, const std::map<std::string, TypePtr>& typeVariables)
 {
     if (id.identifier.moduleName.empty())
     {
@@ -620,21 +873,43 @@ TypePtr Annotator::typeFromIdentifier(const ast::TypeIdentifier& id, const std::
         {
             return it->second;
         }
+
+        // must be a basic type
+        assert(id.parameters.empty());
+        return makeConst(id.identifier.name);
     }
-    SimpleTypePtr typePtr;
-    if (containsTypeVariable(id, typeVariables))
+
+    if (id.parameters.empty())
     {
-        typePtr = makeVar();
+        return makeConst(id.identifier);
+    }
+    else if (!containsTypeVariable(id, typeVariables))
+    {
+        return makeConst(id);
     }
     else
     {
-        typePtr = makeConst(id.str());
+        auto dataAst = astModule_->lookupType(id.identifier);
+        if (dataAst.empty())
+        {
+            throw Error("Annotator::typeFromIdentifier astModule_->lookupType");
+        }
+
+        auto typePtr = makeVar(dataAst);
+        for (auto& param : id.parameters)
+        {
+            typePtr->parameters_.push_back(typeFromIdentifier(param, typeVariables));
+        }
+        for (auto& constructor : dataAst.data->constructors)
+        {
+            for (auto& field : constructor.fields)
+            {
+                typePtr->fields[field.name] = typeFromIdentifier(field.type, typeVariables);
+            }
+        }
+
+        return typePtr;
     }
-    for (auto& param : id.parameters)
-    {
-        typePtr->parameters->push_back(typeFromIdentifier(param));
-    }
-    return typePtr;
 }
 
 void Annotator::operator()(const ast::Function& fun)
@@ -651,7 +926,7 @@ void Annotator::operator()(const ast::Function& fun)
     args.push_back(bodyType);
     for (auto& arg : fun.parameters)
     {
-        auto argTV          = arg->type.empty() ? makeVar() : typeFromIdentifier(arg->type);
+        auto argTV          = arg->type.empty() ? static_cast<TypePtr>(makeVar()) : typeFromIdentifier(arg->type); // what if arg->type has typeParameters?
         // TODO: nested type parameters
         auto [it, inserted] = variables.insert({ arg->identifier, argTV });
         if (!inserted)
@@ -747,16 +1022,26 @@ void PatternTypeVisitor::visit(ast::IdentifierPattern& pattern)
 
 void PatternTypeVisitor::visit(ast::ConstructorPattern& pattern)
 {
-    // Lookup ast!
+    auto astData = annotator.astModule_->lookupConstructor(pattern.identifier);
+    assert(!astData.empty());
+    auto& constructor = lookupConstructor(*astData.data, pattern.identifier, pattern.location);
 
-    auto type = annotator.makeVar();
-    type->constructors.insert(pattern.identifier.str());
+    auto type = annotator.makeVar(astData);
     add(pattern, type);
-    for (auto& arg : pattern.arguments)
+    for (auto& enumer : llvm::enumerate(pattern.arguments))
     {
-        // TODO: add constraints for fields... by index!
-        // and make constraint for parameters...
+        auto& arg = enumer.value();
+
         arg.pattern->accept(this);
+
+        auto astField               = constructor.fields.at(enumer.index());
+        auto fieldType              = annotator.typeFromIdentifier(astField.type);
+        type->fields[astField.name] = fieldType;
+        annotator.result[&arg]      = annotator.makeVar();
+
+        annotator.constraints.push_back({ arg.location, std::move(fieldType), annotator.tv(arg) });
+
+        // TODO: add constraints for parameters...
     }
 }
 
@@ -934,63 +1219,37 @@ void Annotator::visit(ast::FieldExp& exp)
     // make constraint for parameters...
 }
 
-namespace
-{
-
-const ast::DataConstructor& lookupConstructor(const ast::Data& astData, ast::ConstructorExp& exp)
-{
-    if (astData.constructors.size() == 1)
-    {
-        if (astData.name == exp.identifier.name)
-        {
-            return astData.constructors.front();
-        }
-    }
-    else
-    {
-        for (const auto& con : astData.constructors)
-        {
-            if (con.name == exp.identifier.name)
-            {
-                return con;
-            }
-        }
-    }
-    throw ErrorLocation{ exp.location, std::string{ "unknown constructor: '" } + exp.identifier.str() + '\'' };
-}
-
-} // namespace
-
 void Annotator::visit(ast::ConstructorExp& exp)
 {
     auto astData = astModule_->lookupConstructor(exp.identifier);
     assert(!astData.empty());
-    auto& constructor = lookupConstructor(*astData.data, exp);
-
-    SimpleTypePtr expTV;
-    if (astData.data->typeVariables.empty())
-    {
-        expTV = makeConst(astData.importedModule->name() + ':' + astData.data->name);
-    }
-    else
-    {
-        expTV = makeVar();
-        expTV->parameters.emplace();
-    }
-
-    std::map<std::string, TypeVarPtr> typeVariables;
-    for (auto& typeVarName : astData.data->typeVariables)
-    {
-        auto typeVar               = makeVar();
-        typeVariables[typeVarName] = typeVar;
-        expTV->parameters->push_back(std::move(typeVar));
-    }
-    result[&exp] = expTV;
-
+    auto& constructor = lookupConstructor(*astData.data, exp.identifier, exp.location);
     if (constructor.fields.size() != exp.arguments.size())
     {
         throw ErrorLocation{ exp.location, "incorrect number of arguments" };
     }
+
+    std::map<std::string, TypePtr> typeVariables;
+
+    SimpleTypePtr expTV;
+    if (astData.data->typeVariables.empty())
+    {
+        expTV = makeConst(exp.identifier);
+    }
+    else
+    {
+        auto varTypePtr = makeVar(astData);
+        for (auto& typeVarName : astData.data->typeVariables)
+        {
+            auto typeVarPtr            = makeVar();
+            typeVariables[typeVarName] = typeVarPtr;
+            varTypePtr->parameters_.push_back(std::move(typeVarPtr));
+        }
+        expTV = std::move(varTypePtr);
+    }
+
+    result[&exp] = expTV;
+
     for (const auto& [field, arg] : llvm::zip(constructor.fields, exp.arguments))
     {
         arg.exp->accept(this);
@@ -1001,16 +1260,15 @@ void Annotator::visit(ast::ConstructorExp& exp)
         expTV->fields.insert(std::make_pair(field.name, argType));
     }
 
-    for (auto& con : astData.data->constructors)
+    // maybe add fields for other constructors
+    /* for (auto& con : astData.data->constructors)
     {
-        expTV->constructors.insert(con.name);
-        // maybe add fields for other constructors
-        /* if (con.name != exp.identifier.name) {
+         if (con.name != exp.identifier.name) {
             for (const auto& [field, arg] : llvm::zip(con.fields, exp.arguments))
             {
             }
-        } */
-    }
+        }
+    }*/
 }
 
 void Annotator::visit(ast::IntrinsicExp& exp)
@@ -1026,19 +1284,77 @@ void Annotator::visit(ast::IntrinsicExp& exp)
     result[&exp] = makeConst(types.at(1));
 }
 
-TypeVarPtr Annotator::makeVar()
+UnboundTypeVarPtr Annotator::makeVar()
 {
-    return std::make_shared<TypeVar>(current++);
+    return std::make_shared<UnboundTypeVar>(current++);
+}
+
+BoundTypeVarPtr Annotator::makeVar(DataAst ast)
+{
+    return std::make_shared<BoundTypeVar>(ast, current++);
 }
 
 TypeConstantPtr Annotator::makeConst(llvm::StringRef stringRef)
 {
+    assert(!stringRef.contains(':'));
+
     std::string str{ stringRef.str() };
     auto        it = typeConstants.find(str);
     if (it == typeConstants.end())
     {
         auto& constant = typeConstants[str];
-        constant       = std::make_shared<TypeConstant>(std::move(str));
+        constant       = std::make_shared<TypeConstant>(DataAst{}, std::move(str));
+        return constant;
+    }
+    else
+    {
+        return it->second;
+    }
+}
+
+TypeConstantPtr Annotator::makeConst(const ast::TypeIdentifier& id)
+{
+    if (id.identifier.moduleName.empty())
+    {
+        assert(id.parameters.empty());
+        return makeConst(id.identifier.name);
+    }
+    auto idStr = id.str();
+    auto it    = typeConstants.find(idStr);
+    if (it == typeConstants.end())
+    {
+        auto dataAst = astModule_->lookupType(id.identifier);
+        assert(!dataAst.empty());
+        auto& constant = typeConstants[idStr];
+        constant       = std::make_shared<TypeConstant>(dataAst, std::move(idStr));
+        for (auto& param : id.parameters)
+        {
+            constant->parameters_.push_back(makeConst(param));
+        }
+        return constant;
+    }
+    else
+    {
+        return it->second;
+    }
+}
+
+TypeConstantPtr Annotator::makeConst(const GlobalIdentifier& id)
+{
+    if (id.moduleName.empty())
+    {
+        return makeConst(id.name);
+    }
+    auto idStr = id.str();
+    auto it    = typeConstants.find(idStr);
+    if (it == typeConstants.end())
+    {
+        auto dataAst = astModule_->lookupType(id);
+        assert(!dataAst.empty());
+        assert(dataAst.data->typeVariables.empty()); // should call makeConst(ast::TypeIdentifier) variant
+
+        auto& constant = typeConstants[idStr];
+        constant       = std::make_shared<TypeConstant>(dataAst, std::move(idStr));
         return constant;
     }
     else
@@ -1081,9 +1397,9 @@ void Annotator::add(Constraint c)
 
 // ----------------------------------------------------------------------------
 
-std::string test(ImportedModule* astModule, ast::Function& fun)
+std::string test(ImportedModule* mod, ast::Function& fun)
 {
-    Annotator annotator{ astModule };
+    Annotator annotator{ mod };
     annotator(fun);
 
     TypeAnnotation          annotation{ std::move(annotator.result), std::move(annotator.variables), std::move(annotator.functions), annotator.current };
@@ -1125,7 +1441,7 @@ std::string test(ImportedModule* astModule, ast::Function& fun)
     {
         std::cout << c.str() << '\n';
     }
-    return annotation.getFun(astModule->name() + ':' + fun.name)->str();
+    return annotation.getFun(mod->name() + ':' + fun.name)->str();
 }
 
 TypeAnnotation inferType(const ImportedModule* astModule, const ast::Function& fun)
@@ -1134,7 +1450,7 @@ TypeAnnotation inferType(const ImportedModule* astModule, const ast::Function& f
     annotator(fun);
 
     TypeAnnotation          annotation{ std::move(annotator.result), std::move(annotator.variables), std::move(annotator.functions), annotator.current };
-    std::vector<Constraint> constraints{ std::move(annotator.constraints) };
+    std::vector<Constraint> constraints{ std::move(annotator.constraints) }; // should be a set!
 
     for (size_t i = 0; i < constraints.size(); ++i)
     {
@@ -1152,6 +1468,53 @@ TypeAnnotation inferType(const ImportedModule* astModule, const ast::Function& f
     }
 
     return annotation;
+}
+
+namespace
+{
+
+TypePtr addTypeInFunctionDeclaration(std::map<std::string, TypePtr>& typeMap, const ImportedModule* mod, const ast::TypeIdentifier& argTypeId)
+{
+    std::string argType = argTypeId.str();
+    auto        it      = typeMap.find(argType);
+    if (it == typeMap.end())
+    {
+        if (argTypeId.identifier.moduleName.empty())
+        {
+            auto type = std::make_shared<TypeConstant>(DataAst{}, argTypeId.identifier.name);
+            it        = typeMap.insert(std::make_pair(std::move(argType), std::move(type))).first;
+        }
+        else
+        {
+            DataAst astdata = mod->lookupType(argTypeId.identifier);
+            auto    type    = std::make_shared<BoundTypeVar>(astdata, static_cast<hm::TypeVarId>(typeMap.size()));
+            for (auto& param : argTypeId.parameters)
+            {
+                type->parameters_.push_back(addTypeInFunctionDeclaration(typeMap, mod, param));
+            }
+            // fields?
+            it = typeMap.insert(std::make_pair(std::move(argType), std::move(type))).first;
+        }
+    }
+    return it->second;
+}
+
+} // namespace
+
+FunTypePtr inferType(const ImportedModule* mod, const ast::Class& class_, const ast::FunctionDeclaration& ast)
+{
+    std::map<std::string, TypePtr> typeMap;
+
+    typeMap[class_.typeVariable] = std::make_shared<UnboundTypeVar>(0);
+
+    std::vector<TypePtr> functionTypes;
+    functionTypes.push_back(addTypeInFunctionDeclaration(typeMap, mod, ast.type));
+    for (auto& arg : ast.parameters)
+    {
+        functionTypes.push_back(addTypeInFunctionDeclaration(typeMap, mod, arg->type));
+    }
+
+    return std::make_shared<FunctionType>(std::move(functionTypes));
 }
 
 } // namespace llfp::hm

@@ -105,18 +105,26 @@ std::shared_ptr<hm::TypeConstant> TypeInstance::getType(std::map<const TypeInsta
         return it->second;
     }
 
-    auto type   = std::make_shared<hm::TypeConstant>(identifier_.str());
+    hm::TypeConstantPtr type;
+    if (auto* mod = getModule())
+    {
+        auto ast = mod->lookupType(identifier_.name);
+        type     = std::make_shared<hm::TypeConstant>(ast, identifier_.str());
+    }
+    else
+    {
+        type = std::make_shared<hm::TypeConstant>(DataAst{}, identifier_.str());
+    }
     types[this] = type;
 
     for (auto& typeClass : typeClasses)
     {
         type->typeClasses.insert(typeClass);
     }
-    type->parameters.emplace();
     for (auto paramIt : llvm::enumerate(identifier_.parameters))
     {
         auto paramInstance = getTypeParameter(paramIt.index());
-        type->parameters->push_back(paramInstance->getType(types));
+        type->parameters_.push_back(paramInstance->getType(types));
     }
 
     return type;
@@ -180,7 +188,7 @@ unsigned int TypeInstance::getFieldIndex(const std::string&) const { return Inva
 unsigned int TypeInstance::getFieldIndex(const std::string&, const std::string&) const { return InvalidIndex; }
 
 const FieldList& TypeInstance::getFields() const { return assertFalse<FieldList>(); }
-const FieldList& TypeInstance::getFields(const std::string& constructor) const { return assertFalse<FieldList>(); }
+const FieldList& TypeInstance::getFields(const std::string&) const { return assertFalse<FieldList>(); }
 
 TypeInstanceBasic::TypeInstanceBasic(llvm::StringLiteral name, llvm::Type* llvmType, std::vector<std::string> typeClasses_)
     : TypeInstance({ { "", name.str() }, {} }, std::move(typeClasses_)),
@@ -382,11 +390,13 @@ std::shared_ptr<hm::TypeConstant> TypeInstanceVariant::getType(std::map<const Ty
     }
 
     auto type = TypeInstance::getType(types);
-    for (auto [astConstructor, constructor] : llvm::zip(ast->constructors, constructors))
+    for (auto& paramType : parameters)
     {
-        type->constructors.insert(astConstructor.name);
+        type->parameters_.push_back(paramType->getType(types));
     }
-    assert(!(!type->fields.empty() && type->constructors.size() > 1));
+    type->ast_.importedModule = module;
+    type->ast_.data           = ast;
+    assert(!(!type->fields.empty() && ast->constructors.size() > 1));
     return type;
 }
 

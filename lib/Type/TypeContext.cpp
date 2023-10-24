@@ -31,22 +31,36 @@ public:
 
     type::Identifier result;
 
-    void visit(hm::TypeVar&) override
+    void visit(hm::UnboundTypeVar&) override
     {
-        assert(false);
+        throw Error("TypeIdentifierBuilder type parameter was not a type constant");
+    }
+
+    void visit(hm::BoundTypeVar& t) override
+    {
+        std::vector<Identifier> parameters;
+        for (auto& param : t.parameters_)
+        {
+            TypeIdentifierBuilder visitor;
+            param->accept(&visitor);
+            assert(!visitor.result.name.name.empty()); // should throw if fail
+            parameters.push_back(std::move(visitor.result));
+        }
+        assert(!t.ast_.empty());
+        result = type::Identifier{ { t.ast_.importedModule->name(), t.ast_.data->name }, std::move(parameters) };
     }
 
     void visit(hm::TypeConstant& t) override
     {
-        const auto              constantId      = llvm::StringRef{ t.id };
+        const auto              constantId      = llvm::StringRef{ t.id_ };
         const auto              firstBraceIndex = constantId.find_first_of('[');
         auto                    id              = GlobalIdentifier::split(constantId.substr(0, firstBraceIndex));
         std::vector<Identifier> parameters;
-        assert(t.parameters.has_value());
-        for (auto& param : *t.parameters)
+        for (auto& param : t.parameters_)
         {
             TypeIdentifierBuilder visitor;
             param->accept(&visitor);
+            assert(!visitor.result.name.name.empty());
             parameters.push_back(std::move(visitor.result));
         }
         result = type::Identifier{ std::move(id), std::move(parameters) };
@@ -54,7 +68,7 @@ public:
 
     void visit(hm::FunctionType&) override
     {
-        assert(false);
+        throw Error("TypeIdentifierBuilder type parameter was not a type constant");
     }
 };
 
@@ -70,9 +84,9 @@ public:
         : context{ context_ }
     {}
 
-    void visit(hm::TypeVar& t) override
+    void visit(hm::UnboundTypeVar& t) override
     {
-        if (t.constructors.empty() && t.fields.empty())
+        if (t.constructors_.empty() && t.fields.empty())
         {
             if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == id::Floating; }))
             {
@@ -89,15 +103,27 @@ public:
         }
         else
         {
-            if (t.constructors.empty())
+            if (t.constructors_.empty())
             {
                 // lookup type based on fields?
             }
             else
             {
-                result = context->getTypeFromConstructor(*t.constructors.begin());
+                result = context->getTypeFromConstructor(*t.constructors_.begin());
             }
         }
+    }
+
+    void visit(hm::BoundTypeVar& t) override
+    {
+        /* if (std::all_of(t.parameters_ are const))
+        {
+
+        }*/
+        TypeIdentifierBuilder visitor;
+        t.accept(&visitor);
+        assert(!visitor.result.name.moduleName.empty() || t.fields.empty()); // either have module name, or be basic type without fields
+        result = context->getType(std::move(visitor.result));
     }
 
     void visit(hm::TypeConstant& t) override
@@ -146,71 +172,27 @@ TypeContext::TypeContext(llvm::LLVMContext& llvmContext_, SourceModule* sourceMo
 
 #undef LLVM_TYPE
 
-const hm::TypeAnnotation& TypeContext::getAnnotation(const ImportedModule* module, const ast::Function* ast)
+const hm::TypeAnnotation& TypeContext::getAnnotation(const ImportedModule* mod, const ast::Function* ast)
 {
     auto it = annotations.find(ast);
-    if (it == annotations.end())
+    if (it != annotations.end())
     {
-        auto ptr = std::make_unique<hm::TypeAnnotation>(llfp::hm::inferType(module, *ast));
-        auto it2 = annotations.insert({ ast, std::move(ptr) });
-        return *it2.first->second;
+        return *it->second;
     }
-    return *it->second;
+    auto ptr = std::make_unique<hm::TypeAnnotation>(llfp::hm::inferType(mod, *ast));
+    auto it2 = annotations.insert({ ast, std::move(ptr) });
+    return *it2.first->second;
 }
 
-namespace
-{
-
-struct FunctionDeclarationTypeAnnotationBuilder
-{
-    std::map<std::string, hm::TypePtr> typeMap;
-
-    hm::TypePtr add(const ast::TypeIdentifier& argTypeId)
-    {
-        std::string argType = argTypeId.str();
-        auto        it      = typeMap.find(argType);
-        if (it == typeMap.end())
-        {
-            auto type = std::make_shared<hm::TypeConstant>(std::string{ argType });
-            type->parameters.emplace();
-            for (auto& param : argTypeId.parameters)
-            {
-                type->parameters->push_back(add(param));
-            }
-            it = typeMap.insert(std::make_pair(std::move(argType), std::move(type))).first;
-        }
-        return it->second;
-    }
-
-    hm::FunTypePtr build(const ast::Class* class_, const ast::FunctionDeclaration* ast)
-    {
-        typeMap[class_->typeVariable] = std::make_shared<hm::TypeVar>(0);
-
-        std::vector<hm::TypePtr> functionTypes;
-        functionTypes.push_back(add(ast->type));
-        for (auto& arg : ast->parameters)
-        {
-            functionTypes.push_back(add(arg->type));
-        }
-
-        return std::make_shared<hm::FunctionType>(std::move(functionTypes));
-    }
-};
-
-} // namespace
-
-const hm::FunTypePtr& TypeContext::getAnnotation(const ast::Class* class_, const ast::FunctionDeclaration* ast)
+const hm::FunTypePtr& TypeContext::getAnnotation(const ImportedModule* mod, const ast::Class* class_, const ast::FunctionDeclaration* ast)
 {
     auto it = annotationsDecls.find(ast);
     if (it != annotationsDecls.end())
     {
         return it->second;
     }
-
-    FunctionDeclarationTypeAnnotationBuilder builder;
-
-    auto result = annotationsDecls.insert({ ast, builder.build(class_, ast) });
-    return result.first->second;
+    auto it2 = annotationsDecls.insert({ ast, hm::inferType(mod, *class_, *ast) });
+    return it2.first->second;
 }
 
 // will throw on error, return not needed?

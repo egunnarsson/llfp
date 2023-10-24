@@ -67,8 +67,8 @@ public:
 
     TypeContext(llvm::LLVMContext& llvmContext_, SourceModule* sourceModule_, GlobalContext* globalContext_);
 
-    const hm::TypeAnnotation& getAnnotation(const ImportedModule* module, const ast::Function* ast);
-    const hm::FunTypePtr&     getAnnotation(const ast::Class* class_, const ast::FunctionDeclaration* ast);
+    const hm::TypeAnnotation& getAnnotation(const ImportedModule* mod, const ast::Function* ast);
+    const hm::FunTypePtr&     getAnnotation(const ImportedModule* mod, const ast::Class* class_, const ast::FunctionDeclaration* ast);
 
     TypeInstPtr getTypeFromAst(const ast::TypeIdentifier& identifier);
     TypeInstPtr getTypeFromAst(const ast::TypeIdentifier& identifier, const ImportedModule* lookupModule);

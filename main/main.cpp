@@ -4,6 +4,7 @@
 #include "Lexer.h"
 #include "llfp.h"
 #include "Module.h"
+#include "NameMangling.h"
 #include "Utils/DotFileWriter.h"
 
 #pragma warning(disable : 4244 4267)
@@ -112,7 +113,7 @@ llfp::ReturnCode writeDefFile(llvm::ArrayRef<llfp::CompiledModule> modules, llvm
                          {
                              if (f->exported)
                              {
-                                 os << "    " << m.sourceModule->getExportedName(f.get()) << "\n";
+                                 os << "    " << llfp::getExportedName(*m.sourceModule, f.get()) << "\n";
                              }
                          }
                      }

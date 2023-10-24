@@ -16,11 +16,16 @@ std::vector<llfp::CompiledModule> compile(const char* string)
     return llfp::compile(input);
 }
 
-std::string compileError(const char* string)
+std::string compileError(const char* string, bool print = false)
 {
     testing::internal::CaptureStderr();
     EXPECT_THROW(compile(string), llfp::ReturnCode);
     const auto msg = testing::internal::GetCapturedStderr();
+    if (print)
+    {
+        std::cout << "\n------------\n"
+                  << msg << "\n------------\n";
+    }
     if (msg.size() < 2)
     {
         return {};
@@ -126,6 +131,8 @@ TEST(CodegenTest, DataDeclaration)
     // clang-format off
     EXPECT_EQ(compileError(M "data foo = { i32 x; i32 x; };\nexport i32 f(m:foo x) = 1;"), "string(2,21): duplicate field \"x\"\n");
     EXPECT_EQ(compileError(M "data x = {};\ndata x = {};\nexport i32 f(m:x y) = 1;"),      "string(3,1): data already defined\n");
+    EXPECT_EQ(compileError(M "export i32 f(m:x y) = 1;"),                                  "string(2,14): undefined data type m:x\n");
+    EXPECT_EQ(compileError(M "export i32 f(foo y) = 1;"),                                  "string(2,14): undefined data type foo\n");
     // clang-format on
 }
 
@@ -175,6 +182,7 @@ TEST(CodegenTest, DataConstructor)
     EXPECT_EQ(compileError(M "data d = {i32 x; i32 y;};\nexport d f(i32 z) = d{z,z,z};"),   "string(3,21): incorrect number of arguments\n");
     EXPECT_EQ(compileError(M "data d = {i32 x; i32 y;};\nexport d f(i32 z) = d{x=z,j=z};"), "string(3,27): unknown field name\n");
     EXPECT_EQ(compileError(M "data d = {i32 x; i32 y;};\nexport d f(i32 z) = d{y=z,y=z};"), "string(3,23): incorrect field position\n");
+    // Dont know about this one. Problem is that we now succeed in unify 'Num a' and 'bool' into 'Num bool'
     EXPECT_EQ(compileError(M "data d[a] = {a x; a y;};\nexport i32 f1() = d{1,true}.x;"),   "string(3,23): failed to unify types, '@IntegerLiteral' with 'bool'\n");
     // clang-format on
 }

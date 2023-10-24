@@ -127,14 +127,14 @@ bool CodeGenerator::generateFunction(const ast::Function* ast, std::vector<const
 namespace
 {
 
-// TODO implement
+// TODO implement, already done in FunTypePtr inferType(...)?
 hm::FunTypePtr replaceClassTypeVariableWithTypeVar(const ast::Class* astClass, const hm::FunTypePtr& funType)
 {
-    std::map<std::string, hm::TypePtr> typeConstants;
+    std::map<std::string, hm::TypeConstantPtr> typeConstants;
     return funType->copyFun(typeConstants);
 }
 
-void injectFunctionTypes(hm::TypeAnnotation& typeAnnotation, SourceModule& sourceModule, type::TypeContext& typeContext)
+void injectFunctionTypes(const ast::Function* fun, hm::TypeAnnotation& typeAnnotation, SourceModule& sourceModule, type::TypeContext& typeContext)
 {
     for (const auto& [funName, varTypePtr] : typeAnnotation.getFunctions())
     {
@@ -143,11 +143,11 @@ void injectFunctionTypes(hm::TypeAnnotation& typeAnnotation, SourceModule& sourc
         {
             auto funDecl = sourceModule.lookupFunctionDecl(GlobalIdentifier::split(funName));
             assert(!funDecl.empty());
-            auto& funType    = typeContext.getAnnotation(funDecl.class_, funDecl.function);
+            auto& funType    = typeContext.getAnnotation(&sourceModule, funDecl.class_, funDecl.function);
             auto  newFunType = replaceClassTypeVariableWithTypeVar(funDecl.class_, funType);
             typeAnnotation.addConstraint(funName, newFunType);
         }
-        else
+        else if (funAst.function != fun)
         {
             const auto& funAnnotation = typeContext.getAnnotation(funAst.importedModule, funAst.function);
             const auto  funType       = funAnnotation.getFun(funName);
@@ -155,6 +155,8 @@ void injectFunctionTypes(hm::TypeAnnotation& typeAnnotation, SourceModule& sourc
         }
     }
 }
+
+#if 0
 
 void injectFieldTypes(hm::TypeAnnotation& typeAnnotation, type::TypeContext& typeContext)
 {
@@ -173,14 +175,13 @@ void injectFieldTypes(hm::TypeAnnotation& typeAnnotation, type::TypeContext& typ
                     hm::TypeAnnotation* typeAnnotation_ = nullptr;
                     type::TypeContext*  typeContext_    = nullptr;
 
-                    void visit(hm::TypeVar&) override {}
-                    void visit(hm::TypeConstant& t) override
+                    void injectFields(const DataAst& ast, const std::map<std::string, hm::TypePtr>& fields)
                     {
-                        if (!t.fields.empty())
+                        if (!fields.empty())
                         {
-                            type::Identifier  typeId{ GlobalIdentifier::split(t.id), {} };
+                            type::Identifier  typeId{ { ast.importedModule->name(), ast.data->name }, {} };
                             type::TypeInstPtr typeInstance = typeContext_->getType(typeId);
-                            for (auto& [fieldName, fieldType] : t.fields)
+                            for (auto& [fieldName, fieldType] : fields)
                             {
                                 // if fieldType is now known?
                                 // { didApplyUpdate = true;
@@ -188,9 +189,28 @@ void injectFieldTypes(hm::TypeAnnotation& typeAnnotation, type::TypeContext& typ
                                 const auto  index             = typeInstance->getFieldIndex(fieldName);
                                 const auto& fieldTypeInstance = typeInstance->getFields().at(index);
 
-                                didApplyUpdate = didApplyUpdate || typeAnnotation_->addConstraint(fieldType, fieldTypeInstance->getType());
+                                const bool newConstraints = typeAnnotation_->addConstraint(fieldType, fieldTypeInstance->getType());
+                                didApplyUpdate            = didApplyUpdate || newConstraints;
                             }
                         }
+                    }
+
+                    void visit(hm::UnboundTypeVar&) override {}
+                    void visit(hm::BoundTypeVar& t) override
+                    {
+                        if (!t.parameters_.empty())
+                        {
+                            throw Error("not implemented");
+                        }
+                        injectFields(t.ast_, t.fields);
+                    }
+                    void visit(hm::TypeConstant& t) override
+                    {
+                        if (!t.parameters_.empty())
+                        {
+                            throw Error("not implemented");
+                        }
+                        injectFields(t.ast_, t.fields);
                     }
                     void visit(hm::FunctionType&) override {}
                 } visitor;
@@ -207,6 +227,8 @@ void injectFieldTypes(hm::TypeAnnotation& typeAnnotation, type::TypeContext& typ
         }
     } while (didApplyUpdate);
 }
+
+#endif
 
 } // namespace
 
@@ -228,7 +250,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* mod, const ast:
     {
         typeAnnotation = typeContext.getAnnotation(mod, ast);
         // should I inject when we generate the prototype? Or later?
-        injectFunctionTypes(typeAnnotation, *sourceModule, typeContext);
+        injectFunctionTypes(ast, typeAnnotation, *sourceModule, typeContext);
         // injectFieldTypes(typeAnnotation, typeContext); // do we need this if we lookup ast in type inference?
 
         // standard module may not have implementation
