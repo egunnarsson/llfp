@@ -75,10 +75,86 @@ TEST(TypeTest, CaseExp)
     EXPECT_EQ(funType->types.at(1)->str(), "bool");
 }
 
+TEST(TypeTest, ConstructorExp)
+{
+    // without type variable
+    {
+        auto modulePtr = Parse(R"x(
+            module m(f);
+            data d = {i32 x;};
+            f() = d{1};
+        )x");
+        ASSERT_FALSE(modulePtr == nullptr);
+        auto fooType = Infer(*modulePtr, "f");
+        llvm::outs() << fooType->str() << '\n';
+    }
+
+    // multiple constructors
+    {
+        auto modulePtr = Parse(R"x(
+            module m(f);
+            data d = a{i32 x;}, b{float y;};
+            f() = a{1};
+        )x");
+        ASSERT_FALSE(modulePtr == nullptr);
+        auto fooType = Infer(*modulePtr, "f");
+        llvm::outs() << fooType->str() << '\n';
+    }
+
+    // with type variable
+    {
+        auto modulePtr = Parse(R"x(
+            module m(f);
+            data d[a] = {a x;};
+            f() = d{'b'};
+        )x");
+        ASSERT_FALSE(modulePtr == nullptr);
+        auto fooType = Infer(*modulePtr, "f");
+        llvm::outs() << fooType->str() << '\n';
+    }
+
+    //  multiple constructors with type variable
+    {
+        auto modulePtr = Parse(R"x(
+            module m(f);
+            data d[a] = c1{a x;}, c2{};
+            f() = c2{};
+        )x");
+        ASSERT_FALSE(modulePtr == nullptr);
+        auto fooType = Infer(*modulePtr, "f");
+        llvm::outs() << fooType->str() << '\n';
+    }
+}
+
+// constructor pattern
+TEST(TypeTest, ConstructorPattern)
+{
+    {
+        auto modulePtr = Parse(R"x(
+            module m(foo);
+            data d = a{i32 x;}, b{};
+            foo(m:d x) = case x of a{y} -> y, b{} -> 2 end;
+        )x");
+        ASSERT_FALSE(modulePtr == nullptr);
+        auto fooType = Infer(*modulePtr, "foo");
+        llvm::outs() << fooType->str() << '\n';
+    }
+    {
+        auto modulePtr = Parse(R"x(
+            module m(foo);
+            data d[t] = a{t x;}, b{};
+            foo(m:d[char] x) = case x of a{y} -> y, b{} -> 'c' end;
+        )x");
+        ASSERT_FALSE(modulePtr == nullptr);
+        auto fooType = Infer(*modulePtr, "foo");
+        llvm::outs() << fooType->str() << '\n';
+    }
+}
+
 TEST(TypeTest, IndirectTypeConstraints)
 {
     {
-        auto modulePtr     = Parse(R"x(
+        auto modulePtr = Parse(R"x(
             module m(foo,bar);
             data d[a] = {a x; a y;};
             foo(z, w) = d{z,w};
@@ -105,7 +181,7 @@ TEST(TypeTest, IndirectTypeConstraints)
             llfp::Error);
     }
     {
-        auto modulePtr     = Parse(R"x(
+        auto modulePtr = Parse(R"x(
             module m(foo,bar);
             data wrap[a] = {a v;};
             data d[a] = {a x; wrap[a] y;};

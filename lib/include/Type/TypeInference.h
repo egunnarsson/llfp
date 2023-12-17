@@ -75,7 +75,7 @@ public:
     virtual std::string str() const = 0;
     virtual bool        equals(TypeVarId) const { return false; }
     virtual TypePtr     copy(std::map<std::string, TypeConstantPtr>& typeConstants) const = 0;
-    virtual void        accept(TypeVisitor* visitor)                              = 0;
+    virtual void        accept(TypeVisitor* visitor)                                      = 0;
 
     static void apply(TypePtr& ptr, Substitution s);
 
@@ -83,7 +83,7 @@ protected:
 
     [[noreturn]] static void unifyError(const Type& a, const Type& b);
 
-    virtual void apply(Substitution s) = 0;
+    virtual void apply(Substitution s){};
 };
 
 
@@ -91,19 +91,12 @@ class SimpleType : public Type
 {
 public:
 
-    std::set<std::string>          typeClasses;
-    std::map<std::string, TypePtr> fields;
-    // std::optional<std::vector<TypePtr>> parameters;
-    //  assert(!(!fields.empty() && constructors.size() > 1));
+    std::set<std::string> typeClasses;
 
     std::vector<Substitution> addConstraints(const SimpleType& other); // rename?
     std::string               printConstraints(const std::string& base) const;
 
     void copy(std::map<std::string, TypeConstantPtr>& typeConstants, SimpleType* newObj) const;
-
-protected:
-
-    void apply(Substitution s) override;
 };
 
 /* Unknown data construct */
@@ -128,10 +121,6 @@ public:
     void accept(TypeVisitor* visitor) override;
 
     TypePtr copy(std::map<std::string, TypeConstantPtr>& typeConstants) const override;
-
-protected:
-
-    void apply(Substitution s) override;
 };
 
 /* The data construct is known but at least one parameter is not known */
@@ -186,10 +175,6 @@ public:
 
     TypePtr         copy(std::map<std::string, TypeConstantPtr>& typeConstants) const override;
     TypeConstantPtr copyConst(std::map<std::string, TypeConstantPtr>& typeConstants) const;
-
-protected:
-
-    void apply(Substitution s) override;
 };
 
 
@@ -299,6 +284,7 @@ public:
 class TypeAnnotation
 {
     std::map<const ast::Node*, TypePtr> ast;
+    std::set<const ast::FieldExp*>      fieldExpressions;
     // std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
     std::map<std::string, TypePtr>      variables;
     std::map<std::string, FunTypePtr>   functions;
@@ -309,6 +295,7 @@ public:
     TypeAnnotation() = default;
     TypeAnnotation(
         std::map<const ast::Node*, TypePtr> ast_,
+        std::set<const ast::FieldExp*>      fieldExpressions_,
         std::map<std::string, TypePtr>      vars_,
         std::map<std::string, FunTypePtr>   functions_,
         TypeVarId                           nextFreeVariable_);
@@ -323,6 +310,7 @@ public:
     FunTypePtr getFun(const std::string& id) const;
 
     auto& getTypes() const { return ast; }
+    auto& getfieldExpressions() const { return fieldExpressions; }
     auto& getFunctions() const { return functions; }
 
     void substitute(Substitution sub);
@@ -350,6 +338,7 @@ public:
     std::map<std::string, TypePtr>      variables;
     std::map<std::string, FunTypePtr>   functions;
     std::map<const ast::Node*, TypePtr> result;
+    std::set<const ast::FieldExp*>      fieldExpressions;
     std::vector<Constraint>             constraints;
 
     void operator()(const ast::Function& fun);

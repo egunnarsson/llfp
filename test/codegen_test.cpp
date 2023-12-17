@@ -463,6 +463,20 @@ TEST(CodegenTest, TypeClass)
               "string(4,20): no instance of \"m:C bool\"\n");
 }
 
+TEST(CodegenTest, ArgumentTypeCheck)
+{
+    // Had an issue with getType() on different type instance types
+    EXPECT_NO_THROW({
+        auto result = compile(M R"x(
+            data d[a]= d1{a x;}, d2{};
+            export i32 f(d[i32] arg) = case arg of d1{x} -> x, d2{} -> 0 end;
+        )x");
+        auto m      = result.at(0).llvmModule.get();
+        ASSERT_NE(m, nullptr);
+        EXPECT_NE(m->getFunction("m_f"), nullptr);
+    });
+}
+
 TEST(CodegenTest, Scope)
 {
     EXPECT_EQ(compileError(
@@ -495,6 +509,30 @@ TEST(CodegenTest, MathModule)
 
     double result = call<float, float, float>(jit, "m_foo", 1, 1); // 0.8414709848 + 0.54030230586 = 1.38177329066
     EXPECT_NEAR(result, 1.3817732, 0.0000001);
+}
+
+TEST(CodegenTest, List) {
+    EXPECT_NO_THROW({
+        auto result = compile(M R"x(
+            data List[a]= Elem{a x; List[a] next;}, Empty{};
+            export List[i32] f() = Elem{1,Empty{}};
+        )x");
+        auto m      = result.at(0).llvmModule.get();
+        ASSERT_NE(m, nullptr);
+        EXPECT_NE(m->getFunction("m_f"), nullptr);
+    });
+
+    // Alternating, indirect recursion
+    EXPECT_NO_THROW({
+        auto result = compile(M R"x(
+            data List1[a]= Elem1{a x; List2[a] next;}, Empty1{};
+            data List2[a]= Elem2{a x; List1[a] next;}, Empty2{};
+            export List1[i32] f() = Elem1{1,Empty2{}};
+        )x");
+        auto m      = result.at(0).llvmModule.get();
+        ASSERT_NE(m, nullptr);
+        EXPECT_NE(m->getFunction("m_f"), nullptr);
+    });
 }
 
 /*

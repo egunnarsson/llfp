@@ -156,14 +156,13 @@ void injectFunctionTypes(const ast::Function* fun, hm::TypeAnnotation& typeAnnot
     }
 }
 
-#if 0
-
 void injectFieldTypes(hm::TypeAnnotation& typeAnnotation, type::TypeContext& typeContext)
 {
     bool didApplyUpdate = false;
     do {
         didApplyUpdate = false;
-        for (auto& [node, type] : typeAnnotation.getTypes())
+
+        for (auto& fieldExp : typeAnnotation.getfieldExpressions())
         {
             try
             {
@@ -171,26 +170,27 @@ void injectFieldTypes(hm::TypeAnnotation& typeAnnotation, type::TypeContext& typ
                 {
                 public:
 
-                    bool                didApplyUpdate  = false;
-                    hm::TypeAnnotation* typeAnnotation_ = nullptr;
-                    type::TypeContext*  typeContext_    = nullptr;
+                    bool                 didApplyUpdate  = false;
+                    hm::TypeAnnotation*  typeAnnotation_ = nullptr;
+                    type::TypeContext*   typeContext_    = nullptr;
+                    const ast::FieldExp* fieldExp_       = nullptr;
 
-                    void injectFields(const DataAst& ast, const std::map<std::string, hm::TypePtr>& fields)
+                    void injectField(const DataAst& ast)
                     {
-                        if (!fields.empty())
+                        if (ast.data->constructors.size() != 1)
                         {
-                            type::Identifier  typeId{ { ast.importedModule->name(), ast.data->name }, {} };
-                            type::TypeInstPtr typeInstance = typeContext_->getType(typeId);
-                            for (auto& [fieldName, fieldType] : fields)
-                            {
-                                // if fieldType is now known?
-                                // { didApplyUpdate = true;
-                                assert(!typeInstance->isBasicType());
-                                const auto  index             = typeInstance->getFieldIndex(fieldName);
-                                const auto& fieldTypeInstance = typeInstance->getFields().at(index);
+                            throw Error("injectFields on type with multiple constructor");
+                        }
 
-                                const bool newConstraints = typeAnnotation_->addConstraint(fieldType, fieldTypeInstance->getType());
-                                didApplyUpdate            = didApplyUpdate || newConstraints;
+                        auto& constructor = ast.data->constructors.front();
+                        for (auto& field : constructor.fields)
+                        {
+                            if (field.name == fieldExp_->fieldIdentifier)
+                            {
+                                auto       fieldInstanceType = typeContext_->getTypeFromAst(field.type);
+                                const bool newConstraints    = typeAnnotation_->addConstraint(typeAnnotation_->get(fieldExp_), fieldInstanceType->getType());
+                                didApplyUpdate               = didApplyUpdate || newConstraints;
+                                break;
                             }
                         }
                     }
@@ -202,7 +202,7 @@ void injectFieldTypes(hm::TypeAnnotation& typeAnnotation, type::TypeContext& typ
                         {
                             throw Error("not implemented");
                         }
-                        injectFields(t.ast_, t.fields);
+                        injectField(t.ast_);
                     }
                     void visit(hm::TypeConstant& t) override
                     {
@@ -210,25 +210,25 @@ void injectFieldTypes(hm::TypeAnnotation& typeAnnotation, type::TypeContext& typ
                         {
                             throw Error("not implemented");
                         }
-                        injectFields(t.ast_, t.fields);
+                        injectField(t.ast_);
                     }
                     void visit(hm::FunctionType&) override {}
                 } visitor;
                 visitor.typeAnnotation_ = &typeAnnotation;
                 visitor.typeContext_    = &typeContext;
+                visitor.fieldExp_       = fieldExp;
 
+                auto type = typeAnnotation.get(fieldExp->lhs.get());
                 type->accept(&visitor);
                 didApplyUpdate = didApplyUpdate || visitor.didApplyUpdate;
             }
             catch (const Error& error)
             {
-                throw ErrorLocation{ node->location, error.what() };
+                throw ErrorLocation{ fieldExp->location, error.what() };
             }
         }
     } while (didApplyUpdate);
 }
-
-#endif
 
 } // namespace
 
@@ -251,7 +251,7 @@ Function* CodeGenerator::generatePrototype(const ImportedModule* mod, const ast:
         typeAnnotation = typeContext.getAnnotation(mod, ast);
         // should I inject when we generate the prototype? Or later?
         injectFunctionTypes(ast, typeAnnotation, *sourceModule, typeContext);
-        // injectFieldTypes(typeAnnotation, typeContext); // do we need this if we lookup ast in type inference?
+        injectFieldTypes(typeAnnotation, typeContext);
 
         // standard module may not have implementation
         if (ast->functionBody != nullptr)
@@ -1967,7 +1967,6 @@ void generateVariantSwitch(llvm::IRBuilder<>& llvmBuilder, llvm::Value* value, t
     auto oneV      = llvm::ConstantInt::get(int32Type, 1);
 
     assert(!type->getConstructors().empty());
-    assert(!type->getConstructors().front().fields.empty());
 
     auto headerType          = llvm::StructType::create({ int32Type, enumType });
     auto variantTypeValuePtr = llvmBuilder.CreateGEP(headerType, value, { zeroV, oneV }, "typePtr");

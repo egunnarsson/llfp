@@ -224,10 +224,9 @@ std::shared_ptr<hm::TypeConstant> TypeInstanceAggregate::getType(std::map<const 
     }
 
     auto type = TypeInstance::getType(types);
-    for (const auto& field : llvm::enumerate(constructor.fields))
-    {
-        type->fields.insert({ constructor.ast->fields[field.index()].name, field.value()->getType(types) });
-    }
+
+    assert(type->ast_.importedModule == module);
+    assert(type->ast_.data == ast);
     return type;
 }
 
@@ -390,13 +389,9 @@ std::shared_ptr<hm::TypeConstant> TypeInstanceVariant::getType(std::map<const Ty
     }
 
     auto type = TypeInstance::getType(types);
-    for (auto& paramType : parameters)
-    {
-        type->parameters_.push_back(paramType->getType(types));
-    }
-    type->ast_.importedModule = module;
-    type->ast_.data           = ast;
-    assert(!(!type->fields.empty() && ast->constructors.size() > 1));
+    assert(type->parameters_.size() == parameters.size());
+    assert(type->ast_.importedModule == module);
+    assert(type->ast_.data == ast);
     return type;
 }
 

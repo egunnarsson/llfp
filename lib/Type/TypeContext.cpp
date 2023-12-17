@@ -86,7 +86,7 @@ public:
 
     void visit(hm::UnboundTypeVar& t) override
     {
-        if (t.constructors_.empty() && t.fields.empty())
+        if (t.constructors_.empty())
         {
             if (std::any_of(t.typeClasses.begin(), t.typeClasses.end(), [](const std::string& s) { return s == id::Floating; }))
             {
@@ -122,7 +122,7 @@ public:
         }*/
         TypeIdentifierBuilder visitor;
         t.accept(&visitor);
-        assert(!visitor.result.name.moduleName.empty() || t.fields.empty()); // either have module name, or be basic type without fields
+        assert(!visitor.result.name.moduleName.empty() || t.ast_.empty()); // either have module name, or be basic type without fields
         result = context->getType(std::move(visitor.result));
     }
 
@@ -130,7 +130,7 @@ public:
     {
         TypeIdentifierBuilder visitor;
         t.accept(&visitor);
-        assert(!visitor.result.name.moduleName.empty() || t.fields.empty()); // either have module name, or be basic type without fields
+        assert(!visitor.result.name.moduleName.empty() || t.ast_.empty()); // either have module name, or be basic type without fields
         result = context->getType(std::move(visitor.result));
     }
 
