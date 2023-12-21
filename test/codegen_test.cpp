@@ -89,9 +89,10 @@ TEST(CodegenTest, Functions)
 
     // negative
     // clang-format off
-    EXPECT_EQ(compileError(M "export i32 f() = x();"),           "string(2,18): undefined function \"x\"\n");
-    EXPECT_EQ(compileError(M "export i32 f(i32 x, i32 x) = 1;"), "string(2,21): duplicate parameter \"x\"\n");
-    EXPECT_EQ(compileError(M "f = 1;\nf = 2;"),                  "string(3,1): function already defined\n");
+    EXPECT_EQ(compileError(M "export i32 f() = x();"),                     "string(2,18): undefined function \"x\"\n");
+    EXPECT_EQ(compileError(M "export i32 f(i32 x, i32 x) = 1;"),           "string(2,21): duplicate parameter \"x\"\n");
+    EXPECT_EQ(compileError(M "f = 1;\nf = 2;"),                            "string(3,1): function already defined\n");
+    EXPECT_EQ(compileError(M "export i32 f = x(1,2);\ni32 x(i32 a) = a;"), "string(2,16): incorrect number of arguments\n");
     // clang-format on
 }
 
@@ -511,7 +512,8 @@ TEST(CodegenTest, MathModule)
     EXPECT_NEAR(result, 1.3817732, 0.0000001);
 }
 
-TEST(CodegenTest, List) {
+TEST(CodegenTest, List)
+{
     EXPECT_NO_THROW({
         auto result = compile(M R"x(
             data List[a]= Elem{a x; List[a] next;}, Empty{};

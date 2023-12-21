@@ -136,22 +136,39 @@ hm::FunTypePtr replaceClassTypeVariableWithTypeVar(const ast::Class* astClass, c
 
 void injectFunctionTypes(const ast::Function* fun, hm::TypeAnnotation& typeAnnotation, SourceModule& sourceModule, type::TypeContext& typeContext)
 {
-    for (const auto& [funName, varTypePtr] : typeAnnotation.getFunctions())
+    for (const auto& [funName, annotatedFun] : typeAnnotation.getFunctions())
     {
-        auto funAst = sourceModule.lookupFunction(GlobalIdentifier::split(funName)); // module? not sourceModule?
+        auto           funAst = sourceModule.lookupFunction(GlobalIdentifier::split(funName)); // module? not sourceModule?
+        hm::FunTypePtr funType;
         if (funAst.empty())
         {
             auto funDecl = sourceModule.lookupFunctionDecl(GlobalIdentifier::split(funName));
             assert(!funDecl.empty());
-            auto& funType    = typeContext.getAnnotation(&sourceModule, funDecl.class_, funDecl.function);
-            auto  newFunType = replaceClassTypeVariableWithTypeVar(funDecl.class_, funType);
-            typeAnnotation.addConstraint(funName, newFunType);
+            auto& funDeclType = typeContext.getAnnotation(&sourceModule, funDecl.class_, funDecl.function);
+            funType           = replaceClassTypeVariableWithTypeVar(funDecl.class_, funDeclType);
         }
         else if (funAst.function != fun)
         {
             const auto& funAnnotation = typeContext.getAnnotation(funAst.importedModule, funAst.function);
-            const auto  funType       = funAnnotation.getFun(funName);
-            typeAnnotation.addConstraint(funName, funType);
+            funType                   = funAnnotation.getFun(funName);
+        }
+        if (funType != nullptr)
+        {
+            if (annotatedFun.typePtr->types.size() != funType->types.size())
+            {
+                if (annotatedFun.callExp != nullptr)
+                {
+                    throw ErrorLocation{ annotatedFun.callExp->location, "incorrect number of arguments" };
+                }
+                else
+                {
+                    throw Error{ "incorrect number of arguments" };
+                }
+            }
+            else
+            {
+                typeAnnotation.addConstraint(funName, funType);
+            }
         }
     }
 }

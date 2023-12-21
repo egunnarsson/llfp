@@ -489,11 +489,11 @@ void TypeUnifier::visit(FunctionType& self) { visit_(self); }
 // ----------------------------------------------------------------------------
 
 TypeAnnotation::TypeAnnotation(
-    std::map<const ast::Node*, TypePtr> ast_,
-    std::set<const ast::FieldExp*>      fieldExpressions_,
-    std::map<std::string, TypePtr>      vars_,
-    std::map<std::string, FunTypePtr>   functions_,
-    TypeVarId                           nextFreeVariable_)
+    std::map<const ast::Node*, TypePtr>      ast_,
+    std::set<const ast::FieldExp*>           fieldExpressions_,
+    std::map<std::string, TypePtr>           vars_,
+    std::map<std::string, AnnotatedFunction> functions_,
+    TypeVarId                                nextFreeVariable_)
     : ast{ std::move(ast_) },
       fieldExpressions{ std::move(fieldExpressions_) },
       variables{ std::move(vars_) },
@@ -514,9 +514,9 @@ TypeAnnotation::TypeAnnotation(const TypeAnnotation& other)
     {
         variables[name] = type->copy(typeConstants);
     }
-    for (const auto& [name, type] : other.functions)
+    for (const auto& [name, fun] : other.functions)
     {
-        functions[name] = type->copyFun(typeConstants);
+        functions[name] = { fun.typePtr->copyFun(typeConstants), fun.callExp };
     }
 }
 
@@ -537,9 +537,9 @@ TypeAnnotation& TypeAnnotation::operator=(const TypeAnnotation& other)
     {
         variables[name] = type->copy(typeConstants);
     }
-    for (const auto& [name, type] : other.functions)
+    for (const auto& [name, fun] : other.functions)
     {
-        functions[name] = type->copyFun(typeConstants);
+        functions[name] = { fun.typePtr->copyFun(typeConstants), fun.callExp };
     }
 
     return *this;
@@ -557,7 +557,7 @@ TypePtr TypeAnnotation::getVar(const std::string& id) const
 
 FunTypePtr TypeAnnotation::getFun(const std::string& id) const
 {
-    return functions.at(id);
+    return functions.at(id).typePtr;
 }
 
 void TypeAnnotation::substitute(Substitution sub)
@@ -572,7 +572,7 @@ void TypeAnnotation::substitute(Substitution sub)
     }
     for (auto& funType : functions)
     {
-        funType.second->apply(sub);
+        funType.second.typePtr->apply(sub);
         // TypePtr ptr = funType.second;
         // Type::apply(ptr, sub);
     }
@@ -586,7 +586,7 @@ void TypeAnnotation::print() const
     }
     for (auto& fun : functions)
     {
-        std::cout << fun.first << " = " << fun.second->str() << '\n';
+        std::cout << fun.first << " = " << fun.second.typePtr->str() << '\n';
     }
 }
 
@@ -872,7 +872,7 @@ void Annotator::operator()(const ast::Function& fun)
         args.push_back(std::move(argTV));
     }
 
-    functions.insert({ std::move(astModule_->name() + ':' + fun.name), makeFunction(std::move(args)) });
+    functions.insert({ std::move(astModule_->name() + ':' + fun.name), { makeFunction(std::move(args)), nullptr } });
 
     // standard module may not have implementation
     if (fun.functionBody != nullptr)
@@ -1127,11 +1127,11 @@ void Annotator::visit(ast::CallExp& exp)
     if (it == functions.end())
     {
         assert(strchr(funName.c_str(), ':') != nullptr);
-        functions[std::move(funName)] = funType;
+        functions[std::move(funName)] = { funType, &exp };
     }
     else
     {
-        add({ exp.location, funType, it->second });
+        add({ exp.location, funType, it->second.typePtr });
     }
 }
 
@@ -1147,7 +1147,7 @@ void Annotator::visit(ast::VariableExp& exp)
         auto ptr     = makeVar();
         result[&exp] = ptr;
         assert(strchr(varName.c_str(), ':') != nullptr);
-        functions[std::move(varName)] = makeFunction({ ptr });
+        functions[std::move(varName)] = { makeFunction({ ptr }), nullptr };
     }
     else
     {
@@ -1329,7 +1329,7 @@ TypePtr Annotator::tv(const std::string& name)
     auto it = variables.find(name);
     if (it == variables.end())
     {
-        return functions.at(name);
+        return functions.at(name).typePtr;
     }
     return it->second;
 }

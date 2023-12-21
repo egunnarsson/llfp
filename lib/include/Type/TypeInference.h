@@ -281,24 +281,32 @@ public:
 };
 
 
+// get rid of this if possible
+struct AnnotatedFunction
+{
+    FunTypePtr          typePtr;
+    const ast::CallExp* callExp = nullptr;
+};
+
+
 class TypeAnnotation
 {
-    std::map<const ast::Node*, TypePtr> ast;
-    std::set<const ast::FieldExp*>      fieldExpressions;
+    std::map<const ast::Node*, TypePtr>      ast;
+    std::set<const ast::FieldExp*>           fieldExpressions;
     // std::map<std::string, TypePtr>      vars; // things required, like abs(float) and abs(int);
-    std::map<std::string, TypePtr>      variables;
-    std::map<std::string, FunTypePtr>   functions;
-    TypeVarId                           nextFreeVariable = 0;
+    std::map<std::string, TypePtr>           variables;
+    std::map<std::string, AnnotatedFunction> functions;
+    TypeVarId                                nextFreeVariable = 0;
 
 public:
 
     TypeAnnotation() = default;
     TypeAnnotation(
-        std::map<const ast::Node*, TypePtr> ast_,
-        std::set<const ast::FieldExp*>      fieldExpressions_,
-        std::map<std::string, TypePtr>      vars_,
-        std::map<std::string, FunTypePtr>   functions_,
-        TypeVarId                           nextFreeVariable_);
+        std::map<const ast::Node*, TypePtr>      ast_,
+        std::set<const ast::FieldExp*>           fieldExpressions_,
+        std::map<std::string, TypePtr>           vars_,
+        std::map<std::string, AnnotatedFunction> functions_,
+        TypeVarId                                nextFreeVariable_);
     TypeAnnotation(TypeAnnotation&& other) = default;
     TypeAnnotation(const TypeAnnotation& other);
 
@@ -334,12 +342,12 @@ public:
 
     Annotator(const ImportedModule* astModule);
 
-    TypeVarId                           current = 0;
-    std::map<std::string, TypePtr>      variables;
-    std::map<std::string, FunTypePtr>   functions;
-    std::map<const ast::Node*, TypePtr> result;
-    std::set<const ast::FieldExp*>      fieldExpressions;
-    std::vector<Constraint>             constraints;
+    TypeVarId                                current = 0;
+    std::map<std::string, TypePtr>           variables;
+    std::map<std::string, AnnotatedFunction> functions;
+    std::map<const ast::Node*, TypePtr>      result;
+    std::set<const ast::FieldExp*>           fieldExpressions;
+    std::vector<Constraint>                  constraints;
 
     void operator()(const ast::Function& fun);
 
