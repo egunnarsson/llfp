@@ -169,7 +169,7 @@ TEST(TypeTest, IndirectTypeConstraints)
                 {
                     barAnnotation.addConstraint("m:foo", fooType);
                 }
-                catch (const llfp::Error& error)
+                catch (const llfp::ErrorLocation& error)
                 {
                     const std::string msg = error.what();
                     EXPECT_NE(msg.find("Failed to unify types"), std::string::npos);
@@ -178,7 +178,7 @@ TEST(TypeTest, IndirectTypeConstraints)
                     throw;
                 }
             },
-            llfp::Error);
+            llfp::ErrorLocation);
     }
     {
         auto modulePtr = Parse(R"x(
@@ -197,7 +197,7 @@ TEST(TypeTest, IndirectTypeConstraints)
                 {
                     barAnnotation.addConstraint("m:foo", fooType);
                 }
-                catch (const llfp::Error& error)
+                catch (const llfp::ErrorLocation& error)
                 {
                     const std::string msg = error.what();
                     EXPECT_NE(msg.find("Failed to unify types"), std::string::npos);
@@ -206,6 +206,6 @@ TEST(TypeTest, IndirectTypeConstraints)
                     throw;
                 }
             },
-            llfp::Error);
+            llfp::ErrorLocation);
     }
 }

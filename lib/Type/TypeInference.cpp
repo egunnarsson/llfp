@@ -673,31 +673,47 @@ public:
 
 void TypeAnnotation::addConstraint(const std::string& funName, const FunTypePtr& inType)
 {
-    auto convertedFunctionType = TypeIdConverter::convert(nextFreeVariable, inType);
-    auto currentFunctionType   = getFun(funName);
+    const auto& annotatedFun          = functions.at(funName);
+    auto        convertedFunctionType = TypeIdConverter::convert(nextFreeVariable, inType);
+    auto        currentFunctionType   = annotatedFun.typePtr;
 
     std::vector<Constraint> constraints;
 
     assert(convertedFunctionType->types.size() == currentFunctionType->types.size());
     for (auto [inParam, currentParam] : llvm::zip(convertedFunctionType->types, currentFunctionType->types))
     {
-        constraints.push_back({ {}, inParam, currentParam });
+        const auto location = annotatedFun.callExp != nullptr ? annotatedFun.callExp->location : SourceLocation{};
+        constraints.push_back({ location, inParam, currentParam });
     }
 
     for (size_t i = 0; i < constraints.size(); ++i)
     {
-        auto subs = constraints[i].solve();
-        for (size_t j = 0; j < subs.size(); ++j)
+        try
         {
-            substitute(subs[j]);
-            for (size_t k = i + 1; k < constraints.size(); ++k)
+            auto subs = constraints[i].solve();
+            for (size_t j = 0; j < subs.size(); ++j)
             {
-                constraints[k].substitute(subs[j]);
+                substitute(subs[j]);
+                for (size_t k = i + 1; k < constraints.size(); ++k)
+                {
+                    constraints[k].substitute(subs[j]);
+                }
+                for (size_t k = j + 1; k < subs.size(); ++k)
+                {
+                    // TODO: assert(subs[i].id != subs[j].id);
+                    Type::apply(subs[k].type, subs[j]);
+                }
             }
-            for (size_t k = j + 1; k < subs.size(); ++k)
+        }
+        catch (const Error& error)
+        {
+            if (constraints[i].location.File != nullptr)
             {
-                // TODO: assert(subs[i].id != subs[j].id);
-                Type::apply(subs[k].type, subs[j]);
+                throw ErrorLocation{ constraints[i].location, error.what() };
+            }
+            else
+            {
+                throw;
             }
         }
     }
@@ -1403,16 +1419,21 @@ TypeAnnotation inferType(const ImportedModule* astModule, const ast::Function& f
 
     for (size_t i = 0; i < constraints.size(); ++i)
     {
-        // try{} to catch and add source location?
-
-        auto subs = constraints[i].solve();
-        for (auto& sub : subs)
+        try
         {
-            annotation.substitute(sub);
-            for (size_t j = i + 1; j < constraints.size(); ++j)
+            auto subs = constraints[i].solve();
+            for (auto& sub : subs)
             {
-                constraints[j].substitute(sub);
+                annotation.substitute(sub);
+                for (size_t j = i + 1; j < constraints.size(); ++j)
+                {
+                    constraints[j].substitute(sub);
+                }
             }
+        }
+        catch (const Error& error)
+        {
+            throw ErrorLocation{ constraints[i].location, error.what() };
         }
     }
 
